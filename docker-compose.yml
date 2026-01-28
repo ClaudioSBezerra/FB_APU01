@@ -1,0 +1,61 @@
+services:
+  # Backend (Go)
+  api:
+    build: ./backend
+    container_name: fb_apu01-api
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable
+      - REDIS_ADDR=redis:6379
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - api_uploads:/root/uploads
+    networks:
+      - fb_net
+
+  # Frontend (React)
+  web:
+    build: ./frontend
+    container_name: fb_apu01-web
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    networks:
+      - fb_net
+
+  # Banco de Dados
+  db:
+    image: postgres:15-alpine
+    container_name: fb_apu01-db
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - fb_net
+
+  # Redis
+  redis:
+    image: redis:alpine
+    container_name: fb_apu01-redis
+    ports:
+      - "${REDIS_PORT}:6379"
+    networks:
+      - fb_net
+
+networks:
+  fb_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  api_uploads:

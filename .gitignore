@@ -1,0 +1,21 @@
+node_modules/
+dist/
+backend/server
+.env
+.DS_Store
+# Node
+node_modules/
+dist/
+build/
+
+# Go
+backend/server
+*.exe
+
+# Env
+.env
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
