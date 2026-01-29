@@ -22,16 +22,32 @@ Este documento detalha os passos macro (Épicos) para levar o **FB_APU01** do am
 ## 🚀 Épico 3: Pipeline de Deploy Contínuo (CD)
 **Objetivo:** Automatizar a atualização do sistema via Git.
 
-- [ ] **Conexão GitHub -> Coolify**: Adicionar repositório.
-- [ ] **Configuração de Serviços**:
-  - [ ] Banco de Dados (Postgres).
-  - [ ] Redis.
-  - [ ] Aplicação (Docker Compose).
-- [ ] **Variáveis de Ambiente**: Configurar segredos de produção.
+- [x] **Conexão GitHub -> Coolify**: Adicionar repositório.
+- [x] **Configuração de Serviços**:
+  - [x] Banco de Dados (Postgres).
+  - [x] Redis.
+  - [x] Aplicação (Docker Compose).
+- [x] **Variáveis de Ambiente**: Configurar segredos de produção.
+- [x] **Deploy em Produção**: Acessível em `http://fbtax.cloud`.
 
 ## 📊 Épico 4: Monitoramento e Observabilidade
 **Objetivo:** Manter a saúde do sistema.
 
-- [ ] **Painel Coolify**: Monitoramento de recursos.
-- [ ] **Health Checks**: Alertas de disponibilidade.
-- [ ] **Backups**: Rotina de segurança dos dados.
+- [x] **Painel Coolify**: Monitoramento de recursos ativo.
+- [x] **Health Checks**: Endpoint `/api/health` validado.
+- [ ] **Backups**: Configurar rotina automática no Coolify.
+
+---
+
+## 🔮 Épico 5: Migração do Sistema Completo (Lovable -> Go/React)
+**Objetivo:** Migrar as funcionalidades avançadas desenvolvidas no Lovable para nossa infraestrutura proprietária.
+
+- [ ] **Análise do Código Lovable**: Mapear componentes e fluxos.
+- [ ] **Migração do Frontend**:
+  - [ ] Dashboards analíticos.
+  - [ ] Telas de cadastro complexas.
+  - [ ] Relatórios fiscais.
+- [ ] **Expansão do Backend (Go)**:
+  - [ ] Novos endpoints para suportar features do Lovable.
+  - [ ] Otimização de queries para grandes volumes de dados.
+- [ ] **Integração**: Conectar novo Frontend ao Backend Go existente.
