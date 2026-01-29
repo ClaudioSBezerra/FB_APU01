@@ -31,7 +31,9 @@ func initDB() {
 	var err error
 	connStr := os.Getenv("DATABASE_URL")
 	if connStr == "" {
-		log.Fatal("DATABASE_URL environment variable is not set")
+		// Fallback for local development
+		connStr = "postgres://postgres:postgres@localhost:5432/fiscal_db?sslmode=disable"
+		fmt.Println("DATABASE_URL not set, using default local connection:", connStr)
 	}
 
 	// Retry logic for database connection
@@ -55,10 +57,22 @@ func main() {
 	defer db.Close()
 
 	// Execute migrations
-	files, err := filepath.Glob("migrations/*.sql")
+	migrationDir := "migrations"
+	if _, err := os.Stat(migrationDir); os.IsNotExist(err) {
+		// Try backend/migrations if running from root
+		if _, err := os.Stat("backend/migrations"); err == nil {
+			migrationDir = "backend/migrations"
+		}
+	}
+
+	fmt.Printf("Looking for migrations in: %s\n", migrationDir)
+	files, err := filepath.Glob(filepath.Join(migrationDir, "*.sql"))
 	if err != nil {
 		log.Printf("Error finding migration files: %v", err)
 	} else {
+		if len(files) == 0 {
+			log.Println("Warning: No migration files found!")
+		}
 		for _, file := range files {
 			fmt.Printf("Executing migration: %s\n", file)
 			migration, err := os.ReadFile(file)
@@ -95,6 +109,12 @@ func main() {
 
 		json.NewEncoder(w).Encode(response)
 	})
+
+	// Report Endpoints
+	http.HandleFunc("/api/reports/mercadorias", handlers.GetMercadoriasReportHandler(db))
+	http.HandleFunc("/api/reports/energia", handlers.GetEnergiaReportHandler(db))
+	http.HandleFunc("/api/reports/transporte", handlers.GetTransporteReportHandler(db))
+	http.HandleFunc("/api/reports/comunicacoes", handlers.GetComunicacoesReportHandler(db))
 
 	// Start Background Worker
 	worker.StartWorker(db)
