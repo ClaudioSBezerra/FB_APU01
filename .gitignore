@@ -35,3 +35,6 @@ backend/server
 .env.local
 docker-compose.override.yml
 docker-compose.override.yml
+
+# Temporary
+temp_lovable_analysis/
