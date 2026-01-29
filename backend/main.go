@@ -103,6 +103,7 @@ func main() {
 	http.HandleFunc("/api/upload", handlers.UploadHandler(db))
 
 	// Register Job Status Handler
+	http.HandleFunc("/api/jobs", handlers.ListJobsHandler(db))
 	http.HandleFunc("/api/jobs/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/participants") {
 			handlers.GetJobParticipantsHandler(db)(w, r)

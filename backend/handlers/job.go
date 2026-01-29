@@ -9,6 +9,7 @@ import (
 
 type JobStatusResponse struct {
 	ID        string `json:"id"`
+	Filename  string `json:"filename"`
 	Status    string `json:"status"`
 	Message   string `json:"message"`
 	CreatedAt string `json:"created_at"`
@@ -68,6 +69,41 @@ func GetJobParticipantsHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+func ListJobsHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.Method != "GET" {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		rows, err := db.Query(`
+			SELECT id, filename, status, message, created_at, updated_at 
+			FROM import_jobs 
+			ORDER BY created_at DESC 
+			LIMIT 50
+		`)
+		if err != nil {
+			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		jobs := []JobStatusResponse{}
+		for rows.Next() {
+			var job JobStatusResponse
+			if err := rows.Scan(&job.ID, &job.Filename, &job.Status, &job.Message, &job.CreatedAt, &job.UpdatedAt); err != nil {
+				continue
+			}
+			jobs = append(jobs, job)
+		}
+
+		json.NewEncoder(w).Encode(jobs)
+	}
+}
+
 func GetJobStatusHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// CORS Headers
@@ -89,9 +125,9 @@ func GetJobStatusHandler(db *sql.DB) http.HandlerFunc {
 		jobID := pathParts[3]
 
 		var job JobStatusResponse
-		query := `SELECT id, status, message, created_at, updated_at FROM import_jobs WHERE id = $1`
+		query := `SELECT id, filename, status, message, created_at, updated_at FROM import_jobs WHERE id = $1`
 		
-		err := db.QueryRow(query, jobID).Scan(&job.ID, &job.Status, &job.Message, &job.CreatedAt, &job.UpdatedAt)
+		err := db.QueryRow(query, jobID).Scan(&job.ID, &job.Filename, &job.Status, &job.Message, &job.CreatedAt, &job.UpdatedAt)
 		if err == sql.ErrNoRows {
 			http.Error(w, "Job not found", http.StatusNotFound)
 			return
