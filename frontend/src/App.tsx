@@ -8,7 +8,18 @@ function App() {
 
   useEffect(() => {
     fetch('/api/health')
-      .then(res => res.json())
+      .then(async res => {
+        const contentType = res.headers.get("content-type");
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+          return res.json();
+        } else {
+          const text = await res.text();
+          throw new Error(`Resposta não é JSON: ${text.substring(0, 50)}...`);
+        }
+      })
       .then(data => setStatus(`Backend Status: ${data.status} | Service: ${data.service}`))
       .catch(err => setStatus('Erro ao conectar ao backend: ' + err.message))
   }, [])

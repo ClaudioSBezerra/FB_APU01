@@ -3,8 +3,9 @@ services:
   api:
     build: ./backend
     container_name: fb_apu01-api
-    # ports:
-    #   - "8080:8080"
+    restart: always
+    ports:
+      - "8080:8080"
     expose:
       - "8080"
     environment:
@@ -12,8 +13,10 @@ services:
       - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable
       - REDIS_ADDR=redis:6379
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     volumes:
       - api_uploads:/root/uploads
     networks:
@@ -23,8 +26,9 @@ services:
   web:
     build: ./frontend
     container_name: fb_apu01-web
-    # ports:
-    #   - "3000:80"
+    restart: always
+    ports:
+      - "3000:80"
     expose:
       - "80"
     depends_on:
@@ -36,6 +40,7 @@ services:
   db:
     image: postgres:15-alpine
     container_name: fb_apu01-db
+    restart: always
     environment:
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
@@ -46,11 +51,17 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - fb_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Redis
   redis:
     image: redis:alpine
     container_name: fb_apu01-redis
+    restart: always
     # ports:
     #   - "${REDIS_PORT}:6379"
     networks:
