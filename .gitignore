@@ -33,3 +33,4 @@ backend/server
 # Env
 .env
 .env.local
+docker-compose.override.yml
