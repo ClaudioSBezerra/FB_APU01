@@ -34,3 +34,4 @@ backend/server
 .env
 .env.local
 docker-compose.override.yml
+docker-compose.override.yml
