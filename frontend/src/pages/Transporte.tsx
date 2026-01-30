@@ -3,6 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Download, Filter, FileText, Calculator } from "lucide-react";
 import { exportToExcel } from "@/lib/exportToExcel";
@@ -24,6 +31,9 @@ interface AggregatedData {
 
 const Transporte = () => {
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [selectedYear, setSelectedYear] = useState<string>("2027");
+  const [selectedFilial, setSelectedFilial] = useState<string>("all");
+  const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [data, setData] = useState<AggregatedData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -32,7 +42,7 @@ const Transporte = () => {
   // Fetch data from backend
   useEffect(() => {
     setLoading(true);
-    fetch('/api/reports/transporte')
+    fetch(`/api/reports/transporte?target_year=${selectedYear}`)
       .then(res => {
         if (!res.ok) throw new Error(`Erro na API: ${res.status} ${res.statusText}`);
         return res.json();
@@ -47,7 +57,7 @@ const Transporte = () => {
         setError(err.message);
         setLoading(false);
       });
-  }, []);
+  }, [selectedYear]);
 
   if (loading) {
     return (
@@ -63,7 +73,7 @@ const Transporte = () => {
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
           <p className="font-bold">Erro ao carregar dados</p>
           <p>{error}</p>
-          <p className="text-sm mt-2">Verifique se o backend está rodando em http://localhost:8080</p>
+          <p className="text-sm mt-2">Verifique se o backend está rodando em http://localhost:8081</p>
         </div>
       </div>
     );
@@ -87,14 +97,28 @@ const Transporte = () => {
     );
   }
 
+  // Extract unique values for filters
+  const uniqueFiliais = Array.from(new Set(data.map(item => item.filial_nome))).sort();
+  const uniqueMonths = Array.from(new Set(data.map(item => item.mes_ano))).sort((a, b) => {
+    const [ma, ya] = a.split('/').map(Number);
+    const [mb, yb] = b.split('/').map(Number);
+    return ya - yb || ma - mb;
+  });
+
+  // Filter data
+  const filteredData = data.filter(item => {
+    const matchFilial = selectedFilial === "all" || item.filial_nome === selectedFilial;
+    const matchMonth = selectedMonth === "all" || item.mes_ano === selectedMonth;
+    return matchFilial && matchMonth;
+  });
+
   const handleExport = () => {
-    const exportData = data.map(item => ({
+    const exportData = filteredData.map(item => ({
       'Filial': item.filial_nome,
       'Mês/Ano': item.mes_ano,
       'Tipo': item.tipo,
       'Valor Total': item.valor,
-      'PIS': item.pis,
-      'COFINS': item.cofins,
+      'PIS/COFINS': item.pis + item.cofins,
       'ICMS': item.icms,
       'ICMS Projetado': item.vl_icms_projetado,
       'IBS Projetado': item.vl_ibs_projetado,
@@ -103,7 +127,7 @@ const Transporte = () => {
     exportToExcel(exportData, 'relatorio_transporte');
   };
 
-  const chartData = data.reduce((acc: any[], curr) => {
+  const chartData = filteredData.reduce((acc: any[], curr) => {
     const existing = acc.find(item => item.name === curr.mes_ano);
     if (existing) {
       if (curr.tipo === 'SAIDA') {
@@ -125,7 +149,7 @@ const Transporte = () => {
     return acc;
   }, []);
 
-  const projectionData = data.reduce((acc: any[], curr) => {
+  const projectionData = filteredData.reduce((acc: any[], curr) => {
     const existing = acc.find(item => item.name === curr.mes_ano);
     if (existing) {
       existing.IBS += curr.vl_ibs_projetado;
@@ -149,14 +173,50 @@ const Transporte = () => {
           <h1 className="text-3xl font-bold text-gray-900">Serviços de Transporte</h1>
           <p className="text-gray-500 mt-1">Análise de aquisições e prestações de serviço de transporte (D100)</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => {}}>
-            <Filter className="w-4 h-4 mr-2" />
-            Filtrar
-          </Button>
+        <div className="flex gap-2 items-center">
+          <div className="flex items-center gap-2 bg-white p-1 rounded-md border">
+            <span className="text-sm font-medium text-gray-700 ml-2">Simulação:</span>
+            <Select value={selectedYear} onValueChange={setSelectedYear}>
+              <SelectTrigger className="w-[80px] h-8 border-none focus:ring-0">
+                <SelectValue placeholder="Ano" />
+              </SelectTrigger>
+              <SelectContent>
+                {[2027, 2028, 2029, 2030, 2031, 2032, 2033].map((year) => (
+                  <SelectItem key={year} value={year.toString()}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Select value={selectedFilial} onValueChange={setSelectedFilial}>
+            <SelectTrigger className="w-[180px] h-8">
+              <SelectValue placeholder="Filial: Todas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Filial: Todas</SelectItem>
+              {uniqueFiliais.map((f) => (
+                <SelectItem key={f} value={f}>{f}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="w-[130px] h-8">
+              <SelectValue placeholder="Mês: Todos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Mês: Todos</SelectItem>
+              {uniqueMonths.map((m) => (
+                <SelectItem key={m} value={m}>{m}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <Button variant="default" size="sm" onClick={handleExport}>
             <Download className="w-4 h-4 mr-2" />
-            Exportar Excel
+            Exportar
           </Button>
         </div>
       </div>
@@ -169,8 +229,8 @@ const Transporte = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatCurrency(data.filter(d => d.tipo === 'SAIDA').reduce((sum, item) => sum + item.valor, 0))}
-            </div>
+              {formatCurrency(filteredData.filter(d => d.tipo === 'SAIDA').reduce((sum, item) => sum + item.valor, 0))}
+            </div></div>
           </CardContent>
         </Card>
         <Card>
@@ -210,7 +270,7 @@ const Transporte = () => {
         <TabsContent value="dashboard" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Projeção de Movimentação</CardTitle>
+              <CardTitle>Projeção de Movimentação ({selectedYear})</CardTitle>
             </CardHeader>
             <CardContent className="h-[400px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -241,9 +301,11 @@ const Transporte = () => {
                     <TableHead>Mês/Ano</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead className="text-right">Valor Contábil</TableHead>
-                    <TableHead className="text-right">PIS</TableHead>
-                    <TableHead className="text-right">COFINS</TableHead>
-                    <TableHead className="text-right">ICMS</TableHead>
+                    <TableHead className="text-right">PIS/COFINS</TableHead>
+                    <TableHead className="text-right">ICMS Atual</TableHead>
+                    <TableHead className="text-right bg-blue-50">ICMS Projetado</TableHead>
+                    <TableHead className="text-right bg-blue-50">IBS</TableHead>
+                    <TableHead className="text-right bg-blue-50">CBS</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -259,9 +321,11 @@ const Transporte = () => {
                         </span>
                       </TableCell>
                       <TableCell className="text-right">{formatCurrency(row.valor)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.pis)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.cofins)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(row.pis + row.cofins)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(row.icms)}</TableCell>
+                      <TableCell className="text-right bg-blue-50 font-medium text-blue-700">{formatCurrency(row.vl_icms_projetado)}</TableCell>
+                      <TableCell className="text-right bg-blue-50 font-medium text-blue-700">{formatCurrency(row.vl_ibs_projetado)}</TableCell>
+                      <TableCell className="text-right bg-blue-50 font-medium text-blue-700">{formatCurrency(row.vl_cbs_projetado)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
