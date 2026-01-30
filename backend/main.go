@@ -132,6 +132,9 @@ func main() {
 		}
 	})
 
+	// Configuration Endpoints
+	http.HandleFunc("/api/config/aliquotas", handlers.GetTaxRatesHandler(db))
+
 	fmt.Printf("FB_APU01 Fiscal Engine (Go) starting on port %s...\n", port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatal(err)

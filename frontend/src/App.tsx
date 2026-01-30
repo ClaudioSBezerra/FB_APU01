@@ -5,6 +5,7 @@ import Mercadorias from './pages/Mercadorias';
 import Energia from './pages/Energia';
 import Transporte from './pages/Transporte';
 import Comunicacoes from './pages/Comunicacoes';
+import TabelaAliquotas from './pages/TabelaAliquotas';
 import { Button } from '@/components/ui/button';
 import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
@@ -62,7 +63,7 @@ function App() {
               <Route path="/dashboards" element={<ComingSoon title="Dashboards" />} />
               
               {/* Configurações */}
-              <Route path="/config/aliquotas" element={<ComingSoon title="Tabela de Alíquotas" />} />
+              <Route path="/config/aliquotas" element={<TabelaAliquotas />} />
               <Route path="/config/usuarios" element={<ComingSoon title="Gestão de Usuários" />} />
               <Route path="/config/ambiente" element={<ComingSoon title="Gestão de Ambiente" />} />
               
