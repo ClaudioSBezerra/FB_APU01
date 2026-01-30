@@ -140,6 +140,20 @@ export default function ImportarEFD() {
     }
   };
 
+  const handleCancelJob = async (id: string) => {
+    try {
+      const res = await fetch(`/api/jobs/${id}/cancel`, { method: 'POST' });
+      if (res.ok) {
+        toast.info('Cancelamento solicitado. O processo será interrompido em breve.');
+      } else {
+        toast.error('Erro ao solicitar cancelamento.');
+      }
+    } catch (error) {
+      console.error('Error cancelling job:', error);
+      toast.error('Erro ao conectar com o servidor.');
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6 animate-fade-in">
       <div className="flex flex-col gap-2">
@@ -241,9 +255,22 @@ export default function ImportarEFD() {
                       <div className="flex flex-col flex-1 min-w-0">
                         <div className="flex justify-between items-center mb-1">
                           <span className="text-sm font-medium truncate">{job.filename}</span>
-                          <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                            {new Date(job.created_at).toLocaleString()}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {new Date(job.created_at).toLocaleString()}
+                            </span>
+                            {job.status === 'processing' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                onClick={() => handleCancelJob(job.id)}
+                                title="Cancelar Importação"
+                              >
+                                <XCircle className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                         
                         {job.status === 'processing' && job.message && (
