@@ -2,14 +2,17 @@ package worker
 
 import (
 	"bufio"
+	"bytes"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/transform"
 )
@@ -67,6 +70,31 @@ func processNextJob(db *sql.DB) {
 	}
 }
 
+func countLines(filename string) (int, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
+
+	buf := make([]byte, 32*1024)
+	count := 0
+	lineSep := []byte{'\n'}
+
+	for {
+		c, err := file.Read(buf)
+		count += bytes.Count(buf[:c], lineSep)
+
+		switch {
+		case err == io.EOF:
+			return count, nil
+
+		case err != nil:
+			return count, err
+		}
+	}
+}
+
 func parseDate(s string) interface{} {
 	if len(s) != 8 {
 		return nil
@@ -110,6 +138,14 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 
 	fmt.Printf("Worker: Parsing SPED file %s (EFD ICMS Logic)...\n", filename)
 
+	// Count total lines for progress tracking
+	totalLines, err := countLines(path)
+	if err != nil {
+		fmt.Printf("Worker: Warning counting lines: %v\n", err)
+		totalLines = 0
+	}
+	fmt.Printf("Worker: Total lines to process: %d\n", totalLines)
+
 	tx, err := db.Begin()
 	if err != nil {
 		return "", fmt.Errorf("failed to begin transaction: %v", err)
@@ -140,13 +176,13 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 	if err != nil { return "", err }
 	defer stmtC600.Close()
 
-	stmtD100, err := tx.Prepare(`INSERT INTO reg_d100 (job_id, filial_cnpj, ind_oper, ind_emit, cod_part, cod_mod, cod_sit, ser, num_doc, chv_cte, dt_doc, dt_a_p, vl_doc, vl_icms, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`)
+	// Optimize D100 using CopyIn (Bulk Insert)
+	stmtD100, err := tx.Prepare(pq.CopyIn("reg_d100", "job_id", "filial_cnpj", "ind_oper", "ind_emit", "cod_part", "cod_mod", "cod_sit", "ser", "num_doc", "chv_cte", "dt_doc", "dt_a_p", "vl_doc", "vl_icms", "vl_pis", "vl_cofins", "vl_piscofins", "vl_icms_projetado", "vl_ibs_projetado", "vl_cbs_projetado"))
 	if err != nil { return "", err }
-	defer stmtD100.Close()
-
-	stmtD500, err := tx.Prepare(`INSERT INTO reg_d500 (job_id, filial_cnpj, ind_oper, ind_emit, cod_part, cod_mod, cod_sit, ser, sub, num_doc, dt_doc, dt_a_p, vl_doc, vl_icms, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`)
+	
+	// Optimize D500 using CopyIn (Bulk Insert)
+	stmtD500, err := tx.Prepare(pq.CopyIn("reg_d500", "job_id", "filial_cnpj", "ind_oper", "ind_emit", "cod_part", "cod_mod", "cod_sit", "ser", "sub", "num_doc", "dt_doc", "dt_a_p", "vl_doc", "vl_icms", "vl_pis", "vl_cofins", "vl_piscofins", "vl_icms_projetado", "vl_ibs_projetado", "vl_cbs_projetado"))
 	if err != nil { return "", err }
-	defer stmtD500.Close()
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -159,7 +195,15 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 			if len(parts) > 1 {
 				regType = parts[1]
 			}
-			msg := fmt.Sprintf("Processing line %d (Reg %s)...", lineCount, regType)
+			
+			var msg string
+			if totalLines > 0 {
+				percent := float64(lineCount) / float64(totalLines) * 100
+				msg = fmt.Sprintf("Processing line %d / %d (%.1f%%) - Reg %s...", lineCount, totalLines, percent, regType)
+			} else {
+				msg = fmt.Sprintf("Processing line %d (Reg %s)...", lineCount, regType)
+			}
+			
 			fmt.Printf("Worker: %s\n", msg)
 			// Use db.Exec (not tx) so updates are visible immediately
 			db.Exec("UPDATE import_jobs SET message=$1 WHERE id=$2", msg, jobID)
@@ -221,6 +265,13 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 
 	if err := scanner.Err(); err != nil { return "", fmt.Errorf("error reading file: %v", err) }
 	if count0000 == 0 { return "", fmt.Errorf("invalid SPED file: Record 0000 not found") }
+
+	// Flush Bulk Inserts
+	if _, err := stmtD100.Exec(); err != nil { return "", fmt.Errorf("error flushing D100: %v", err) }
+	if err := stmtD100.Close(); err != nil { return "", fmt.Errorf("error closing D100 copy: %v", err) }
+	
+	if _, err := stmtD500.Exec(); err != nil { return "", fmt.Errorf("error flushing D500: %v", err) }
+	if err := stmtD500.Close(); err != nil { return "", fmt.Errorf("error closing D500 copy: %v", err) }
 
 	// Run Aggregations
 	fmt.Println("Worker: Running aggregations (Database intensive)...")

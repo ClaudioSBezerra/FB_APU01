@@ -46,7 +46,7 @@ export default function ImportarEFD() {
     };
 
     fetchJobs();
-    const interval = setInterval(fetchJobs, 5000);
+    const interval = setInterval(fetchJobs, 2000);
     return () => clearInterval(interval);
   }, []);
 
@@ -238,11 +238,39 @@ export default function ImportarEFD() {
                       {job.status === 'error' && <XCircle className="h-4 w-4 text-red-500" />}
                       {job.status === 'pending' && <Clock className="h-4 w-4 text-gray-500" />}
                       
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">{job.filename}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(job.created_at).toLocaleString()}
-                        </span>
+                      <div className="flex flex-col flex-1 min-w-0">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-sm font-medium truncate">{job.filename}</span>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                            {new Date(job.created_at).toLocaleString()}
+                          </span>
+                        </div>
+                        
+                        {job.status === 'processing' && job.message && (
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>{job.message}</span>
+                            </div>
+                            {(() => {
+                              const match = job.message.match(/\(([\d.]+)%\)/);
+                              const percent = match ? parseFloat(match[1]) : 0;
+                              return (
+                                <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-primary transition-all duration-500 ease-in-out" 
+                                    style={{ width: `${percent}%` }}
+                                  />
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+                        
+                        {job.status !== 'processing' && (
+                           <span className="text-xs text-muted-foreground truncate" title={job.message}>
+                             {job.message || 'Aguardando...'}
+                           </span>
+                        )}
                       </div>
                     </div>
                     <Badge variant={
