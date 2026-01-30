@@ -235,8 +235,8 @@ const Comunicacoes = () => {
               <CardContent>
                 <div className="text-2xl font-bold">
               {formatCurrency(filteredData.reduce((acc, curr) => acc + curr.valor, 0))}
-            </div>    </div>
-              </CardContent>
+            </div>
+          </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

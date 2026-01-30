@@ -209,7 +209,7 @@ const Mercadorias = () => {
           <CardContent>
             <div className="text-2xl font-bold">
               {formatCurrency(filteredData.filter(d => d.tipo === 'SAIDA').reduce((sum, item) => sum + item.valor, 0))}
-            </div></div>
+            </div>
           </CardContent>
         </Card>
         <Card>
