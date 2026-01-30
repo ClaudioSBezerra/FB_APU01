@@ -134,6 +134,8 @@ func main() {
 
 	// Configuration Endpoints
 	http.HandleFunc("/api/config/aliquotas", handlers.GetTaxRatesHandler(db))
+	http.HandleFunc("/api/config/cfop", handlers.ListCFOPsHandler(db))
+	http.HandleFunc("/api/config/cfop/import", handlers.ImportCFOPsHandler(db))
 
 	fmt.Printf("FB_APU01 Fiscal Engine (Go) starting on port %s...\n", port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {

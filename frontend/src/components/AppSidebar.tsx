@@ -43,6 +43,7 @@ const menuItems = [
     icon: Settings,
     items: [
       { title: "Tabela de Alíquotas", url: "/config/aliquotas", icon: Table },
+      { title: "Tabela CFOP", url: "/config/cfop", icon: Table },
       { title: "Gestão de Usuários", url: "/config/usuarios", icon: Users, disabled: true },
       { title: "Gestão de Ambiente", url: "/config/ambiente", icon: Building, disabled: true },
     ]
