@@ -1,7 +1,9 @@
 services:
   # Backend (Go)
   api:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: fb_apu01-api
     restart: always
     # ports:
