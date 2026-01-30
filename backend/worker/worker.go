@@ -155,6 +155,11 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 	}
 	fmt.Printf("Worker: Total lines to process: %d\n", totalLines)
 
+	// Verify DB connection before starting transaction
+	if err := db.Ping(); err != nil {
+		return "", fmt.Errorf("database connection lost before transaction: %v", err)
+	}
+
 	tx, err := db.Begin()
 	if err != nil {
 		return "", fmt.Errorf("failed to begin transaction: %v", err)
@@ -163,35 +168,41 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 
 	// Insert Dummy Participants
 	_, err = tx.Exec(`INSERT INTO participants (job_id, cod_part, nome, cnpj, cpf) VALUES ($1, '9999999999', 'CONSUMIDOR FINAL', '', ''), ($1, '8888888888', 'FORNECEDOR GENERICO', '', '') ON CONFLICT DO NOTHING`, jobID)
-	if err != nil { fmt.Printf("Worker: Warning inserting dummy participants: %v\n", err) }
+	if err != nil { 
+		fmt.Printf("Worker: Warning inserting dummy participants: %v\n", err)
+		// If connection is bad, we should probably stop here
+		if strings.Contains(err.Error(), "bad connection") {
+			return "", fmt.Errorf("connection failed during dummy insert: %v", err)
+		}
+	}
 
 	stmtPart, err := tx.Prepare(`INSERT INTO participants (job_id, cod_part, nome, cod_pais, cnpj, cpf, ie, cod_mun, suframa, endereco, numero, complemento, bairro) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`)
-	if err != nil { return "", err }
+	if err != nil { return "", fmt.Errorf("failed to prepare stmtPart: %v", err) }
 	defer stmtPart.Close()
 
 	stmtC100, err := tx.Prepare(`INSERT INTO reg_c100 (job_id, filial_cnpj, ind_oper, ind_emit, cod_part, cod_mod, cod_sit, ser, num_doc, chv_nfe, dt_doc, dt_e_s, vl_doc, vl_icms, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING id`)
-	if err != nil { return "", err }
+	if err != nil { return "", fmt.Errorf("failed to prepare stmtC100: %v", err) }
 	defer stmtC100.Close()
 
 	stmtC190, err := tx.Prepare(`INSERT INTO reg_c190 (job_id, id_pai_c100, cfop, vl_opr, vl_bc_icms, vl_icms, vl_bc_icms_st, vl_icms_st, vl_red_bc, vl_ipi, cod_obs) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`)
-	if err != nil { return "", err }
+	if err != nil { return "", fmt.Errorf("failed to prepare stmtC190: %v", err) }
 	defer stmtC190.Close()
 
 	stmtC500, err := tx.Prepare(`INSERT INTO reg_c500 (job_id, filial_cnpj, cod_part, cod_mod, ser, num_doc, dt_doc, dt_e_s, vl_doc, vl_icms, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`)
-	if err != nil { return "", err }
+	if err != nil { return "", fmt.Errorf("failed to prepare stmtC500: %v", err) }
 	defer stmtC500.Close()
 
 	stmtC600, err := tx.Prepare(`INSERT INTO reg_c600 (job_id, filial_cnpj, cod_mod, cod_mun, ser, sub, cod_cons, qtd_cons, dt_doc, vl_doc, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`)
-	if err != nil { return "", err }
+	if err != nil { return "", fmt.Errorf("failed to prepare stmtC600: %v", err) }
 	defer stmtC600.Close()
 
 	// Optimize D100 using CopyIn (Bulk Insert)
 	stmtD100, err := tx.Prepare(pq.CopyIn("reg_d100", "job_id", "filial_cnpj", "ind_oper", "ind_emit", "cod_part", "cod_mod", "cod_sit", "ser", "num_doc", "chv_cte", "dt_doc", "dt_a_p", "vl_doc", "vl_icms", "vl_pis", "vl_cofins", "vl_piscofins", "vl_icms_projetado", "vl_ibs_projetado", "vl_cbs_projetado"))
-	if err != nil { return "", err }
+	if err != nil { return "", fmt.Errorf("failed to prepare stmtD100: %v", err) }
 	
 	// Optimize D500 using CopyIn (Bulk Insert)
 	stmtD500, err := tx.Prepare(pq.CopyIn("reg_d500", "job_id", "filial_cnpj", "ind_oper", "ind_emit", "cod_part", "cod_mod", "cod_sit", "ser", "sub", "num_doc", "dt_doc", "dt_a_p", "vl_doc", "vl_icms", "vl_pis", "vl_cofins", "vl_piscofins", "vl_icms_projetado", "vl_ibs_projetado", "vl_cbs_projetado"))
-	if err != nil { return "", err }
+	if err != nil { return "", fmt.Errorf("failed to prepare stmtD500: %v", err) }
 
 	for scanner.Scan() {
 		line := scanner.Text()
