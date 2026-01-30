@@ -57,6 +57,15 @@ func processNextJob(db *sql.DB) {
 	}
 
 	// Simulate Processing
+	if err := db.Ping(); err != nil {
+		fmt.Printf("Worker: Database connection lost, retrying... %v\n", err)
+		time.Sleep(1 * time.Second)
+		if err := db.Ping(); err != nil {
+			fmt.Printf("Worker: Database unreachable: %v\n", err)
+			return // Retry next loop
+		}
+	}
+
 	summary, err := processFile(db, id, filename)
 	
 	if err != nil {

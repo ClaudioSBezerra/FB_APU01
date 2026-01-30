@@ -42,6 +42,10 @@ func initDB() {
 		if err == nil {
 			err = db.Ping()
 			if err == nil {
+				// Configure Connection Pool
+				db.SetMaxOpenConns(25)
+				db.SetMaxIdleConns(5)
+				db.SetConnMaxLifetime(5 * time.Minute)
 				fmt.Println("Successfully connected to the database!")
 				return
 			}
