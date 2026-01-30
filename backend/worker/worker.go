@@ -191,6 +191,14 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 
 		// Progress Update (every 2000 lines)
 		if lineCount%2000 == 0 {
+			// Check for cancellation
+			var currentStatus string
+			if err := db.QueryRow("SELECT status FROM import_jobs WHERE id=$1", jobID).Scan(&currentStatus); err == nil {
+				if currentStatus == "cancelling" {
+					return "", fmt.Errorf("job cancelled by user")
+				}
+			}
+
 			regType := "?"
 			if len(parts) > 1 {
 				regType = parts[1]
