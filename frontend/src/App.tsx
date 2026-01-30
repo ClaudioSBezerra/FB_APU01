@@ -6,20 +6,32 @@ import Energia from './pages/Energia';
 import Transporte from './pages/Transporte';
 import Comunicacoes from './pages/Comunicacoes';
 import { Button } from '@/components/ui/button';
+import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
+import { AppSidebar } from '@/components/AppSidebar';
+import { Separator } from '@/components/ui/separator';
 
 function Home() {
   return (
     <div className="p-8 space-y-4">
       <h1 className="text-3xl font-bold">Bem-vindo ao FB_APU01</h1>
-      <p className="text-muted-foreground">Sistema de Apuração Assistida</p>
+      <p className="text-muted-foreground">Sistema de Apuração Assistida - Reforma Tributária</p>
       <div className="flex gap-4">
         <Link to="/importar-efd">
           <Button>Começar Importação</Button>
         </Link>
         <Link to="/mercadorias">
-          <Button variant="outline">Ver Mercadorias</Button>
+          <Button variant="outline">Ver Operações Comerciais</Button>
         </Link>
       </div>
+    </div>
+  );
+}
+
+function ComingSoon({ title }: { title: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-[50vh] space-y-4">
+      <h1 className="text-2xl font-bold text-muted-foreground">{title}</h1>
+      <p className="text-sm text-muted-foreground">Este módulo está em desenvolvimento.</p>
     </div>
   );
 }
@@ -27,35 +39,45 @@ function Home() {
 function App() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <div className="min-h-screen bg-background font-sans antialiased">
-        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="container flex h-14 items-center">
-            <div className="mr-4 flex">
-              <Link to="/" className="mr-6 flex items-center space-x-2 font-bold">
-                FB_APU01
-              </Link>
-              <nav className="flex items-center space-x-6 text-sm font-medium">
-                <Link to="/importar-efd" className="transition-colors hover:text-foreground/80">Importar</Link>
-                <Link to="/mercadorias" className="transition-colors hover:text-foreground/80">Mercadorias</Link>
-                <Link to="/energia" className="transition-colors hover:text-foreground/80">Energia</Link>
-                <Link to="/transporte" className="transition-colors hover:text-foreground/80">Transporte</Link>
-                <Link to="/comunicacoes" className="transition-colors hover:text-foreground/80">Comunicações</Link>
-              </nav>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+            <SidebarTrigger className="-ml-1" />
+            <Separator orientation="vertical" className="mr-2 h-4" />
+            <div className="flex items-center gap-2 text-sm font-medium">
+              FB_APU01 / Painel
             </div>
+          </header>
+          <div className="flex-1 space-y-4 p-4 pt-6">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              
+              {/* Simulador da RT */}
+              <Route path="/importar-efd" element={<ImportarEFD />} />
+              <Route path="/mercadorias" element={<Mercadorias />} />
+              <Route path="/energia" element={<Energia />} />
+              <Route path="/transporte" element={<Transporte />} />
+              <Route path="/comunicacoes" element={<Comunicacoes />} />
+              <Route path="/dashboards" element={<ComingSoon title="Dashboards" />} />
+              
+              {/* Configurações */}
+              <Route path="/config/aliquotas" element={<ComingSoon title="Tabela de Alíquotas" />} />
+              <Route path="/config/usuarios" element={<ComingSoon title="Gestão de Usuários" />} />
+              <Route path="/config/ambiente" element={<ComingSoon title="Gestão de Ambiente" />} />
+              
+              {/* Apuração */}
+              <Route path="/apuracao/entrada" element={<ComingSoon title="Importar XMLs Entrada" />} />
+              <Route path="/apuracao/saida" element={<ComingSoon title="Importar XMLs Saída" />} />
+              <Route path="/apuracao/nfse" element={<ComingSoon title="Importar XMLs NFS-e" />} />
+              
+              {/* RFB */}
+              <Route path="/rfb/importar" element={<ComingSoon title="Importar Apuração RFB" />} />
+            </Routes>
           </div>
-        </header>
-        <main>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/importar-efd" element={<ImportarEFD />} />
-            <Route path="/mercadorias" element={<Mercadorias />} />
-            <Route path="/energia" element={<Energia />} />
-            <Route path="/transporte" element={<Transporte />} />
-            <Route path="/comunicacoes" element={<Comunicacoes />} />
-          </Routes>
-        </main>
-        <Toaster />
-      </div>
+          <Toaster />
+        </SidebarInset>
+      </SidebarProvider>
     </BrowserRouter>
   );
 }
