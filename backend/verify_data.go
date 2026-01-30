@@ -1,10 +1,11 @@
+//go:build scripts
+
 package main
 
 import (
 	"database/sql"
 	"fmt"
 	"log"
-	"os"
 
 	_ "github.com/lib/pq"
 )

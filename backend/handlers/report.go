@@ -2,8 +2,9 @@ package handlers
 
 import (
 "database/sql"
-"encoding/json"
-"net/http"
+	"encoding/json"
+	"net/http"
+	"strconv"
 )
 
 type MercadoriasReport struct {
@@ -20,12 +21,20 @@ type MercadoriasReport struct {
 }
 
 func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
-return func(w http.ResponseWriter, r *http.Request) {
-w.Header().Set("Content-Type", "application/json")
-w.Header().Set("Access-Control-Allow-Origin", "*")
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 
-query := `
-SELECT 
+		targetYearStr := r.URL.Query().Get("target_year")
+		var targetYear interface{} = nil
+		if targetYearStr != "" {
+			if y, err := strconv.Atoi(targetYearStr); err == nil {
+				targetYear = y
+			}
+		}
+
+		query := `
+			SELECT 
 				COALESCE(j.company_name, 'Desconhecida') as filial_nome,
 				COALESCE(TO_CHAR(c.dt_doc, 'MM/YYYY'), 'ND') as mes_ano,
 				CASE WHEN c.ind_oper = '0' THEN 'ENTRADA' ELSE 'SAIDA' END as tipo,
@@ -33,11 +42,12 @@ SELECT
 				COALESCE(SUM(c.vl_pis), 0) as pis,
 				COALESCE(SUM(c.vl_cofins), 0) as cofins,
 				COALESCE(SUM(c.vl_icms), 0) as icms,
-				COALESCE(SUM(c.vl_icms_projetado), 0) as icms_projetado,
-				COALESCE(SUM(c.vl_ibs_projetado), 0) as ibs_projetado,
-				COALESCE(SUM(c.vl_cbs_projetado), 0) as cbs_projetado
+				COALESCE(SUM(c.vl_icms * (1 - (COALESCE(ta.perc_reduc_icms, 0) / 100.0))), 0) as icms_projetado,
+				COALESCE(SUM(c.vl_doc * ((COALESCE(NULLIF(ta.perc_ibs_uf, 0), 9.0) + COALESCE(NULLIF(ta.perc_ibs_mun, 0), 8.7)) / 100.0)), 0) as ibs_projetado,
+				COALESCE(SUM(c.vl_doc * (COALESCE(NULLIF(ta.perc_cbs, 0), 8.80) / 100.0)), 0) as cbs_projetado
 			FROM reg_c100 c
 			JOIN import_jobs j ON j.id = c.job_id
+			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($1, CAST(TO_CHAR(c.dt_doc, 'YYYY') AS INTEGER))
 			GROUP BY 1, 2, 3
 
 			UNION ALL
@@ -50,11 +60,12 @@ SELECT
 				COALESCE(SUM(d.vl_pis), 0),
 				COALESCE(SUM(d.vl_cofins), 0),
 				COALESCE(SUM(d.vl_icms), 0),
-				COALESCE(SUM(d.vl_icms_projetado), 0),
-				COALESCE(SUM(d.vl_ibs_projetado), 0),
-				COALESCE(SUM(d.vl_cbs_projetado), 0)
+				COALESCE(SUM(d.vl_icms * (1 - (COALESCE(ta.perc_reduc_icms, 0) / 100.0))), 0),
+				COALESCE(SUM(d.vl_doc * ((COALESCE(NULLIF(ta.perc_ibs_uf, 0), 9.0) + COALESCE(NULLIF(ta.perc_ibs_mun, 0), 8.7)) / 100.0)), 0),
+				COALESCE(SUM(d.vl_doc * (COALESCE(NULLIF(ta.perc_cbs, 0), 8.80) / 100.0)), 0)
 			FROM reg_d100 d
 			JOIN import_jobs j ON j.id = d.job_id
+			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($2, CAST(TO_CHAR(d.dt_doc, 'YYYY') AS INTEGER))
 			GROUP BY 1, 2, 3
 
 			UNION ALL
@@ -67,11 +78,12 @@ SELECT
 				COALESCE(SUM(c5.vl_pis), 0),
 				COALESCE(SUM(c5.vl_cofins), 0),
 				COALESCE(SUM(c5.vl_icms), 0),
-				COALESCE(SUM(c5.vl_icms_projetado), 0),
-				COALESCE(SUM(c5.vl_ibs_projetado), 0),
-				COALESCE(SUM(c5.vl_cbs_projetado), 0)
+				COALESCE(SUM(c5.vl_icms * (1 - (COALESCE(ta.perc_reduc_icms, 0) / 100.0))), 0),
+				COALESCE(SUM(c5.vl_doc * ((COALESCE(NULLIF(ta.perc_ibs_uf, 0), 9.0) + COALESCE(NULLIF(ta.perc_ibs_mun, 0), 8.7)) / 100.0)), 0),
+				COALESCE(SUM(c5.vl_doc * (COALESCE(NULLIF(ta.perc_cbs, 0), 8.80) / 100.0)), 0)
 			FROM reg_c500 c5
 			JOIN import_jobs j ON j.id = c5.job_id
+			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($3, CAST(TO_CHAR(c5.dt_doc, 'YYYY') AS INTEGER))
 			GROUP BY 1, 2
 
 			UNION ALL
@@ -84,15 +96,16 @@ SELECT
 				COALESCE(SUM(c6.vl_pis), 0),
 				COALESCE(SUM(c6.vl_cofins), 0),
 				0,
-				COALESCE(SUM(c6.vl_icms_projetado), 0),
-				COALESCE(SUM(c6.vl_ibs_projetado), 0),
-				COALESCE(SUM(c6.vl_cbs_projetado), 0)
+				0,
+				COALESCE(SUM(c6.vl_doc * ((COALESCE(NULLIF(ta.perc_ibs_uf, 0), 9.0) + COALESCE(NULLIF(ta.perc_ibs_mun, 0), 8.7)) / 100.0)), 0),
+				COALESCE(SUM(c6.vl_doc * (COALESCE(NULLIF(ta.perc_cbs, 0), 8.80) / 100.0)), 0)
 			FROM reg_c600 c6
 			JOIN import_jobs j ON j.id = c6.job_id
+			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($4, CAST(TO_CHAR(c6.dt_doc, 'YYYY') AS INTEGER))
 			GROUP BY 1, 2
 `
 
-rows, err := db.Query(query)
+		rows, err := db.Query(query, targetYear, targetYear, targetYear, targetYear)
 if err != nil {
 http.Error(w, err.Error(), http.StatusInternalServerError)
 return
@@ -122,6 +135,14 @@ func GetTransporteReportHandler(db *sql.DB) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
+		targetYearStr := r.URL.Query().Get("target_year")
+		var targetYear interface{} = nil
+		if targetYearStr != "" {
+			if y, err := strconv.Atoi(targetYearStr); err == nil {
+				targetYear = y
+			}
+		}
+
 		query := `
 			SELECT 
 				COALESCE(j.company_name, 'Desconhecida') as filial_nome,
@@ -131,15 +152,16 @@ func GetTransporteReportHandler(db *sql.DB) http.HandlerFunc {
 				COALESCE(SUM(d.vl_pis), 0) as pis,
 				COALESCE(SUM(d.vl_cofins), 0) as cofins,
 				COALESCE(SUM(d.vl_icms), 0) as icms,
-				COALESCE(SUM(d.vl_icms_projetado), 0) as icms_projetado,
-				COALESCE(SUM(d.vl_ibs_projetado), 0) as ibs_projetado,
-				COALESCE(SUM(d.vl_cbs_projetado), 0) as cbs_projetado
+				COALESCE(SUM(d.vl_icms * (1 - (COALESCE(ta.perc_reduc_icms, 0) / 100.0))), 0) as icms_projetado,
+				COALESCE(SUM(d.vl_doc * ((COALESCE(NULLIF(ta.perc_ibs_uf, 0), 9.0) + COALESCE(NULLIF(ta.perc_ibs_mun, 0), 8.7)) / 100.0)), 0) as ibs_projetado,
+				COALESCE(SUM(d.vl_doc * (COALESCE(NULLIF(ta.perc_cbs, 0), 8.80) / 100.0)), 0) as cbs_projetado
 			FROM reg_d100 d
 			JOIN import_jobs j ON j.id = d.job_id
+			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($1, CAST(TO_CHAR(d.dt_doc, 'YYYY') AS INTEGER))
 			GROUP BY 1, 2, 3
 		`
 
-		rows, err := db.Query(query)
+		rows, err := db.Query(query, targetYear)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -169,6 +191,14 @@ func GetEnergiaReportHandler(db *sql.DB) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
+		targetYearStr := r.URL.Query().Get("target_year")
+		var targetYear interface{} = nil
+		if targetYearStr != "" {
+			if y, err := strconv.Atoi(targetYearStr); err == nil {
+				targetYear = y
+			}
+		}
+
 		query := `
 			SELECT 
 				COALESCE(j.company_name, 'Desconhecida') as filial_nome,
@@ -178,15 +208,16 @@ func GetEnergiaReportHandler(db *sql.DB) http.HandlerFunc {
 				COALESCE(SUM(c.vl_pis), 0) as pis,
 				COALESCE(SUM(c.vl_cofins), 0) as cofins,
 				COALESCE(SUM(c.vl_icms), 0) as icms,
-				COALESCE(SUM(c.vl_icms_projetado), 0) as icms_projetado,
-				COALESCE(SUM(c.vl_ibs_projetado), 0) as ibs_projetado,
-				COALESCE(SUM(c.vl_cbs_projetado), 0) as cbs_projetado
+				COALESCE(SUM(c.vl_icms * (1 - (COALESCE(ta.perc_reduc_icms, 0) / 100.0))), 0) as icms_projetado,
+				COALESCE(SUM(c.vl_doc * ((COALESCE(NULLIF(ta.perc_ibs_uf, 0), 9.0) + COALESCE(NULLIF(ta.perc_ibs_mun, 0), 8.7)) / 100.0)), 0) as ibs_projetado,
+				COALESCE(SUM(c.vl_doc * (COALESCE(NULLIF(ta.perc_cbs, 0), 8.80) / 100.0)), 0) as cbs_projetado
 			FROM reg_c500 c
 			JOIN import_jobs j ON j.id = c.job_id
+			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($1, CAST(TO_CHAR(c.dt_doc, 'YYYY') AS INTEGER))
 			GROUP BY 1, 2
 		`
 
-		rows, err := db.Query(query)
+		rows, err := db.Query(query, targetYear)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -216,6 +247,14 @@ func GetComunicacoesReportHandler(db *sql.DB) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
+		targetYearStr := r.URL.Query().Get("target_year")
+		var targetYear interface{} = nil
+		if targetYearStr != "" {
+			if y, err := strconv.Atoi(targetYearStr); err == nil {
+				targetYear = y
+			}
+		}
+
 		query := `
 			SELECT 
 				COALESCE(j.company_name, 'Desconhecida') as filial_nome,
@@ -225,15 +264,16 @@ func GetComunicacoesReportHandler(db *sql.DB) http.HandlerFunc {
 				COALESCE(SUM(d.vl_pis), 0) as pis,
 				COALESCE(SUM(d.vl_cofins), 0) as cofins,
 				COALESCE(SUM(d.vl_icms), 0) as icms,
-				COALESCE(SUM(d.vl_icms_projetado), 0) as icms_projetado,
-				COALESCE(SUM(d.vl_ibs_projetado), 0) as ibs_projetado,
-				COALESCE(SUM(d.vl_cbs_projetado), 0) as cbs_projetado
+				COALESCE(SUM(d.vl_icms * (1 - (COALESCE(ta.perc_reduc_icms, 0) / 100.0))), 0) as icms_projetado,
+				COALESCE(SUM(d.vl_doc * ((COALESCE(NULLIF(ta.perc_ibs_uf, 0), 9.0) + COALESCE(NULLIF(ta.perc_ibs_mun, 0), 8.7)) / 100.0)), 0) as ibs_projetado,
+				COALESCE(SUM(d.vl_doc * (COALESCE(NULLIF(ta.perc_cbs, 0), 8.80) / 100.0)), 0) as cbs_projetado
 			FROM reg_d500 d
 			JOIN import_jobs j ON j.id = d.job_id
+			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($1, CAST(TO_CHAR(d.dt_doc, 'YYYY') AS INTEGER))
 			GROUP BY 1, 2, 3
 		`
 
-		rows, err := db.Query(query)
+		rows, err := db.Query(query, targetYear)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
