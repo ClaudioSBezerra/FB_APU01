@@ -201,8 +201,17 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 	if err != nil { return "", fmt.Errorf("failed to prepare stmtD100: %v", err) }
 	
 	// Optimize D500 using CopyIn (Bulk Insert)
-	stmtD500, err := tx.Prepare(pq.CopyIn("reg_d500", "job_id", "filial_cnpj", "ind_oper", "ind_emit", "cod_part", "cod_mod", "cod_sit", "ser", "sub", "num_doc", "dt_doc", "dt_a_p", "vl_doc", "vl_icms", "vl_pis", "vl_cofins", "vl_piscofins", "vl_icms_projetado", "vl_ibs_projetado", "vl_cbs_projetado"))
-	if err != nil { return "", fmt.Errorf("failed to prepare stmtD500: %v", err) }
+	// Add retry for D500 preparation as it tends to fail on bad connections
+	var stmtD500 *sql.Stmt
+	for i := 0; i < 3; i++ {
+		stmtD500, err = tx.Prepare(pq.CopyIn("reg_d500", "job_id", "filial_cnpj", "ind_oper", "ind_emit", "cod_part", "cod_mod", "cod_sit", "ser", "sub", "num_doc", "dt_doc", "dt_a_p", "vl_doc", "vl_icms", "vl_pis", "vl_cofins", "vl_piscofins", "vl_icms_projetado", "vl_ibs_projetado", "vl_cbs_projetado"))
+		if err == nil {
+			break
+		}
+		fmt.Printf("Worker: Retrying stmtD500 preparation (attempt %d/3): %v\n", i+1, err)
+		time.Sleep(1 * time.Second)
+	}
+	if err != nil { return "", fmt.Errorf("failed to prepare stmtD500 after retries: %v", err) }
 
 	for scanner.Scan() {
 		line := scanner.Text()
