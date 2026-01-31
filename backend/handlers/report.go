@@ -4,6 +4,7 @@ import (
 "database/sql"
 	"encoding/json"
 	"fmt"
+	"fmt"
 	"net/http"
 	"strconv"
 )
@@ -160,7 +161,7 @@ func GetTransporteReportHandler(db *sql.DB) http.HandlerFunc {
 				COALESCE(SUM(d.vl_doc * (COALESCE(NULLIF(ta.perc_cbs, 0), 8.80) / 100.0)), 0) as cbs_projetado
 			FROM reg_d100 d
 			JOIN import_jobs j ON j.id = d.job_id
-			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($1, CAST(TO_CHAR(d.dt_doc, 'YYYY') AS INTEGER))
+			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE(CAST($2 AS INTEGER), CAST(TO_CHAR(d.dt_doc, 'YYYY') AS INTEGER))
 			GROUP BY 1, 2, 3
 		`
 
@@ -175,9 +176,10 @@ func GetTransporteReportHandler(db *sql.DB) http.HandlerFunc {
 		for rows.Next() {
 			var r MercadoriasReport
 			if err := rows.Scan(&r.FilialNome, &r.MesAno, &r.Tipo, &r.Valor, &r.Pis, &r.Cofins, &r.Icms, &r.IcmsProjetado, &r.IbsProjetado, &r.CbsProjetado); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
+			fmt.Printf("Error scanning mercadorias report: %v\n", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 			reports = append(reports, r)
 		}
 
