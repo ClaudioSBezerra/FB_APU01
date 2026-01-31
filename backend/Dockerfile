@@ -9,9 +9,10 @@ RUN go mod download
 
 # Copy source code
 COPY backend/ .
+RUN go mod tidy
 
 # Build optimized binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o server main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -v -ldflags="-w -s" -o server main.go
 
 # Run Stage
 FROM alpine:latest
