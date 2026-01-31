@@ -70,8 +70,10 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// Save file to disk
+		fmt.Printf("Upload Debug: Starting to write file %s to storage...\n", safeFilename)
 		dst, err := os.Create(savePath)
 		if err != nil {
+			fmt.Printf("Upload Error: Failed to create file on storage: %v\n", err)
 			http.Error(w, "Unable to create the file on server", http.StatusInternalServerError)
 			return
 		}
@@ -79,9 +81,11 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 
 		written, err := io.Copy(dst, file)
 		if err != nil {
+			fmt.Printf("Upload Error: Failed to write content to storage: %v\n", err)
 			http.Error(w, "Unable to save the file content", http.StatusInternalServerError)
 			return
 		}
+		fmt.Printf("Upload Debug: Successfully wrote %d bytes to %s\n", written, safeFilename)
 
 		// Verify size
 		fmt.Printf("Upload Debug: Header Size: %d, Written: %d\n", header.Size, written)
