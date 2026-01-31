@@ -77,6 +77,23 @@ export default function ImportarEFD() {
   const handleUpload = async () => {
     if (!selectedFile) return;
 
+    // Extract Metadata (Lines from |9999| and Size)
+    let expectedLines = "unknown";
+    try {
+      // Read last 4KB to find trailer
+      const blob = selectedFile.slice(Math.max(selectedFile.size - 4096, 0));
+      const text = await blob.text();
+      // Look for |9999|count|
+      // SPED lines start and end with pipes. Regex: \|9999\|(\d+)\|
+      const match = text.match(/\|9999\|(\d+)\|/);
+      if (match && match[1]) {
+        expectedLines = match[1];
+        console.log(`Frontend Debug: Found trailer |9999|${expectedLines}|`);
+      }
+    } catch (err) {
+      console.warn("Could not read file trailer:", err);
+    }
+
     setUploadProgress({
       status: 'uploading',
       percentage: 0,
@@ -88,6 +105,8 @@ export default function ImportarEFD() {
 
     const formData = new FormData();
     formData.append('file', selectedFile);
+    formData.append('expected_lines', expectedLines);
+    formData.append('expected_size', selectedFile.size.toString());
 
     try {
       const startTime = Date.now();

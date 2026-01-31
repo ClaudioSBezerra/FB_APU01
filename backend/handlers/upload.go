@@ -94,6 +94,51 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 			log.Printf("WARNING: Upload size mismatch! Header says %d but wrote %d bytes.\n", header.Size, written)
 		}
 
+		// --- Integrity Check (Storage Verification) ---
+		expectedLines := r.FormValue("expected_lines")
+		expectedSize := r.FormValue("expected_size")
+
+		// Read last 4KB to find |9999|
+		tailBuf := make([]byte, 4096)
+		startPos := int64(0)
+		if written > 4096 {
+			startPos = written - 4096
+		}
+		
+		// Re-open for reading
+		fCheck, err := os.Open(savePath)
+		if err == nil {
+			defer fCheck.Close()
+			_, err = fCheck.ReadAt(tailBuf, startPos)
+			if err == nil || err == io.EOF {
+				tailStr := string(tailBuf)
+				var actualLines string = "not_found"
+				
+				// Simple parsing for |9999|
+				lines := strings.Split(tailStr, "\n")
+				for i := len(lines) - 1; i >= 0; i-- {
+					line := strings.TrimSpace(lines[i])
+					if strings.Contains(line, "|9999|") {
+						parts := strings.Split(line, "|")
+						// |9999|COUNT| -> index 0 is empty, 1 is 9999, 2 is COUNT
+						if len(parts) >= 3 && parts[1] == "9999" {
+							actualLines = parts[2]
+							break
+						}
+					}
+				}
+
+				log.Printf("LOG API Integrity: File=%s", safeFilename)
+				log.Printf("LOG API Frontend: Expected Lines=%s, Expected Size=%s", expectedLines, expectedSize)
+				log.Printf("LOG API Storage:  Registro Final %s, tamanho recebido final %d", actualLines, written)
+				
+				if expectedLines != "unknown" && expectedLines != actualLines {
+					log.Printf("LOG API WARNING: Line count mismatch! Frontend says %s, Storage found %s", expectedLines, actualLines)
+				}
+			}
+		}
+		// ---------------------------------------------
+
 		// Insert job into database
 		var jobID string
 		query := `INSERT INTO import_jobs (filename, status, message) VALUES ($1, $2, $3) RETURNING id`
