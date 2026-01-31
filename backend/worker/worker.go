@@ -164,6 +164,16 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, 1024*1024)
 
+	// SKIP LINES logic for Resume
+	if lastLineProcessed > 0 {
+		fmt.Printf("Worker: Skipping first %d lines to resume...\n", lastLineProcessed)
+		linesSkipped := 0
+		for linesSkipped < lastLineProcessed && scanner.Scan() {
+			linesSkipped++
+		}
+		lineCount = lastLineProcessed
+	}
+
 	var (
 		count0000, count0150, countC100, countC190, countC500, countC600, countD100, countD500, lineCount int
 		company, filialCNPJ, dtIni, dtFin, currentC100ID                                                  string
@@ -192,6 +202,22 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 	// Verify DB connection before starting
 	if err := db.Ping(); err != nil {
 		return "", fmt.Errorf("database connection lost before start: %v", err)
+	}
+
+	// Auto-Migrate: Ensure last_line_processed column exists
+	// This allows us to resume processing if it crashes
+	_, err = db.Exec(`ALTER TABLE import_jobs ADD COLUMN IF NOT EXISTS last_line_processed INT DEFAULT 0`)
+	if err != nil {
+		fmt.Printf("Worker: Warning checking checkpoint column: %v\n", err)
+	}
+
+	// CHECKPOINT: Check if we are resuming a job
+	var lastLineProcessed int
+	err = db.QueryRow("SELECT COALESCE(last_line_processed, 0) FROM import_jobs WHERE id = $1", jobID).Scan(&lastLineProcessed)
+	if err == nil && lastLineProcessed > 0 {
+		fmt.Printf("Worker: RESUMING job %s from line %d\n", jobID, lastLineProcessed)
+	} else {
+		lastLineProcessed = 0
 	}
 
 	// Warning check for empty CFOP table
@@ -413,6 +439,13 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 			if err := commitBatch(); err != nil {
 				return "", fmt.Errorf("batch commit failed at line %d: %v", lineCount, err)
 			}
+
+			// Update Checkpoint in DB
+			_, err = db.Exec("UPDATE import_jobs SET last_line_processed = $1, updated_at = NOW() WHERE id = $2", lineCount, jobID)
+			if err != nil {
+				fmt.Printf("Worker: Warning updating checkpoint: %v\n", err)
+			}
+
 			if err := startBatch(); err != nil {
 				return "", fmt.Errorf("failed to restart batch at line %d: %v", lineCount, err)
 			}
