@@ -70,6 +70,8 @@ services:
     image: redis:alpine
     container_name: fb_apu01-redis
     restart: always
+    sysctls:
+      - net.core.somaxconn=1024
     # ports:
     #   - "${REDIS_PORT}:6379"
     networks:

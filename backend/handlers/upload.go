@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -70,10 +71,10 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// Save file to disk
-		fmt.Printf("Upload Debug: Starting to write file %s to storage...\n", safeFilename)
+		log.Printf("Upload Debug: Starting to write file %s to storage...\n", safeFilename)
 		dst, err := os.Create(savePath)
 		if err != nil {
-			fmt.Printf("Upload Error: Failed to create file on storage: %v\n", err)
+			log.Printf("Upload Error: Failed to create file on storage: %v\n", err)
 			http.Error(w, "Unable to create the file on server", http.StatusInternalServerError)
 			return
 		}
@@ -81,16 +82,16 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 
 		written, err := io.Copy(dst, file)
 		if err != nil {
-			fmt.Printf("Upload Error: Failed to write content to storage: %v\n", err)
+			log.Printf("Upload Error: Failed to write content to storage: %v\n", err)
 			http.Error(w, "Unable to save the file content", http.StatusInternalServerError)
 			return
 		}
-		fmt.Printf("Upload Debug: Successfully wrote %d bytes to %s\n", written, safeFilename)
+		log.Printf("Upload Debug: Successfully wrote %d bytes to %s\n", written, safeFilename)
 
 		// Verify size
-		fmt.Printf("Upload Debug: Header Size: %d, Written: %d\n", header.Size, written)
+		log.Printf("Upload Debug: Header Size: %d, Written: %d\n", header.Size, written)
 		if written != header.Size {
-			fmt.Printf("WARNING: Upload size mismatch! Header says %d but wrote %d bytes.\n", header.Size, written)
+			log.Printf("WARNING: Upload size mismatch! Header says %d but wrote %d bytes.\n", header.Size, written)
 		}
 
 		// Insert job into database
@@ -100,9 +101,11 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 		if err != nil {
 			// Try to cleanup file if DB fails
 			os.Remove(savePath)
+			log.Printf("Database Error: %v\n", err)
 			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+		log.Printf("Upload Success: Job %s created for file %s\n", jobID, safeFilename)
 
 		fmt.Printf("File saved: %s (Size: %d bytes) -> Job ID: %s\n", savePath, header.Size, jobID)
 

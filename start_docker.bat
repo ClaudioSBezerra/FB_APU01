@@ -1,7 +1,7 @@
 @echo off
 echo Starting FB_APU01 with .env.FB_APU01...
-echo Forcing rebuild of API to ensure latest code changes...
-docker compose --env-file .env.FB_APU01 build --no-cache api
+echo Forcing rebuild of API and WEB to ensure latest code/config changes...
+docker compose --env-file .env.FB_APU01 build --no-cache api web
 docker compose --env-file .env.FB_APU01 up -d
 
 echo.
