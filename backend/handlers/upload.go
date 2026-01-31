@@ -35,12 +35,12 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Limit upload size (10MB)
-		r.ParseMultipartForm(10 << 20)
+		// Limit upload size (512MB to avoid temp file issues if any, though mainly RAM)
+		r.ParseMultipartForm(512 << 20)
 
 		file, header, err := r.FormFile("file")
 		if err != nil {
-			http.Error(w, "Error retrieving the file", http.StatusBadRequest)
+			http.Error(w, "Error retrieving the file: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 		defer file.Close()
@@ -73,9 +73,16 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 		}
 		defer dst.Close()
 
-		if _, err := io.Copy(dst, file); err != nil {
+		written, err := io.Copy(dst, file)
+		if err != nil {
 			http.Error(w, "Unable to save the file content", http.StatusInternalServerError)
 			return
+		}
+
+		// Verify size
+		fmt.Printf("Upload Debug: Header Size: %d, Written: %d\n", header.Size, written)
+		if written != header.Size {
+			fmt.Printf("WARNING: Upload size mismatch! Header says %d but wrote %d bytes.\n", header.Size, written)
 		}
 
 		// Insert job into database

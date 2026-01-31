@@ -1,6 +1,9 @@
 @echo off
 echo Starting FB_APU01 with .env.FB_APU01...
-docker compose --env-file .env.FB_APU01 up -d --build
+echo Forcing rebuild of API to ensure latest code changes...
+docker compose --env-file .env.FB_APU01 build --no-cache api
+docker compose --env-file .env.FB_APU01 up -d
+
 echo.
-echo Check status with: docker compose --env-file .env.FB_APU01 ps
-pause
+echo Containers started. Attaching to backend logs (Service: api)...
+docker compose --env-file .env.FB_APU01 logs -f api
