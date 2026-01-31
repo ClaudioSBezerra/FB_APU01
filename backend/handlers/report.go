@@ -4,7 +4,6 @@ import (
 "database/sql"
 	"encoding/json"
 	"fmt"
-	"fmt"
 	"net/http"
 	"strconv"
 )
