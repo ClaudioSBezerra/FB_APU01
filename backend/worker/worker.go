@@ -169,38 +169,44 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 	// Helper to start a new batch transaction
 	startBatch := func() error {
 		var err error
-		// Retry logic for starting transaction
+		// Retry logic for starting transaction AND preparing statements
 		for i := 0; i < 3; i++ {
-			tx, err = db.Begin()
-			if err == nil { break }
-			fmt.Printf("Worker: Failed to begin transaction (attempt %d/3): %v. Retrying...\n", i+1, err)
+			err = func() error {
+				tx, err = db.Begin()
+				if err != nil { return err }
+
+				stmtPart, err = tx.Prepare(`INSERT INTO participants (job_id, cod_part, nome, cod_pais, cnpj, cpf, ie, cod_mun, suframa, endereco, numero, complemento, bairro) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`)
+				if err != nil { return err }
+
+				stmtC100, err = tx.Prepare(`INSERT INTO reg_c100 (job_id, filial_cnpj, ind_oper, ind_emit, cod_part, cod_mod, cod_sit, ser, num_doc, chv_nfe, dt_doc, dt_e_s, vl_doc, vl_icms, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING id`)
+				if err != nil { return err }
+
+				stmtC190, err = tx.Prepare(`INSERT INTO reg_c190 (job_id, id_pai_c100, cfop, vl_opr, vl_bc_icms, vl_icms, vl_bc_icms_st, vl_icms_st, vl_red_bc, vl_ipi, cod_obs) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`)
+				if err != nil { return err }
+
+				stmtC500, err = tx.Prepare(`INSERT INTO reg_c500 (job_id, filial_cnpj, cod_part, cod_mod, ser, num_doc, dt_doc, dt_e_s, vl_doc, vl_icms, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`)
+				if err != nil { return err }
+
+				stmtC600, err = tx.Prepare(`INSERT INTO reg_c600 (job_id, filial_cnpj, cod_mod, cod_mun, ser, sub, cod_cons, qtd_cons, dt_doc, vl_doc, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`)
+				if err != nil { return err }
+
+				stmtD100, err = tx.Prepare(pq.CopyIn("reg_d100", "job_id", "filial_cnpj", "ind_oper", "ind_emit", "cod_part", "cod_mod", "cod_sit", "ser", "num_doc", "chv_cte", "dt_doc", "dt_a_p", "vl_doc", "vl_icms", "vl_pis", "vl_cofins", "vl_piscofins", "vl_icms_projetado", "vl_ibs_projetado", "vl_cbs_projetado"))
+				if err != nil { return err }
+
+				stmtD500, err = tx.Prepare(pq.CopyIn("reg_d500", "job_id", "filial_cnpj", "ind_oper", "ind_emit", "cod_part", "cod_mod", "cod_sit", "ser", "sub", "num_doc", "dt_doc", "dt_a_p", "vl_doc", "vl_icms", "vl_pis", "vl_cofins", "vl_piscofins", "vl_icms_projetado", "vl_ibs_projetado", "vl_cbs_projetado"))
+				if err != nil { return err }
+
+				return nil
+			}()
+
+			if err == nil { return nil }
+
+			if tx != nil { tx.Rollback() }
+			fmt.Printf("Worker: Batch setup failed (attempt %d/3): %v. Retrying...\n", i+1, err)
 			time.Sleep(1 * time.Second)
 			db.Ping() // Try to reconnect
 		}
-		if err != nil { return fmt.Errorf("failed to begin transaction after retries: %v", err) }
-
-		stmtPart, err = tx.Prepare(`INSERT INTO participants (job_id, cod_part, nome, cod_pais, cnpj, cpf, ie, cod_mun, suframa, endereco, numero, complemento, bairro) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`)
-		if err != nil { return err }
-
-		stmtC100, err = tx.Prepare(`INSERT INTO reg_c100 (job_id, filial_cnpj, ind_oper, ind_emit, cod_part, cod_mod, cod_sit, ser, num_doc, chv_nfe, dt_doc, dt_e_s, vl_doc, vl_icms, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING id`)
-		if err != nil { return err }
-
-		stmtC190, err = tx.Prepare(`INSERT INTO reg_c190 (job_id, id_pai_c100, cfop, vl_opr, vl_bc_icms, vl_icms, vl_bc_icms_st, vl_icms_st, vl_red_bc, vl_ipi, cod_obs) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`)
-		if err != nil { return err }
-
-		stmtC500, err = tx.Prepare(`INSERT INTO reg_c500 (job_id, filial_cnpj, cod_part, cod_mod, ser, num_doc, dt_doc, dt_e_s, vl_doc, vl_icms, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`)
-		if err != nil { return err }
-
-		stmtC600, err = tx.Prepare(`INSERT INTO reg_c600 (job_id, filial_cnpj, cod_mod, cod_mun, ser, sub, cod_cons, qtd_cons, dt_doc, vl_doc, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`)
-		if err != nil { return err }
-
-		stmtD100, err = tx.Prepare(pq.CopyIn("reg_d100", "job_id", "filial_cnpj", "ind_oper", "ind_emit", "cod_part", "cod_mod", "cod_sit", "ser", "num_doc", "chv_cte", "dt_doc", "dt_a_p", "vl_doc", "vl_icms", "vl_pis", "vl_cofins", "vl_piscofins", "vl_icms_projetado", "vl_ibs_projetado", "vl_cbs_projetado"))
-		if err != nil { return err }
-
-		stmtD500, err = tx.Prepare(pq.CopyIn("reg_d500", "job_id", "filial_cnpj", "ind_oper", "ind_emit", "cod_part", "cod_mod", "cod_sit", "ser", "sub", "num_doc", "dt_doc", "dt_a_p", "vl_doc", "vl_icms", "vl_pis", "vl_cofins", "vl_piscofins", "vl_icms_projetado", "vl_ibs_projetado", "vl_cbs_projetado"))
-		if err != nil { return err }
-
-		return nil
+		return fmt.Errorf("failed to begin transaction and prepare statements after retries: %v", err)
 	}
 
 	// Helper to commit current batch and close statements
