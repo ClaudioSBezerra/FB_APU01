@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lib/pq"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/transform"
 )
