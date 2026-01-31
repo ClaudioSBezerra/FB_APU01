@@ -3,17 +3,12 @@ FROM golang:1.22-alpine AS builder
 
 WORKDIR /app
 
-# Copy root go.work and go.work.sum (if exists)
-COPY go.work .
-COPY go.work.sum* .
-
 # Copy backend module
-COPY backend/go.mod backend/go.sum* ./backend/
-COPY backend/ ./backend/
-
-# Download dependencies
-WORKDIR /app/backend
+COPY backend/go.mod backend/go.sum ./
 RUN go mod download
+
+# Copy source code
+COPY backend/ .
 
 # Build optimized binary
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o server main.go
@@ -23,8 +18,8 @@ FROM alpine:latest
 
 WORKDIR /root/
 
-COPY --from=builder /app/backend/server .
-COPY --from=builder /app/backend/migrations ./migrations
+COPY --from=builder /app/server .
+COPY --from=builder /app/migrations ./migrations
 
 EXPOSE 8080
 
