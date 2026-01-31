@@ -166,66 +166,66 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 	var tx *sql.Tx
 	var stmtPart, stmtC100, stmtC190, stmtC500, stmtC600, stmtD100, stmtD500 *sql.Stmt
 
+	// Initial dummy participants (outside batch loop for simplicity, or inside first batch)
+	// We'll do it quickly in a separate mini-tx to ensure they exist
+	if _, err := db.Exec(`INSERT INTO participants (job_id, cod_part, nome, cnpj, cpf) VALUES ($1, '9999999999', 'CONSUMIDOR FINAL', '', ''), ($1, '8888888888', 'FORNECEDOR GENERICO', '', '') ON CONFLICT DO NOTHING`, jobID); err != nil {
+		fmt.Printf("Worker: Warning inserting dummy participants: %v\n", err)
+	}
+
 	// Helper to start a new batch transaction
 	startBatch := func() error {
 		var err error
 		// Retry logic for starting transaction AND preparing statements
-		for i := 0; i < 3; i++ {
+		for i := 0; i < 5; i++ {
+			// Reset statements to nil before attempt
+			stmtPart = nil; stmtC100 = nil; stmtC190 = nil; stmtC500 = nil; stmtC600 = nil; stmtD100 = nil; stmtD500 = nil
+			
 			err = func() error {
 				tx, err = db.Begin()
-				if err != nil { return err }
+				if err != nil { return fmt.Errorf("db.Begin: %w", err) }
 
 				stmtPart, err = tx.Prepare(`INSERT INTO participants (job_id, cod_part, nome, cod_pais, cnpj, cpf, ie, cod_mun, suframa, endereco, numero, complemento, bairro) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`)
-				if err != nil { return err }
+				if err != nil { return fmt.Errorf("prepare stmtPart: %w", err) }
 
 				stmtC100, err = tx.Prepare(`INSERT INTO reg_c100 (job_id, filial_cnpj, ind_oper, ind_emit, cod_part, cod_mod, cod_sit, ser, num_doc, chv_nfe, dt_doc, dt_e_s, vl_doc, vl_icms, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING id`)
-				if err != nil { return err }
+				if err != nil { return fmt.Errorf("prepare stmtC100: %w", err) }
 
 				stmtC190, err = tx.Prepare(`INSERT INTO reg_c190 (job_id, id_pai_c100, cfop, vl_opr, vl_bc_icms, vl_icms, vl_bc_icms_st, vl_icms_st, vl_red_bc, vl_ipi, cod_obs) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`)
-				if err != nil { return err }
+				if err != nil { return fmt.Errorf("prepare stmtC190: %w", err) }
 
 				stmtC500, err = tx.Prepare(`INSERT INTO reg_c500 (job_id, filial_cnpj, cod_part, cod_mod, ser, num_doc, dt_doc, dt_e_s, vl_doc, vl_icms, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`)
-				if err != nil { return err }
+				if err != nil { return fmt.Errorf("prepare stmtC500: %w", err) }
 
 				stmtC600, err = tx.Prepare(`INSERT INTO reg_c600 (job_id, filial_cnpj, cod_mod, cod_mun, ser, sub, cod_cons, qtd_cons, dt_doc, vl_doc, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`)
-				if err != nil { return err }
+				if err != nil { return fmt.Errorf("prepare stmtC600: %w", err) }
 
 				stmtD100, err = tx.Prepare(pq.CopyIn("reg_d100", "job_id", "filial_cnpj", "ind_oper", "ind_emit", "cod_part", "cod_mod", "cod_sit", "ser", "num_doc", "chv_cte", "dt_doc", "dt_a_p", "vl_doc", "vl_icms", "vl_pis", "vl_cofins", "vl_piscofins", "vl_icms_projetado", "vl_ibs_projetado", "vl_cbs_projetado"))
-				if err != nil { return err }
+				if err != nil { return fmt.Errorf("prepare stmtD100: %w", err) }
 
 				stmtD500, err = tx.Prepare(pq.CopyIn("reg_d500", "job_id", "filial_cnpj", "ind_oper", "ind_emit", "cod_part", "cod_mod", "cod_sit", "ser", "sub", "num_doc", "dt_doc", "dt_a_p", "vl_doc", "vl_icms", "vl_pis", "vl_cofins", "vl_piscofins", "vl_icms_projetado", "vl_ibs_projetado", "vl_cbs_projetado"))
-				if err != nil { return err }
+				if err != nil { return fmt.Errorf("prepare stmtD500: %w", err) }
 
 				return nil
 			}()
 
 			if err == nil { return nil }
 
+			// Cleanup on failure
+			if stmtPart != nil { stmtPart.Close() }
+			if stmtC100 != nil { stmtC100.Close() }
+			if stmtC190 != nil { stmtC190.Close() }
+			if stmtC500 != nil { stmtC500.Close() }
+			if stmtC600 != nil { stmtC600.Close() }
+			if stmtD100 != nil { stmtD100.Close() }
+			if stmtD500 != nil { stmtD500.Close() }
 			if tx != nil { tx.Rollback() }
-			fmt.Printf("Worker: Batch setup failed (attempt %d/3): %v. Retrying...\n", i+1, err)
-			time.Sleep(1 * time.Second)
+
+			fmt.Printf("Worker: Batch setup failed (attempt %d/5): %v. Retrying in %ds...\n", i+1, err, i+1)
+			time.Sleep(time.Duration(i+1) * time.Second)
 			db.Ping() // Try to reconnect
 		}
 		return fmt.Errorf("failed to begin transaction and prepare statements after retries: %v", err)
 	}
-
-	// Helper to commit current batch and close statements
-	commitBatch := func() error {
-		// Flush Bulk Inserts
-		if _, err := stmtD100.Exec(); err != nil { return fmt.Errorf("flush D100: %v", err) }
-		stmtD100.Close()
-		if _, err := stmtD500.Exec(); err != nil { return fmt.Errorf("flush D500: %v", err) }
-		stmtD500.Close()
-		
-		stmtPart.Close(); stmtC100.Close(); stmtC190.Close(); stmtC500.Close(); stmtC600.Close()
-
-		if err := tx.Commit(); err != nil { return fmt.Errorf("commit: %v", err) }
-		return nil
-	}
-
-	// Initial dummy participants (outside batch loop for simplicity, or inside first batch)
-	// We'll do it quickly in a separate mini-tx to ensure they exist
-	db.Exec(`INSERT INTO participants (job_id, cod_part, nome, cnpj, cpf) VALUES ($1, '9999999999', 'CONSUMIDOR FINAL', '', ''), ($1, '8888888888', 'FORNECEDOR GENERICO', '', '') ON CONFLICT DO NOTHING`, jobID)
 
 	// Start first batch
 	if err := startBatch(); err != nil { return "", err }
