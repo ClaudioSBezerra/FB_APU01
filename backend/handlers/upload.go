@@ -35,8 +35,10 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Limit upload size (512MB to avoid temp file issues if any, though mainly RAM)
-		r.ParseMultipartForm(512 << 20)
+		// Limit upload size (1GB to allow large SPED files > 500MB)
+		// Note: ParseMultipartForm limit is for memory; larger files spill to disk.
+		// However, we increase this to be safe and ensure large headers/parts are handled.
+		r.ParseMultipartForm(1024 << 20)
 
 		file, header, err := r.FormFile("file")
 		if err != nil {
