@@ -35,10 +35,12 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Limit upload size (1GB to allow large SPED files > 500MB)
-		// Note: ParseMultipartForm limit is for memory; larger files spill to disk.
-		// However, we increase this to be safe and ensure large headers/parts are handled.
-		r.ParseMultipartForm(1024 << 20)
+		// Limit upload size:
+		// ParseMultipartForm maxMemory is set to 64MB.
+		// Files larger than 64MB will be stored in temporary files on disk.
+		// This prevents Out-Of-Memory (OOM) errors on the VPS while allowing files of ANY size (e.g. 2GB+).
+		// The actual rejection limit is handled by Nginx (client_max_body_size).
+		r.ParseMultipartForm(64 << 20)
 
 		file, header, err := r.FormFile("file")
 		if err != nil {

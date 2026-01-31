@@ -17,50 +17,75 @@ import (
 )
 
 func StartWorker(db *sql.DB) {
-	go func() {
-		fmt.Println("Background Worker Started...")
-		for {
-			processNextJob(db)
-			time.Sleep(5 * time.Second) // Poll every 5 seconds
-		}
-	}()
+	// Worker Pool Size: 5 concurrent workers
+	// This allows multiple files to be processed simultaneously
+	const WorkerPoolSize = 5
+
+	fmt.Printf("Starting Background Worker Pool (%d workers)...\n", WorkerPoolSize)
+
+	for i := 0; i < WorkerPoolSize; i++ {
+		workerID := i + 1
+		go func(id int) {
+			fmt.Printf("Worker #%d started\n", id)
+			for {
+				processNextJob(db, id)
+				time.Sleep(2 * time.Second) // Poll every 2 seconds
+			}
+		}(workerID)
+	}
 }
 
-func processNextJob(db *sql.DB) {
+func processNextJob(db *sql.DB, workerID int) {
 	var id, filename string
 
-	// Select pending job
+	// Select pending job with SKIP LOCKED to avoid race conditions
+	// This allows multiple workers to pick different jobs concurrently
 	query := `
 		SELECT id, filename 
 		FROM import_jobs 
 		WHERE status = 'pending' 
 		ORDER BY created_at ASC 
 		LIMIT 1
+		FOR UPDATE SKIP LOCKED
 	`
 
-	err := db.QueryRow(query).Scan(&id, &filename)
+	// We must use a transaction for FOR UPDATE SKIP LOCKED to hold the lock until update
+	tx, err := db.Begin()
+	if err != nil {
+		fmt.Printf("Worker #%d: Error starting transaction: %v\n", workerID, err)
+		return
+	}
+	defer tx.Rollback() // Rollback if not committed
+
+	err = tx.QueryRow(query).Scan(&id, &filename)
 	if err == sql.ErrNoRows {
 		return // No jobs
 	} else if err != nil {
-		fmt.Printf("Worker Error scanning job: %v\n", err)
+		fmt.Printf("Worker #%d: Error scanning job: %v\n", workerID, err)
 		return
 	}
 
-	fmt.Printf("Worker: Processing Job %s (File: %s)\n", id, filename)
+	fmt.Printf("Worker #%d: Processing Job %s (File: %s)\n", workerID, id, filename)
 
-	// Update status to processing
-	_, err = db.Exec("UPDATE import_jobs SET status = 'processing', updated_at = NOW() WHERE id = $1", id)
+	// Update status to processing within the same transaction
+	_, err = tx.Exec("UPDATE import_jobs SET status = 'processing', updated_at = NOW() WHERE id = $1", id)
 	if err != nil {
-		fmt.Printf("Worker Error updating status to processing: %v\n", err)
+		fmt.Printf("Worker #%d: Error updating status to processing: %v\n", workerID, err)
+		return
+	}
+
+	// Commit the transaction to release the lock and save the status change
+	if err := tx.Commit(); err != nil {
+		fmt.Printf("Worker #%d: Error committing job pickup: %v\n", workerID, err)
 		return
 	}
 
 	// Simulate Processing
 	if err := db.Ping(); err != nil {
-		fmt.Printf("Worker: Database connection lost, retrying... %v\n", err)
+		fmt.Printf("Worker #%d: Database connection lost, retrying... %v\n", workerID, err)
 		time.Sleep(1 * time.Second)
 		if err := db.Ping(); err != nil {
-			fmt.Printf("Worker: Database unreachable: %v\n", err)
+			fmt.Printf("Worker #%d: Database unreachable: %v\n", workerID, err)
 			return // Retry next loop
 		}
 	}
@@ -69,11 +94,11 @@ func processNextJob(db *sql.DB) {
 
 	if err != nil {
 		// Report Error
-		fmt.Printf("Worker: Job %s failed: %v\n", id, err)
+		fmt.Printf("Worker #%d: Job %s failed: %v\n", workerID, id, err)
 		db.Exec("UPDATE import_jobs SET status = 'error', message = $1, updated_at = NOW() WHERE id = $2", err.Error(), id)
 	} else {
 		// Report Success
-		fmt.Printf("Worker: Job %s completed: %s\n", id, summary)
+		fmt.Printf("Worker #%d: Job %s completed: %s\n", workerID, id, summary)
 		db.Exec("UPDATE import_jobs SET status = 'completed', message = $1, updated_at = NOW() WHERE id = $2", summary, id)
 	}
 }
