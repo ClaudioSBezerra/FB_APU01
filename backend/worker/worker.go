@@ -199,7 +199,7 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 				stmtC600, err = tx.Prepare(`INSERT INTO reg_c600 (job_id, filial_cnpj, cod_mod, cod_mun, ser, sub, cod_cons, qtd_cons, dt_doc, vl_doc, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`)
 				if err != nil { return fmt.Errorf("prepare stmtC600: %w", err) }
 
-				stmtD100, err = tx.Prepare(pq.CopyIn("reg_d100", "job_id", "filial_cnpj", "ind_oper", "ind_emit", "cod_part", "cod_mod", "cod_sit", "ser", "num_doc", "chv_cte", "dt_doc", "dt_a_p", "vl_doc", "vl_icms", "vl_pis", "vl_cofins", "vl_piscofins", "vl_icms_projetado", "vl_ibs_projetado", "vl_cbs_projetado"))
+				stmtD100, err = tx.Prepare(`INSERT INTO reg_d100 (job_id, filial_cnpj, ind_oper, ind_emit, cod_part, cod_mod, cod_sit, ser, num_doc, chv_cte, dt_doc, dt_a_p, vl_doc, vl_icms, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`)
 				if err != nil { return fmt.Errorf("prepare stmtD100: %w", err) }
 
 				stmtD500, err = tx.Prepare(`INSERT INTO reg_d500 (job_id, filial_cnpj, ind_oper, ind_emit, cod_part, cod_mod, cod_sit, ser, sub, num_doc, dt_doc, dt_a_p, vl_doc, vl_icms, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`)
@@ -231,7 +231,7 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 	commitBatch := func() error {
 		// Flush CopyIn statements
 		if stmtD100 != nil {
-			if _, err := stmtD100.Exec(); err != nil { return fmt.Errorf("flush stmtD100: %w", err) }
+			// stmtD100 now uses standard INSERT, no need to Exec() for flush, just Close()
 			stmtD100.Close()
 		}
 		if stmtD500 != nil {
