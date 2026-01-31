@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -369,8 +370,11 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 
 		// Progress Update & Checkpoint
 		if lineCount%1000 == 0 || lineCount%BatchSize == 0 {
-			// Console Log for Real-time tracking
-			fmt.Printf("Worker: Processing line %d / %d (%.1f%%) - Current Reg: %s\n", lineCount, totalLines, float64(lineCount)/float64(totalLines)*100, reg)
+			// Console Log for Real-time tracking with RAM usage
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+			fmt.Printf("Worker: Line %d / %d (%.1f%%) | RAM: %d MB | Reg: %s\n", 
+				lineCount, totalLines, float64(lineCount)/float64(totalLines)*100, m.Alloc/1024/1024, reg)
 		}
 
 		// Check for 9999 (End of File)
