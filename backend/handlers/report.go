@@ -3,6 +3,7 @@ package handlers
 import (
 "database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 )
@@ -47,7 +48,7 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 				COALESCE(SUM(c.vl_doc * (COALESCE(NULLIF(ta.perc_cbs, 0), 8.80) / 100.0)), 0) as cbs_projetado
 			FROM reg_c100 c
 			JOIN import_jobs j ON j.id = c.job_id
-			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($1, CAST(TO_CHAR(c.dt_doc, 'YYYY') AS INTEGER))
+			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE(CAST($1 AS INTEGER), CAST(TO_CHAR(c.dt_doc, 'YYYY') AS INTEGER))
 			GROUP BY 1, 2, 3
 
 			UNION ALL
@@ -65,7 +66,7 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 				COALESCE(SUM(d.vl_doc * (COALESCE(NULLIF(ta.perc_cbs, 0), 8.80) / 100.0)), 0)
 			FROM reg_d100 d
 			JOIN import_jobs j ON j.id = d.job_id
-			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($2, CAST(TO_CHAR(d.dt_doc, 'YYYY') AS INTEGER))
+			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE(CAST($2 AS INTEGER), CAST(TO_CHAR(d.dt_doc, 'YYYY') AS INTEGER))
 			GROUP BY 1, 2, 3
 
 			UNION ALL
@@ -83,7 +84,7 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 				COALESCE(SUM(c5.vl_doc * (COALESCE(NULLIF(ta.perc_cbs, 0), 8.80) / 100.0)), 0)
 			FROM reg_c500 c5
 			JOIN import_jobs j ON j.id = c5.job_id
-			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($3, CAST(TO_CHAR(c5.dt_doc, 'YYYY') AS INTEGER))
+			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE(CAST($3 AS INTEGER), CAST(TO_CHAR(c5.dt_doc, 'YYYY') AS INTEGER))
 			GROUP BY 1, 2
 
 			UNION ALL
@@ -101,21 +102,23 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 				COALESCE(SUM(c6.vl_doc * (COALESCE(NULLIF(ta.perc_cbs, 0), 8.80) / 100.0)), 0)
 			FROM reg_c600 c6
 			JOIN import_jobs j ON j.id = c6.job_id
-			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($4, CAST(TO_CHAR(c6.dt_doc, 'YYYY') AS INTEGER))
+			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE(CAST($4 AS INTEGER), CAST(TO_CHAR(c6.dt_doc, 'YYYY') AS INTEGER))
 			GROUP BY 1, 2
 `
 
 		rows, err := db.Query(query, targetYear, targetYear, targetYear, targetYear)
-if err != nil {
-http.Error(w, err.Error(), http.StatusInternalServerError)
-return
-}
+		if err != nil {
+			fmt.Printf("Error querying mercadorias report: %v\n", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 defer rows.Close()
 
 var reports []MercadoriasReport
 for rows.Next() {
 		var r MercadoriasReport
 		if err := rows.Scan(&r.FilialNome, &r.MesAno, &r.Tipo, &r.Valor, &r.Pis, &r.Cofins, &r.Icms, &r.IcmsProjetado, &r.IbsProjetado, &r.CbsProjetado); err != nil {
+			fmt.Printf("Error scanning mercadorias report: %v\n", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
