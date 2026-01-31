@@ -253,31 +253,7 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 		return nil
 	}
 
-	// Start first batchHelper to commit the current batch
-	commitBatch := func() error {
-		// Flush CopyIn statements
-		if stmtD100 != nil {
-			if _, err := stmtD100.Exec(); err != nil { return fmt.Errorf("flush stmtD100: %w", err) }
-			stmtD100.Close()
-		}
-		if stmtD500 != nil {
-			if _, err := stmtD500.Exec(); err != nil { return fmt.Errorf("flush stmtD500: %w", err) }
-			stmtD500.Close()
-		}
 
-		// Close other statements
-		if stmtPart != nil { stmtPart.Close() }
-		if stmtC100 != nil { stmtC100.Close() }
-		if stmtC190 != nil { stmtC190.Close() }
-		if stmtC500 != nil { stmtC500.Close() }
-		if stmtC600 != nil { stmtC600.Close() }
-		
-		// Commit transaction
-		if tx != nil {
-			if err := tx.Commit(); err != nil { return fmt.Errorf("tx.Commit: %w", err) }
-		}
-		return nil
-	}
 
 	// Start first batch
 	if err := startBatch(); err != nil { return "", err }
