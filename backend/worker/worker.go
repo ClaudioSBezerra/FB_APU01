@@ -155,102 +155,119 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 	}
 	fmt.Printf("Worker: Total lines to process: %d\n", totalLines)
 
-	// Verify DB connection before starting transaction
+	// Verify DB connection before starting
 	if err := db.Ping(); err != nil {
-		return "", fmt.Errorf("database connection lost before transaction: %v", err)
+		return "", fmt.Errorf("database connection lost before start: %v", err)
 	}
 
-	tx, err := db.Begin()
-	if err != nil {
-		return "", fmt.Errorf("failed to begin transaction: %v", err)
-	}
-	defer tx.Rollback()
+	// BATCH PROCESSING SETUP
+	// Instead of one huge transaction, we commit every BatchSize lines.
+	const BatchSize = 2000
+	var tx *sql.Tx
+	var stmtPart, stmtC100, stmtC190, stmtC500, stmtC600, stmtD100, stmtD500 *sql.Stmt
 
-	// Insert Dummy Participants
-	_, err = tx.Exec(`INSERT INTO participants (job_id, cod_part, nome, cnpj, cpf) VALUES ($1, '9999999999', 'CONSUMIDOR FINAL', '', ''), ($1, '8888888888', 'FORNECEDOR GENERICO', '', '') ON CONFLICT DO NOTHING`, jobID)
-	if err != nil { 
-		fmt.Printf("Worker: Warning inserting dummy participants: %v\n", err)
-		// If connection is bad, we should probably stop here
-		if strings.Contains(err.Error(), "bad connection") {
-			return "", fmt.Errorf("connection failed during dummy insert: %v", err)
+	// Helper to start a new batch transaction
+	startBatch := func() error {
+		var err error
+		// Retry logic for starting transaction
+		for i := 0; i < 3; i++ {
+			tx, err = db.Begin()
+			if err == nil { break }
+			fmt.Printf("Worker: Failed to begin transaction (attempt %d/3): %v. Retrying...\n", i+1, err)
+			time.Sleep(1 * time.Second)
+			db.Ping() // Try to reconnect
 		}
-	}
+		if err != nil { return fmt.Errorf("failed to begin transaction after retries: %v", err) }
 
-	stmtPart, err := tx.Prepare(`INSERT INTO participants (job_id, cod_part, nome, cod_pais, cnpj, cpf, ie, cod_mun, suframa, endereco, numero, complemento, bairro) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`)
-	if err != nil { return "", fmt.Errorf("failed to prepare stmtPart: %v", err) }
-	defer stmtPart.Close()
+		stmtPart, err = tx.Prepare(`INSERT INTO participants (job_id, cod_part, nome, cod_pais, cnpj, cpf, ie, cod_mun, suframa, endereco, numero, complemento, bairro) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`)
+		if err != nil { return err }
 
-	stmtC100, err := tx.Prepare(`INSERT INTO reg_c100 (job_id, filial_cnpj, ind_oper, ind_emit, cod_part, cod_mod, cod_sit, ser, num_doc, chv_nfe, dt_doc, dt_e_s, vl_doc, vl_icms, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING id`)
-	if err != nil { return "", fmt.Errorf("failed to prepare stmtC100: %v", err) }
-	defer stmtC100.Close()
+		stmtC100, err = tx.Prepare(`INSERT INTO reg_c100 (job_id, filial_cnpj, ind_oper, ind_emit, cod_part, cod_mod, cod_sit, ser, num_doc, chv_nfe, dt_doc, dt_e_s, vl_doc, vl_icms, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING id`)
+		if err != nil { return err }
 
-	stmtC190, err := tx.Prepare(`INSERT INTO reg_c190 (job_id, id_pai_c100, cfop, vl_opr, vl_bc_icms, vl_icms, vl_bc_icms_st, vl_icms_st, vl_red_bc, vl_ipi, cod_obs) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`)
-	if err != nil { return "", fmt.Errorf("failed to prepare stmtC190: %v", err) }
-	defer stmtC190.Close()
+		stmtC190, err = tx.Prepare(`INSERT INTO reg_c190 (job_id, id_pai_c100, cfop, vl_opr, vl_bc_icms, vl_icms, vl_bc_icms_st, vl_icms_st, vl_red_bc, vl_ipi, cod_obs) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`)
+		if err != nil { return err }
 
-	stmtC500, err := tx.Prepare(`INSERT INTO reg_c500 (job_id, filial_cnpj, cod_part, cod_mod, ser, num_doc, dt_doc, dt_e_s, vl_doc, vl_icms, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`)
-	if err != nil { return "", fmt.Errorf("failed to prepare stmtC500: %v", err) }
-	defer stmtC500.Close()
+		stmtC500, err = tx.Prepare(`INSERT INTO reg_c500 (job_id, filial_cnpj, cod_part, cod_mod, ser, num_doc, dt_doc, dt_e_s, vl_doc, vl_icms, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`)
+		if err != nil { return err }
 
-	stmtC600, err := tx.Prepare(`INSERT INTO reg_c600 (job_id, filial_cnpj, cod_mod, cod_mun, ser, sub, cod_cons, qtd_cons, dt_doc, vl_doc, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`)
-	if err != nil { return "", fmt.Errorf("failed to prepare stmtC600: %v", err) }
-	defer stmtC600.Close()
+		stmtC600, err = tx.Prepare(`INSERT INTO reg_c600 (job_id, filial_cnpj, cod_mod, cod_mun, ser, sub, cod_cons, qtd_cons, dt_doc, vl_doc, vl_pis, vl_cofins, vl_piscofins, vl_icms_projetado, vl_ibs_projetado, vl_cbs_projetado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`)
+		if err != nil { return err }
 
-	// Optimize D100 using CopyIn (Bulk Insert)
-	stmtD100, err := tx.Prepare(pq.CopyIn("reg_d100", "job_id", "filial_cnpj", "ind_oper", "ind_emit", "cod_part", "cod_mod", "cod_sit", "ser", "num_doc", "chv_cte", "dt_doc", "dt_a_p", "vl_doc", "vl_icms", "vl_pis", "vl_cofins", "vl_piscofins", "vl_icms_projetado", "vl_ibs_projetado", "vl_cbs_projetado"))
-	if err != nil { return "", fmt.Errorf("failed to prepare stmtD100: %v", err) }
-	
-	// Optimize D500 using CopyIn (Bulk Insert)
-	// Add retry for D500 preparation as it tends to fail on bad connections
-	var stmtD500 *sql.Stmt
-	for i := 0; i < 3; i++ {
+		stmtD100, err = tx.Prepare(pq.CopyIn("reg_d100", "job_id", "filial_cnpj", "ind_oper", "ind_emit", "cod_part", "cod_mod", "cod_sit", "ser", "num_doc", "chv_cte", "dt_doc", "dt_a_p", "vl_doc", "vl_icms", "vl_pis", "vl_cofins", "vl_piscofins", "vl_icms_projetado", "vl_ibs_projetado", "vl_cbs_projetado"))
+		if err != nil { return err }
+
 		stmtD500, err = tx.Prepare(pq.CopyIn("reg_d500", "job_id", "filial_cnpj", "ind_oper", "ind_emit", "cod_part", "cod_mod", "cod_sit", "ser", "sub", "num_doc", "dt_doc", "dt_a_p", "vl_doc", "vl_icms", "vl_pis", "vl_cofins", "vl_piscofins", "vl_icms_projetado", "vl_ibs_projetado", "vl_cbs_projetado"))
-		if err == nil {
-			break
-		}
-		fmt.Printf("Worker: Retrying stmtD500 preparation (attempt %d/3): %v\n", i+1, err)
-		time.Sleep(1 * time.Second)
+		if err != nil { return err }
+
+		return nil
 	}
-	if err != nil { return "", fmt.Errorf("failed to prepare stmtD500 after retries: %v", err) }
+
+	// Helper to commit current batch and close statements
+	commitBatch := func() error {
+		// Flush Bulk Inserts
+		if _, err := stmtD100.Exec(); err != nil { return fmt.Errorf("flush D100: %v", err) }
+		stmtD100.Close()
+		if _, err := stmtD500.Exec(); err != nil { return fmt.Errorf("flush D500: %v", err) }
+		stmtD500.Close()
+		
+		stmtPart.Close(); stmtC100.Close(); stmtC190.Close(); stmtC500.Close(); stmtC600.Close()
+
+		if err := tx.Commit(); err != nil { return fmt.Errorf("commit: %v", err) }
+		return nil
+	}
+
+	// Initial dummy participants (outside batch loop for simplicity, or inside first batch)
+	// We'll do it quickly in a separate mini-tx to ensure they exist
+	db.Exec(`INSERT INTO participants (job_id, cod_part, nome, cnpj, cpf) VALUES ($1, '9999999999', 'CONSUMIDOR FINAL', '', ''), ($1, '8888888888', 'FORNECEDOR GENERICO', '', '') ON CONFLICT DO NOTHING`, jobID)
+
+	// Start first batch
+	if err := startBatch(); err != nil { return "", err }
 
 	for scanner.Scan() {
 		line := scanner.Text()
 		lineCount++
 		parts := strings.Split(line, "|")
 
-		// Progress Update (every 2000 lines)
-		if lineCount%2000 == 0 {
+		// Progress Update & Checkpoint
+		if lineCount%BatchSize == 0 {
 			// Check for cancellation
 			var currentStatus string
 			if err := db.QueryRow("SELECT status FROM import_jobs WHERE id=$1", jobID).Scan(&currentStatus); err == nil {
 				if currentStatus == "cancelling" {
+					tx.Rollback()
 					return "", fmt.Errorf("job cancelled by user")
 				}
 			}
 
+			// Update Progress
 			regType := "?"
-			if len(parts) > 1 {
-				regType = parts[1]
-			}
+			if len(parts) > 1 { regType = parts[1] }
 			
 			var msg string
 			if totalLines > 0 {
 				percent := float64(lineCount) / float64(totalLines) * 100
-				msg = fmt.Sprintf("Processing line %d / %d (%.1f%%) - Reg %s...", lineCount, totalLines, percent, regType)
+				msg = fmt.Sprintf("Processing line %d / %d (%.1f%%) - Reg %s (Batch Commit)...", lineCount, totalLines, percent, regType)
 			} else {
 				msg = fmt.Sprintf("Processing line %d (Reg %s)...", lineCount, regType)
 			}
-			
 			fmt.Printf("Worker: %s\n", msg)
-			// Use db.Exec (not tx) so updates are visible immediately
-			db.Exec("UPDATE import_jobs SET message=$1 WHERE id=$2", msg, jobID)
+			db.Exec("UPDATE import_jobs SET message=$1, updated_at=NOW() WHERE id=$2", msg, jobID)
+
+			// COMMIT BATCH AND RESTART
+			if err := commitBatch(); err != nil {
+				return "", fmt.Errorf("batch commit failed at line %d: %v", lineCount, err)
+			}
+			if err := startBatch(); err != nil {
+				return "", fmt.Errorf("failed to restart batch at line %d: %v", lineCount, err)
+			}
 		}
 
 		if strings.HasPrefix(line, "|0000|") && len(parts) >= 8 {
 			dtIni = parts[4]; dtFin = parts[5]; company = parts[6]; filialCNPJ = parts[7]
 			count0000++
-			_, err := tx.Exec("UPDATE import_jobs SET company_name=$1, cnpj=$2, dt_ini=$3, dt_fin=$4 WHERE id=$5", company, filialCNPJ, parseDate(dtIni), parseDate(dtFin), jobID)
-			if err != nil { fmt.Printf("Worker: Warning updating metadata: %v\n", err) }
+			// Update job metadata immediately (outside tx for visibility)
+			db.Exec("UPDATE import_jobs SET company_name=$1, cnpj=$2, dt_ini=$3, dt_fin=$4 WHERE id=$5", company, filialCNPJ, parseDate(dtIni), parseDate(dtFin), jobID)
 
 			if len(dtIni) == 8 {
 				year, _ := strconv.Atoi(dtIni[4:8])
@@ -303,23 +320,23 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 	if err := scanner.Err(); err != nil { return "", fmt.Errorf("error reading file: %v", err) }
 	if count0000 == 0 { return "", fmt.Errorf("invalid SPED file: Record 0000 not found") }
 
-	// Flush Bulk Inserts
-	if _, err := stmtD100.Exec(); err != nil { return "", fmt.Errorf("error flushing D100: %v", err) }
-	if err := stmtD100.Close(); err != nil { return "", fmt.Errorf("error closing D100 copy: %v", err) }
-	
-	if _, err := stmtD500.Exec(); err != nil { return "", fmt.Errorf("error flushing D500: %v", err) }
-	if err := stmtD500.Close(); err != nil { return "", fmt.Errorf("error closing D500 copy: %v", err) }
+	// Final Batch Commit
+	if err := commitBatch(); err != nil { return "", fmt.Errorf("final batch commit failed: %v", err) }
 
-	// Run Aggregations
+	// Run Aggregations (New Transaction)
 	fmt.Println("Worker: Running aggregations (Database intensive)...")
 	db.Exec("UPDATE import_jobs SET message='Running Aggregations (Database intensive)...' WHERE id=$1", jobID)
 	
-	if err := runAggregations(tx, jobID, rates); err != nil {
+	// Aggregation Transaction
+	aggTx, err := db.Begin()
+	if err != nil { return "", fmt.Errorf("failed to begin aggregation tx: %v", err) }
+	defer aggTx.Rollback()
+
+	if err := runAggregations(aggTx, jobID, rates); err != nil {
 		fmt.Printf("Worker: Error running aggregations: %v\n", err)
 		return "", err
 	}
-
-	if err := tx.Commit(); err != nil { return "", fmt.Errorf("failed to commit transaction: %v", err) }
+	if err := aggTx.Commit(); err != nil { return "", fmt.Errorf("failed to commit aggregations: %v", err) }
 
 	return fmt.Sprintf("Imported: 0000=%d, 0150=%d, C100=%d, C190=%d, C500=%d, C600=%d, D100=%d, D500=%d", 
 		count0000, count0150, countC100, countC190, countC500, countC600, countD100, countD500), nil
