@@ -153,6 +153,27 @@ func parseDecimal(s string) float64 {
 }
 
 func processFile(db *sql.DB, jobID, filename string) (string, error) {
+	// Verify DB connection before starting
+	if err := db.Ping(); err != nil {
+		return "", fmt.Errorf("database connection lost before start: %v", err)
+	}
+
+	// Auto-Migrate: Ensure last_line_processed column exists
+	// This allows us to resume processing if it crashes
+	_, err := db.Exec(`ALTER TABLE import_jobs ADD COLUMN IF NOT EXISTS last_line_processed INT DEFAULT 0`)
+	if err != nil {
+		fmt.Printf("Worker: Warning checking checkpoint column: %v\n", err)
+	}
+
+	// CHECKPOINT: Check if we are resuming a job
+	var lastLineProcessed int
+	err = db.QueryRow("SELECT COALESCE(last_line_processed, 0) FROM import_jobs WHERE id = $1", jobID).Scan(&lastLineProcessed)
+	if err == nil && lastLineProcessed > 0 {
+		fmt.Printf("Worker: RESUMING job %s from line %d\n", jobID, lastLineProcessed)
+	} else {
+		lastLineProcessed = 0
+	}
+
 	// Security: Ensure we only read from allowed directory
 	uploadDir := "uploads"
 	path := filepath.Join(uploadDir, filename)
@@ -170,6 +191,8 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, 1024*1024)
 
+	var lineCount int
+
 	// SKIP LINES logic for Resume
 	if lastLineProcessed > 0 {
 		fmt.Printf("Worker: Skipping first %d lines to resume...\n", lastLineProcessed)
@@ -181,11 +204,11 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 	}
 
 	var (
-		count0000, count0150, countC100, countC190, countC500, countC600, countD100, countD500, lineCount int
-		company, filialCNPJ, dtIni, dtFin, currentC100ID                                                  string
-		rates                                                                                             TaxRates
-		debugLog                                                                                          strings.Builder
-		foundEOF                                                                                          bool
+		count0000, count0150, countC100, countC190, countC500, countC600, countD100, countD500 int
+		company, filialCNPJ, dtIni, dtFin, currentC100ID                                       string
+		rates                                                                                  TaxRates
+		debugLog                                                                               strings.Builder
+		foundEOF                                                                               bool
 	)
 
 	fmt.Printf("Worker: Parsing SPED file %s (EFD ICMS Logic - Fixed Indices)...\n", filename)
@@ -204,27 +227,6 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 		totalLines = 0
 	}
 	fmt.Printf("Worker: Total lines to process: %d\n", totalLines)
-
-	// Verify DB connection before starting
-	if err := db.Ping(); err != nil {
-		return "", fmt.Errorf("database connection lost before start: %v", err)
-	}
-
-	// Auto-Migrate: Ensure last_line_processed column exists
-	// This allows us to resume processing if it crashes
-	_, err = db.Exec(`ALTER TABLE import_jobs ADD COLUMN IF NOT EXISTS last_line_processed INT DEFAULT 0`)
-	if err != nil {
-		fmt.Printf("Worker: Warning checking checkpoint column: %v\n", err)
-	}
-
-	// CHECKPOINT: Check if we are resuming a job
-	var lastLineProcessed int
-	err = db.QueryRow("SELECT COALESCE(last_line_processed, 0) FROM import_jobs WHERE id = $1", jobID).Scan(&lastLineProcessed)
-	if err == nil && lastLineProcessed > 0 {
-		fmt.Printf("Worker: RESUMING job %s from line %d\n", jobID, lastLineProcessed)
-	} else {
-		lastLineProcessed = 0
-	}
 
 	// Warning check for empty CFOP table
 	var cfopCount int
