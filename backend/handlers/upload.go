@@ -20,9 +20,10 @@ func Atoi(s string) int {
 }
 
 type UploadResponse struct {
-	JobID    string `json:"job_id"`
-	Message  string `json:"message"`
-	Filename string `json:"filename"`
+	JobID         string `json:"job_id"`
+	Message       string `json:"message"`
+	Filename      string `json:"filename"`
+	DetectedLines string `json:"detected_lines"`
 }
 
 func UploadHandler(db *sql.DB) http.HandlerFunc {
@@ -210,9 +211,10 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 		fmt.Printf("File saved: %s (Size: %d bytes) -> Job ID: %s\n", savePath, header.Size, jobID)
 
 		response := UploadResponse{
-			JobID:    jobID,
-			Message:  "File uploaded and saved successfully",
-			Filename: safeFilename,
+			JobID:         jobID,
+			Message:       "File uploaded and saved successfully",
+			Filename:      safeFilename,
+			DetectedLines: actualLines,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

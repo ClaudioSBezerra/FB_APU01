@@ -217,12 +217,18 @@ export default function ImportarEFD() {
         }
 
         // Upload Chunk with Retry Logic
+        let responseJson: any = null;
         await new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open('POST', '/api/upload', true);
 
             xhr.onload = () => {
                 if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        responseJson = JSON.parse(xhr.response);
+                    } catch (e) {
+                        // ignore if not json
+                    }
                     resolve(xhr.response);
                 } else {
                     reject(new Error(`Upload failed at chunk ${chunkIndex}: ${xhr.statusText}`));
@@ -231,6 +237,18 @@ export default function ImportarEFD() {
             xhr.onerror = () => reject(new Error(`Network error at chunk ${chunkIndex}`));
             xhr.send(formData);
         });
+
+        // Last Chunk Verification
+        if (chunkIndex === totalChunks - 1 && responseJson && responseJson.detected_lines) {
+           const sentLines = filteredParts.length.toString();
+           const receivedLines = responseJson.detected_lines;
+           
+           if (receivedLines !== 'not_found' && sentLines !== receivedLines) {
+             toast.warning(`Atenção: Backend reportou ${receivedLines} linhas, mas enviamos ${sentLines}. Verifique a integridade.`);
+           } else if (sentLines === receivedLines) {
+             toast.success(`Integridade Verificada: ${receivedLines} registros confirmados no servidor.`);
+           }
+        }
 
         // Update Progress
         const percentUpload = ((chunkIndex + 1) / totalChunks) * 50; 
@@ -254,7 +272,7 @@ export default function ImportarEFD() {
       }
 
       setUploadProgress(prev => ({ ...prev, status: 'completed', percentage: 100 }));
-      toast.success(`Arquivo filtrado e enviado! (${(filteredFile.size/1024/1024).toFixed(2)} MB)`);
+      toast.success(`Arquivo enviado! (${filteredParts.length} registros).`);
       setSelectedFile(null);
       
       // Trigger job refresh
