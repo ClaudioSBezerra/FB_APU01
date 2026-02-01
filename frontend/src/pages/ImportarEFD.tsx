@@ -87,14 +87,20 @@ export default function ImportarEFD() {
       const headerBlob = selectedFile.slice(0, 100);
       headerPreview = await headerBlob.text();
       
-      // Read Footer (Last 200 bytes)
-      const footerBlob = selectedFile.slice(Math.max(selectedFile.size - 200, 0));
+      // Read Footer (Last 16KB to skip digital signatures)
+      const footerBlob = selectedFile.slice(Math.max(selectedFile.size - 16384, 0));
       footerPreview = await footerBlob.text();
       
-      // Look for |9999|count|
-      const match = footerPreview.match(/\|9999\|(\d+)\|/);
-      if (match && match[1]) {
-        expectedLines = match[1];
+      // Look for |9999|count| anywhere in the footer block
+      // We use lastIndexOf to find the actual SPED trailer, ignoring appended signatures
+      const match = footerPreview.match(/\|9999\|(\d+)\|/g);
+      if (match && match.length > 0) {
+        // Get the last valid 9999 record found
+        const lastMatch = match[match.length - 1];
+        const countMatch = lastMatch.match(/\|9999\|(\d+)\|/);
+        if (countMatch) {
+            expectedLines = countMatch[1];
+        }
       }
     } catch (err) {
       console.warn("Could not read file preview:", err);
@@ -119,62 +125,50 @@ export default function ImportarEFD() {
       remainingTime: 0
     });
 
-    const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
-    const totalChunks = Math.ceil(selectedFile.size / CHUNK_SIZE);
-    const uploadId = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    // --- SIMPLE STREAMING UPLOAD (XHR) ---
     const startTime = Date.now();
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    formData.append('filename', selectedFile.name);
+    formData.append('expected_lines', expectedLines);
+    formData.append('expected_size', selectedFile.size.toString());
 
     try {
-      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-        const start = chunkIndex * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, selectedFile.size);
-        const chunk = selectedFile.slice(start, end);
-
-        const formData = new FormData();
-        formData.append('file', chunk);
-        formData.append('chunk_index', chunkIndex.toString());
-        formData.append('total_chunks', totalChunks.toString());
-        formData.append('upload_id', uploadId);
-        formData.append('filename', selectedFile.name);
-        formData.append('expected_lines', expectedLines);
-        formData.append('expected_size', selectedFile.size.toString());
-
         await new Promise((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.open('POST', '/api/upload', true);
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/upload', true);
 
-          xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) {
-              const totalUploaded = start + e.loaded;
-              const percentage = Math.round((totalUploaded / selectedFile.size) * 100);
-              const elapsedTime = (Date.now() - startTime) / 1000;
-              const speed = totalUploaded / elapsedTime;
-              const remainingBytes = selectedFile.size - totalUploaded;
-              const remainingTime = speed > 0 ? remainingBytes / speed : 0;
+            // Progress Event
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const percentage = Math.round((e.loaded / e.total) * 100);
+                    const elapsedTime = (Date.now() - startTime) / 1000;
+                    const speed = e.loaded / elapsedTime; // bytes per second
+                    const remainingBytes = e.total - e.loaded;
+                    const remainingTime = speed > 0 ? remainingBytes / speed : 0;
 
-              setUploadProgress({
-                status: 'uploading',
-                percentage,
-                bytesUploaded: totalUploaded,
-                bytesTotal: selectedFile.size,
-                speed,
-                remainingTime
-              });
-            }
-          };
+                    setUploadProgress({
+                        status: 'uploading',
+                        percentage,
+                        bytesUploaded: e.loaded,
+                        bytesTotal: e.total,
+                        speed,
+                        remainingTime
+                    });
+                }
+            };
 
-          xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              resolve(xhr.response);
-            } else {
-              reject(new Error(xhr.statusText || 'Upload failed'));
-            }
-          };
-
-          xhr.onerror = () => reject(new Error('Network error'));
-          xhr.send(formData);
+            // Load/Error Events
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve(xhr.response);
+                } else {
+                    reject(new Error(xhr.statusText || 'Upload failed'));
+                }
+            };
+            xhr.onerror = () => reject(new Error('Network error during upload'));
+            xhr.send(formData);
         });
-      }
 
       setUploadProgress(prev => ({ ...prev, status: 'completed', percentage: 100 }));
       toast.success('Arquivo enviado com sucesso!');
@@ -210,7 +204,7 @@ export default function ImportarEFD() {
   return (
     <div className="container mx-auto p-6 space-y-6 animate-fade-in">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Importar EFD <span className="text-sm font-normal text-muted-foreground">(v2.1 Chunked)</span></h1>
+        <h1 className="text-3xl font-bold tracking-tight text-primary">Importar EFD <span className="text-sm font-normal text-muted-foreground">(v3.0 Streaming)</span></h1>
         <p className="text-muted-foreground">
           Envie seus arquivos SPED EFD Contribuições para processamento.
         </p>
