@@ -333,6 +333,13 @@ export default function ImportarEFD() {
               </div>
             )}
 
+            {scanStats.phase === 'scanning' && (
+              <div className="text-xs text-muted-foreground mt-2 text-center animate-pulse">
+                🔍 Analisando e Filtrando Arquivo... <br/>
+                {scanStats.scanned.toLocaleString()} linhas lidas | {scanStats.relevant.toLocaleString()} registros mantidos
+              </div>
+            )}
+
             <UploadProgressDisplay 
               progress={uploadProgress} 
               fileName={selectedFile?.name || ''}
