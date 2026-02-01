@@ -27,10 +27,17 @@ func StartWorker(db *sql.DB) {
 	for i := 0; i < WorkerPoolSize; i++ {
 		workerID := i + 1
 		go func(id int) {
+			defer func() {
+				if r := recover(); r != nil {
+					fmt.Printf("Worker #%d PANIC RECOVERED: %v\n", id, r)
+				}
+			}()
 			fmt.Printf("Worker #%d started\n", id)
 			for {
 				processNextJob(db, id)
-				time.Sleep(2 * time.Second) // Poll every 2 seconds
+				time.Sleep(2 * time.Second)
+			}
+		}(workerID) // Poll every 2 seconds
 			}
 		}(workerID)
 	}
