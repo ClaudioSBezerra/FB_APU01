@@ -1,6 +1,9 @@
 # Build Stage
 FROM golang:1.22-alpine AS builder
 
+# Install git (required for go mod download)
+RUN apk add --no-cache git
+
 WORKDIR /app
 
 # Copy backend module
@@ -10,7 +13,7 @@ RUN go mod download
 # Copy source code
 COPY backend/ .
 RUN go mod tidy
-RUN go vet
+RUN go vet ./...
 
 # Build optimized binary
 RUN CGO_ENABLED=0 GOOS=linux go build -v -ldflags="-w -s" -o server main.go

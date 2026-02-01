@@ -37,8 +37,6 @@ func StartWorker(db *sql.DB) {
 				processNextJob(db, id)
 				time.Sleep(2 * time.Second)
 			}
-		}(workerID) // Poll every 2 seconds
-			}
 		}(workerID)
 	}
 }
