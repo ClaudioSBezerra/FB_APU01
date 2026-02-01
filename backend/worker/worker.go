@@ -1,7 +1,7 @@
 package worker
 
 import (
-	// Force Git Update - Worker V4.2.2 (Chunked Upload Fix)
+	// Force Git Update - Worker V5.0 (Client-Side Parsing Support)
 	"bufio"
 	"bytes"
 	"database/sql"
