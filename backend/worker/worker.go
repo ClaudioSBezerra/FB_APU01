@@ -1,7 +1,7 @@
 package worker
 
 import (
-	// Force Git Update - Worker v2.3
+	// Force Git Update - Worker V4
 	"bufio"
 	"bytes"
 	"database/sql"
