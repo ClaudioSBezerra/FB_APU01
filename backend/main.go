@@ -147,7 +147,11 @@ func main() {
 	http.HandleFunc("/api/config/cfop/import", handlers.ImportCFOPsHandler(db))
 
 	fmt.Printf("FB_APU01 Fiscal Engine (Go) starting on port %s...\n", port)
-	fmt.Println("Backend Version: 4.0 - Chunked Upload Support Enabled")
+	
+	// Print Version (Force Rebuild V4.1)
+	fmt.Println("==================================================")
+	fmt.Println("   FB_APU01 BACKEND - V4.1 (CHUNKED UPLOAD)       ")
+	fmt.Println("==================================================")
 	
 	// Use custom server with timeouts (Inspired by production best practices)
 	server := &http.Server{
