@@ -26,6 +26,18 @@ func StartWorker(db *sql.DB) {
 
 	fmt.Printf("Starting Background Worker Pool (%d workers)...\n", WorkerPoolSize)
 
+	// CRASH RECOVERY: Reset any 'processing' jobs to 'pending' on startup
+	// This ensures that if the server crashed, interrupted jobs are resumed automatically
+	res, err := db.Exec("UPDATE import_jobs SET status = 'pending', message = message || ' [Recovered]' WHERE status = 'processing'")
+	if err == nil {
+		count, _ := res.RowsAffected()
+		if count > 0 {
+			fmt.Printf("Worker Recovery: Reset %d stuck jobs from 'processing' to 'pending'\n", count)
+		}
+	} else {
+		fmt.Printf("Worker Recovery Error: %v\n", err)
+	}
+
 	for i := 0; i < WorkerPoolSize; i++ {
 		workerID := i + 1
 		go func(id int) {
@@ -213,7 +225,7 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 	)
 
 	fmt.Printf("Worker: Parsing SPED file %s (EFD ICMS Logic - Fixed Indices)...\n", filename)
-	fmt.Println("Worker: VERSION 2.2 - PROD READY (1GB+ Support & EOF Check)")
+	fmt.Println("Worker: VERSION 2.3 - PROD READY (Resume & Crash Recovery)")
 
 	// Get file info for size
 	fileInfo, err := file.Stat()
