@@ -129,6 +129,13 @@ export default function ImportarEFD() {
            // Fast Check: Must start with pipe
            if (!line.startsWith('|')) continue;
 
+           // STOP SCANNING IF |9999| IS FOUND
+           if (line.startsWith('|9999|')) {
+             console.log(`[DEBUG] Found |9999| at line ${totalLinesScanned}. Stopping scan.`);
+             finishedReading = true;
+             break;
+           }
+
            // Check against whitelist
            let isRelevant = false;
            for (const p of relevantPrefixes) {
@@ -158,11 +165,13 @@ export default function ImportarEFD() {
         processedBytes += chunkBlob.size;
         
         // Update UI (Filtering Phase)
-        if (totalLinesScanned % 5000 === 0 || offset >= selectedFile.size) {
+        if (totalLinesScanned % 5000 === 0 || offset >= selectedFile.size || finishedReading) {
             setScanStats({ scanned: totalLinesScanned, relevant: relevantLinesFound, phase: 'scanning' });
             // Yield to UI thread to prevent freeze
             await new Promise(r => setTimeout(r, 0));
         }
+
+        if (finishedReading) break;
 
         setUploadProgress(prev => ({
            ...prev,
