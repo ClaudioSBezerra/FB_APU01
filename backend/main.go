@@ -57,6 +57,7 @@ func initDB() {
 }
 
 func main() {
+	PrintVersion()
 	initDB()
 	defer db.Close()
 
