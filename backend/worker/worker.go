@@ -1,10 +1,11 @@
 package worker
 
 import (
-	// Force Git Update - Worker V4
+	// Force Git Update - Worker V4.1 (Robustness & Throttle)
 	"bufio"
 	"bytes"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -147,6 +148,41 @@ func countLines(filename string) (int, error) {
 	}
 }
 
+// validateFileIntegrity checks if the file ends with |9999| record
+func validateFileIntegrity(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	stat, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if stat.Size() < 100 {
+		return errors.New("file too small")
+	}
+
+	// Read last 1KB
+	bufSize := int64(1024)
+	if stat.Size() < bufSize {
+		bufSize = stat.Size()
+	}
+	buf := make([]byte, bufSize)
+	_, err = f.ReadAt(buf, stat.Size()-bufSize)
+	if err != nil && err != io.EOF {
+		return err
+	}
+
+	// Check for |9999|
+	// Note: It might be |9999| or |9999|CRLF or |9999|LF
+	if !bytes.Contains(buf, []byte("|9999|")) {
+		return errors.New("missing trailing '|9999|' record - upload incomplete")
+	}
+	return nil
+}
+
 func parseDate(s string) interface{} {
 	if len(s) != 8 {
 		return nil
@@ -190,12 +226,24 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 	uploadDir := "uploads"
 	path := filepath.Join(uploadDir, filename)
 
+	// 1. PRE-VALIDATION: Check if file is truncated (must end with |9999|)
+	if err := validateFileIntegrity(path); err != nil {
+		fmt.Printf("Worker: File integrity check failed: %v\n", err)
+		db.Exec("UPDATE import_jobs SET status='error', message=$1, updated_at=NOW() WHERE id=$2", "File Corrupted/Truncated: "+err.Error(), jobID)
+		return "File Integrity Failed", err
+	}
+
 	// Open file
 	file, err := os.Open(path)
 	if err != nil {
 		return "", fmt.Errorf("file not found: %v", err)
 	}
 	defer file.Close()
+
+	// Get file size for progress calculation
+	if fi, err := file.Stat(); err == nil {
+		fmt.Printf("Worker: Processing %s (Size: %.2f MB)\n", path, float64(fi.Size())/1024/1024)
+	}
 
 	// SPED files are usually encoded in ISO-8859-1 (Latin1)
 	reader := transform.NewReader(file, charmap.ISO8859_1.NewDecoder())
