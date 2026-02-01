@@ -107,7 +107,7 @@ export default function ImportarEFD() {
       let totalLinesScanned = 0;
       let relevantLinesFound = 0;
 
-      while (offset < selectedFile.size && !finishedReading) {
+      while (offset < selectedFile.size) { // Force read until end of file
         const chunkBlob = selectedFile.slice(offset, offset + CHUNK_SIZE);
         const chunkText = await chunkBlob.text();
         
@@ -141,8 +141,7 @@ export default function ImportarEFD() {
 
                if (p === '|D990|') {
                  foundD990 = true;
-                 finishedReading = true;
-                 console.log(`[DEBUG] FOUND |D990| at Line #${totalLinesScanned}. Stopping read.`);
+                 console.log(`[DEBUG] FOUND |D990| at Line #${totalLinesScanned}. Keeping it and continuing scan to confirm no duplicates.`);
                }
                break;
              }
@@ -152,13 +151,18 @@ export default function ImportarEFD() {
              filteredParts.push(line + '\n');
              relevantLinesFound++;
            }
-           if (finishedReading) break;
         }
 
         offset += CHUNK_SIZE;
         processedBytes += chunkBlob.size;
         
         // Update UI (Filtering Phase)
+        if (totalLinesScanned % 5000 === 0 || offset >= selectedFile.size) {
+            setScanStats({ scanned: totalLinesScanned, relevant: relevantLinesFound, phase: 'scanning' });
+            // Yield to UI thread to prevent freeze
+            await new Promise(r => setTimeout(r, 0));
+        }
+
         setUploadProgress(prev => ({
            ...prev,
            percentage: Math.min(Math.round((processedBytes / selectedFile.size) * 50), 50), // 0-50% is filtering
