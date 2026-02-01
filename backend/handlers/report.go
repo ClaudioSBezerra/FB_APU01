@@ -1,7 +1,7 @@
 package handlers
 
 import (
-"database/sql"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
