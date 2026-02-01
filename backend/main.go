@@ -152,8 +152,8 @@ func main() {
 	server := &http.Server{
 		Addr:         ":" + port,
 		Handler:      nil, // Use DefaultServeMux
-		ReadTimeout:  0,   // Infinite for Uploads (Handled by Nginx)
-		WriteTimeout: 0,   // Infinite for Long Responses
+		ReadTimeout:  300 * time.Second,   // 5 minutes for Uploads
+		WriteTimeout: 300 * time.Second,   // 5 minutes for Long Responses
 		IdleTimeout:  60 * time.Second,
 	}
 
