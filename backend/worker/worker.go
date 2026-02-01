@@ -554,6 +554,19 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 			}
 		}
 
+		// STOP if |9999| is found (End of SPED) to avoid reading garbage/certificates
+		if reg == "9999" {
+			parts := strings.Split(line, "|")
+			if len(parts) >= 3 {
+				// Verify if it is a valid counter (> 100 lines)
+				if countVal, err := strconv.Atoi(parts[2]); err == nil && countVal > 100 {
+					fmt.Printf("Worker: Found End of File (|9999|) with count %d. Stopping scan.\n", countVal)
+					foundEOF = true
+					break
+				}
+			}
+		}
+
 		// Only Split if it is a register we process
 		// We use switch/case on 'reg' for O(1) dispatch instead of if/else chain
 		switch reg {

@@ -177,9 +177,13 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 					if strings.HasPrefix(trimmed, "|9999|") {
 						parts := strings.Split(trimmed, "|")
 						// |9999|COUNT| -> index 0 is empty, 1 is 9999, 2 is COUNT
+						// Check if count > 100 to ensure it's a valid SPED trailer and not a random occurrence
 						if len(parts) >= 3 && parts[1] == "9999" {
-							actualLines = parts[2]
-							break // Found the trailer, ignore subsequent garbage/signatures
+							// Parse count to ensure it's numeric and reasonably large
+							if countVal, err := strconv.Atoi(parts[2]); err == nil && countVal > 100 {
+								actualLines = parts[2]
+								break // Found the trailer, ignore subsequent garbage/signatures
+							}
 						}
 					}
 				}

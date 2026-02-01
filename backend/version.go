@@ -4,8 +4,8 @@ import "fmt"
 
 // Version information for backend deployment validation
 const (
-	BackendVersion = "4.3.2"
-	FeatureSet     = "Fix actualLines Scope Error"
+	BackendVersion = "4.4"
+	FeatureSet     = "Garbage Loop Fix + Strict 9999"
 )
 
 // PrintVersion prints the backend version to the console
