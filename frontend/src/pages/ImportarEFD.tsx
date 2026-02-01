@@ -103,6 +103,10 @@ export default function ImportarEFD() {
       const startTimeRead = Date.now();
 
       // Read Loop
+      console.log(`[DEBUG] Starting Client-Side Filter for: ${selectedFile.name}`);
+      let totalLinesScanned = 0;
+      let relevantLinesFound = 0;
+
       while (offset < selectedFile.size && !finishedReading) {
         const chunkBlob = selectedFile.slice(offset, offset + CHUNK_SIZE);
         const chunkText = await chunkBlob.text();
@@ -120,6 +124,7 @@ export default function ImportarEFD() {
 
         // Process Lines
         for (const line of lines) {
+           totalLinesScanned++;
            // Fast Check: Must start with pipe
            if (!line.startsWith('|')) continue;
 
@@ -128,9 +133,16 @@ export default function ImportarEFD() {
            for (const p of relevantPrefixes) {
              if (line.startsWith(p)) {
                isRelevant = true;
+               
+               // DEBUG SAMPLING: Log first 5 occurrences of each register type or every 1000th relevant line
+               if (relevantLinesFound < 20 || relevantLinesFound % 5000 === 0) {
+                 console.log(`[DEBUG] Keeping Line #${totalLinesScanned}: ${line.substring(0, 50)}...`);
+               }
+
                if (p === '|D990|') {
                  foundD990 = true;
                  finishedReading = true;
+                 console.log(`[DEBUG] FOUND |D990| at Line #${totalLinesScanned}. Stopping read.`);
                }
                break;
              }
@@ -138,6 +150,7 @@ export default function ImportarEFD() {
 
            if (isRelevant) {
              filteredParts.push(line + '\n');
+             relevantLinesFound++;
            }
            if (finishedReading) break;
         }
@@ -154,6 +167,8 @@ export default function ImportarEFD() {
       }
 
       // Add Artificial Trailer for Backend Compatibility
+      console.log(`[DEBUG] Filter Complete. Scanned: ${totalLinesScanned}, Kept: ${filteredParts.length}. D990 Found: ${foundD990}`);
+      
       if (foundD990) {
         filteredParts.push('|9999|' + filteredParts.length + '|\n');
       } else {
