@@ -13,6 +13,12 @@ import (
 	"time"
 )
 
+func Atoi(s string) int {
+	var n int
+	fmt.Sscanf(s, "%d", &n)
+	return n
+}
+
 type UploadResponse struct {
 	JobID    string `json:"job_id"`
 	Message  string `json:"message"`
@@ -55,39 +61,86 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Sanitize filename and create unique name
-		originalName := filepath.Base(header.Filename)
-		timestamp := time.Now().Format("20060102_150405")
-		safeFilename := fmt.Sprintf("%s_%s", timestamp, originalName)
-		uploadDir := "uploads"
-		savePath := filepath.Join(uploadDir, safeFilename)
+		// CHUNKED UPLOAD LOGIC
+		// Check if this is a chunked upload
+		isChunked := r.FormValue("is_chunked") == "true"
+		uploadID := r.FormValue("upload_id")
+		chunkIndex := r.FormValue("chunk_index")
+		totalChunks := r.FormValue("total_chunks")
 
-		// Create uploads directory if it doesn't exist
-		if err := os.MkdirAll(uploadDir, 0755); err != nil {
-			http.Error(w, "Failed to create upload directory", http.StatusInternalServerError)
-			return
-		}
+		var safeFilename string
+		var savePath string
+		var written int64
 
-		// Save file to disk
-		log.Printf("Upload Debug: Starting to write file %s to storage...\n", safeFilename)
-		dst, err := os.Create(savePath)
-		if err != nil {
-			log.Printf("Upload Error: Failed to create file on storage: %v\n", err)
-			http.Error(w, "Unable to create the file on server", http.StatusInternalServerError)
-			return
-		}
-		
-		// Use io.Copy for efficient streaming from request to disk
-		written, err := io.Copy(dst, file)
-		// Close file immediately after writing to ensure flush
-		dst.Close() 
+		if isChunked {
+			// Chunked: We use a temporary filename based on upload_id
+			if uploadID == "" {
+				http.Error(w, "Missing upload_id for chunked upload", http.StatusBadRequest)
+				return
+			}
+			safeFilename = uploadID + "_" + filepath.Base(header.Filename)
+			savePath = filepath.Join("uploads", safeFilename)
+			
+			// Open in Append mode or Create if it's the first chunk
+			flags := os.O_APPEND | os.O_CREATE | os.O_WRONLY
+			if chunkIndex == "0" {
+				flags = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
+			}
 
-		if err != nil {
-			log.Printf("Upload Error: Failed to write content to storage: %v\n", err)
-			http.Error(w, "Unable to save the file content", http.StatusInternalServerError)
-			return
+			dst, err := os.OpenFile(savePath, flags, 0644)
+			if err != nil {
+				log.Printf("Chunk Upload Error: %v\n", err)
+				http.Error(w, "Failed to open chunk file", http.StatusInternalServerError)
+				return
+			}
+			
+			// Copy chunk
+			wBytes, err := io.Copy(dst, file)
+			dst.Close()
+			if err != nil {
+				http.Error(w, "Failed to write chunk", http.StatusInternalServerError)
+				return
+			}
+			written = wBytes
+
+			// If this is NOT the last chunk, return success immediately (don't create job yet)
+			if chunkIndex != fmt.Sprintf("%d", Atoi(totalChunks)-1) {
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]string{"status": "chunk_received", "chunk": chunkIndex})
+				return
+			}
+			
+			// If it IS the last chunk, proceed to Job Creation logic below...
+			log.Printf("Chunked Upload Complete: %s\n", safeFilename)
+
+		} else {
+			// STANDARD UPLOAD (Legacy / Small files)
+			originalName := filepath.Base(header.Filename)
+			timestamp := time.Now().Format("20060102_150405")
+			safeFilename = fmt.Sprintf("%s_%s", timestamp, originalName)
+			savePath = filepath.Join("uploads", safeFilename)
+
+			// Create uploads directory if it doesn't exist
+			if err := os.MkdirAll("uploads", 0755); err != nil {
+				http.Error(w, "Failed to create upload directory", http.StatusInternalServerError)
+				return
+			}
+
+			// Save file to disk
+			dst, err := os.Create(savePath)
+			if err != nil {
+				http.Error(w, "Unable to create the file on server", http.StatusInternalServerError)
+				return
+			}
+			
+			wBytes, err := io.Copy(dst, file)
+			dst.Close() 
+			if err != nil {
+				http.Error(w, "Unable to save the file content", http.StatusInternalServerError)
+				return
+			}
+			written = wBytes
 		}
-		log.Printf("Upload Debug: Successfully wrote %d bytes to %s\n", written, safeFilename)
 
 		// Verify size
 		log.Printf("Upload Debug: Header Size: %d, Written: %d\n", header.Size, written)

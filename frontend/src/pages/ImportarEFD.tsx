@@ -188,50 +188,69 @@ export default function ImportarEFD() {
       
       console.log(`Original Size: ${selectedFile.size}, Filtered Size: ${filteredFile.size}`);
 
-      // 3. Upload Filtered File
+      // 3. Upload Filtered File (CHUNKED UPLOAD STRATEGY)
       const startTimeUpload = Date.now();
-      const formData = new FormData();
-      formData.append('file', filteredFile);
-      formData.append('filename', selectedFile.name);
-      formData.append('expected_lines', filteredParts.length.toString());
-      formData.append('expected_size', filteredFile.size.toString());
+      const UPLOAD_CHUNK_SIZE = 5 * 1024 * 1024; // 5MB Upload Chunks
+      const totalChunks = Math.ceil(filteredFile.size / UPLOAD_CHUNK_SIZE);
+      const uploadID = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      console.log(`[DEBUG] Starting Chunked Upload. Total Chunks: ${totalChunks}, ID: ${uploadID}`);
 
-      await new Promise((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.open('POST', '/api/upload', true);
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        const start = chunkIndex * UPLOAD_CHUNK_SIZE;
+        const end = Math.min(start + UPLOAD_CHUNK_SIZE, filteredFile.size);
+        const chunk = filteredFile.slice(start, end);
 
-          xhr.upload.onprogress = (e) => {
-              if (e.lengthComputable) {
-                  // Map 0-100% upload to 50-100% total progress
-                  const percentUpload = (e.loaded / e.total) * 50; 
-                  const totalPercent = 50 + percentUpload;
-                  
-                  const elapsedTime = (Date.now() - startTimeUpload) / 1000;
-                  const speed = e.loaded / elapsedTime;
-                  const remainingBytes = e.total - e.loaded;
-                  const remainingTime = speed > 0 ? remainingBytes / speed : 0;
+        const formData = new FormData();
+        formData.append('file', chunk);
+        formData.append('is_chunked', 'true');
+        formData.append('upload_id', uploadID);
+        formData.append('chunk_index', chunkIndex.toString());
+        formData.append('total_chunks', totalChunks.toString());
+        formData.append('filename', selectedFile.name); // Original name for reference
+        
+        // Only send metadata on last chunk to trigger validation
+        if (chunkIndex === totalChunks - 1) {
+             formData.append('expected_lines', filteredParts.length.toString());
+             formData.append('expected_size', filteredFile.size.toString());
+        }
 
-                  setUploadProgress({
-                      status: 'uploading',
-                      percentage: Math.round(totalPercent),
-                      bytesUploaded: e.loaded,
-                      bytesTotal: e.total,
-                      speed,
-                      remainingTime
-                  });
-              }
-          };
+        // Upload Chunk with Retry Logic
+        await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/upload', true);
 
-          xhr.onload = () => {
-              if (xhr.status >= 200 && xhr.status < 300) {
-                  resolve(xhr.response);
-              } else {
-                  reject(new Error(xhr.statusText || 'Upload failed'));
-              }
-          };
-          xhr.onerror = () => reject(new Error('Network error during upload'));
-          xhr.send(formData);
-      });
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve(xhr.response);
+                } else {
+                    reject(new Error(`Upload failed at chunk ${chunkIndex}: ${xhr.statusText}`));
+                }
+            };
+            xhr.onerror = () => reject(new Error(`Network error at chunk ${chunkIndex}`));
+            xhr.send(formData);
+        });
+
+        // Update Progress
+        const percentUpload = ((chunkIndex + 1) / totalChunks) * 50; 
+        const totalPercent = 50 + percentUpload;
+        
+        // Calculate speed based on total bytes uploaded so far
+        const bytesUploadedSoFar = end;
+        const elapsedTime = (Date.now() - startTimeUpload) / 1000;
+        const speed = bytesUploadedSoFar / elapsedTime;
+        const remainingBytes = filteredFile.size - bytesUploadedSoFar;
+        const remainingTime = speed > 0 ? remainingBytes / speed : 0;
+
+        setUploadProgress({
+            status: 'uploading',
+            percentage: Math.round(totalPercent),
+            bytesUploaded: bytesUploadedSoFar,
+            bytesTotal: filteredFile.size,
+            speed,
+            remainingTime
+        });
+      }
 
       setUploadProgress(prev => ({ ...prev, status: 'completed', percentage: 100 }));
       toast.success(`Arquivo filtrado e enviado! (${(filteredFile.size/1024/1024).toFixed(2)} MB)`);
@@ -268,7 +287,7 @@ export default function ImportarEFD() {
   return (
     <div className="container mx-auto p-6 space-y-6 animate-fade-in">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Importar EFD <span className="text-sm font-normal text-muted-foreground">(v3.1 Client-Filter)</span></h1>
+        <h1 className="text-3xl font-bold tracking-tight text-primary">Importar EFD <span className="text-sm font-normal text-muted-foreground">(v4.0 Chunked Upload)</span></h1>
         <p className="text-muted-foreground">
           Envie seus arquivos SPED EFD Contribuições para processamento.
         </p>
