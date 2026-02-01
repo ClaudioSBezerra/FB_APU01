@@ -11,18 +11,12 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"strconv"
 )
 
 type UploadResponse struct {
 	JobID    string `json:"job_id"`
 	Message  string `json:"message"`
 	Filename string `json:"filename"`
-}
-
-func castToInt(s string) int {
-	i, _ := strconv.Atoi(s)
-	return i
 }
 
 func UploadHandler(db *sql.DB) http.HandlerFunc {
