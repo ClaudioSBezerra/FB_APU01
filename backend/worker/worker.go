@@ -331,7 +331,8 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 
 	// BATCH PROCESSING SETUP
 	// Instead of one huge transaction, we commit every BatchSize lines.
-	const BatchSize = 2000
+	// Reduced to 1000 to prevent DB locks and allow smoother HTTP handling
+	const BatchSize = 1000
 	var tx *sql.Tx
 	var stmtPart, stmtC100, stmtC190, stmtC500, stmtC600, stmtD100, stmtD500 *sql.Stmt
 
@@ -544,8 +545,9 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 				fmt.Printf("Worker: Warning updating checkpoint: %v\n", err)
 			}
 
-			// THROTTLE: Sleep 50ms to allow HTTP requests to be processed (Prevents 504 Timeout on 2 vCPU)
-			time.Sleep(50 * time.Millisecond)
+			// THROTTLE: Sleep 200ms to allow HTTP requests to be processed (Prevents 504 Timeout on 2 vCPU)
+			// Increased from 50ms to 200ms because 504 errors were still occurring during heavy parsing
+			time.Sleep(200 * time.Millisecond)
 
 			if err := startBatch(); err != nil {
 				return "", fmt.Errorf("failed to restart batch at line %d: %v", lineCount, err)
