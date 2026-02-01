@@ -467,6 +467,9 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 				fmt.Printf("Worker: Warning updating checkpoint: %v\n", err)
 			}
 
+			// THROTTLE: Sleep 50ms to allow HTTP requests to be processed (Prevents 504 Timeout)
+			time.Sleep(50 * time.Millisecond)
+
 			if err := startBatch(); err != nil {
 				return "", fmt.Errorf("failed to restart batch at line %d: %v", lineCount, err)
 			}
