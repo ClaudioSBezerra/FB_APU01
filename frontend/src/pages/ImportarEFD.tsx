@@ -202,7 +202,8 @@ export default function ImportarEFD() {
         const chunk = filteredFile.slice(start, end);
 
         const formData = new FormData();
-        formData.append('file', chunk);
+        // IMPORTANT: Pass filename as 3rd argument so backend detects extension (.txt)
+        formData.append('file', chunk, selectedFile.name);
         formData.append('is_chunked', 'true');
         formData.append('upload_id', uploadID);
         formData.append('chunk_index', chunkIndex.toString());
