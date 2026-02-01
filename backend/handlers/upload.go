@@ -109,6 +109,37 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 				}
 				finalFile.Close() // Explicitly close to ensure flush before integrity check
 
+				// --- Integrity Check (Chunked) ---
+				expectedLines := r.FormValue("expected_lines")
+				expectedSize := r.FormValue("expected_size")
+				
+				if fi, err := os.Stat(finalPath); err == nil {
+					written := fi.Size()
+					tailBuf := make([]byte, 4096)
+					startPos := int64(0)
+					if written > 4096 { startPos = written - 4096 }
+					
+					if fCheck, err := os.Open(finalPath); err == nil {
+						fCheck.ReadAt(tailBuf, startPos)
+						fCheck.Close()
+						
+						tailStr := string(tailBuf)
+						actualLines := "not_found"
+						lines := strings.Split(tailStr, "\n")
+						for i := len(lines) - 1; i >= 0; i-- {
+							if strings.Contains(lines[i], "|9999|") {
+								parts := strings.Split(lines[i], "|")
+								if len(parts) >= 3 && parts[1] == "9999" {
+									actualLines = parts[2]
+									break
+								}
+							}
+						}
+						log.Printf("LOG API Integrity (Chunked): File=%s Lines=%s Size=%s ActualEnd=%s", safeFilename, expectedLines, expectedSize, actualLines)
+					}
+				}
+				// ---------------------------------
+
 				// Cleanup temp dir
 				os.RemoveAll(tempDir)
 

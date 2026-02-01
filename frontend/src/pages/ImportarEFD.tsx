@@ -103,59 +103,77 @@ export default function ImportarEFD() {
       remainingTime: 0
     });
 
-    const formData = new FormData();
-    formData.append('file', selectedFile);
-    formData.append('expected_lines', expectedLines);
-    formData.append('expected_size', selectedFile.size.toString());
+    const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
+    const totalChunks = Math.ceil(selectedFile.size / CHUNK_SIZE);
+    const uploadId = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const startTime = Date.now();
 
     try {
-      const startTime = Date.now();
-      
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/upload', true);
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        const start = chunkIndex * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, selectedFile.size);
+        const chunk = selectedFile.slice(start, end);
 
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const percentage = Math.round((e.loaded / e.total) * 100);
-          const elapsedTime = (Date.now() - startTime) / 1000;
-          const speed = e.loaded / elapsedTime; // bytes/sec
-          const remainingBytes = e.total - e.loaded;
-          const remainingTime = speed > 0 ? remainingBytes / speed : 0;
+        const formData = new FormData();
+        formData.append('file', chunk);
+        formData.append('chunk_index', chunkIndex.toString());
+        formData.append('total_chunks', totalChunks.toString());
+        formData.append('upload_id', uploadId);
+        formData.append('filename', selectedFile.name);
+        formData.append('expected_lines', expectedLines);
+        formData.append('expected_size', selectedFile.size.toString());
 
-          setUploadProgress({
-            status: 'uploading',
-            percentage,
-            bytesUploaded: e.loaded,
-            bytesTotal: e.total,
-            speed,
-            remainingTime
-          });
-        }
-      };
+        await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', '/api/upload', true);
 
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          setUploadProgress(prev => ({ ...prev, status: 'completed', percentage: 100 }));
-          toast.success('Arquivo enviado com sucesso!');
-          setSelectedFile(null);
-          // Trigger job refresh
-        } else {
-          setUploadProgress(prev => ({ ...prev, status: 'error', errorMessage: xhr.statusText }));
-          toast.error(`Erro no upload: ${xhr.statusText}`);
-        }
-      };
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const totalUploaded = start + e.loaded;
+              const percentage = Math.round((totalUploaded / selectedFile.size) * 100);
+              const elapsedTime = (Date.now() - startTime) / 1000;
+              const speed = totalUploaded / elapsedTime;
+              const remainingBytes = selectedFile.size - totalUploaded;
+              const remainingTime = speed > 0 ? remainingBytes / speed : 0;
 
-      xhr.onerror = () => {
-        setUploadProgress(prev => ({ ...prev, status: 'error', errorMessage: 'Falha na conexão' }));
-        toast.error('Falha na conexão com o servidor.');
-      };
+              setUploadProgress({
+                status: 'uploading',
+                percentage,
+                bytesUploaded: totalUploaded,
+                bytesTotal: selectedFile.size,
+                speed,
+                remainingTime
+              });
+            }
+          };
 
-      xhr.send(formData);
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve(xhr.response);
+            } else {
+              reject(new Error(xhr.statusText || 'Upload failed'));
+            }
+          };
+
+          xhr.onerror = () => reject(new Error('Network error'));
+          xhr.send(formData);
+        });
+      }
+
+      setUploadProgress(prev => ({ ...prev, status: 'completed', percentage: 100 }));
+      toast.success('Arquivo enviado com sucesso!');
+      setSelectedFile(null);
+      // Trigger job refresh
+      const res = await fetch('/api/jobs');
+      if (res.ok) {
+        const data = await res.json();
+        setJobs(data);
+      }
 
     } catch (error) {
       console.error('Upload error:', error);
-      setUploadProgress(prev => ({ ...prev, status: 'error' }));
-      toast.error('Erro inesperado no upload.');
+      setUploadProgress(prev => ({ ...prev, status: 'error', errorMessage: String(error) }));
+      toast.error('Erro no upload. Tente novamente.');
     }
   };
 
