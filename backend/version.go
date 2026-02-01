@@ -4,8 +4,8 @@ import "fmt"
 
 // Version information for backend deployment validation
 const (
-	BackendVersion = "4.3.1"
-	FeatureSet     = "Dockerfile Syntax Fix + .dockerignore"
+	BackendVersion = "4.3.2"
+	FeatureSet     = "Fix actualLines Scope Error"
 )
 
 // PrintVersion prints the backend version to the console

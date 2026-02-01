@@ -152,6 +152,7 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 		// --- Integrity Check (Storage Verification) ---
 		expectedLines := r.FormValue("expected_lines")
 		expectedSize := r.FormValue("expected_size")
+		actualLines := "not_found"
 
 		// Read last 16KB to find |9999| (Handling Digital Signatures)
 		if fi, err := os.Stat(savePath); err == nil {
@@ -165,7 +166,6 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 				fCheck.Close()
 				
 				tailStr := string(tailBuf)
-				actualLines := "not_found"
 				
 				// Look for last valid |9999| occurrence
 				// Regex to find |9999|COUNT|
