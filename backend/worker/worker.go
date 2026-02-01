@@ -178,6 +178,14 @@ func validateFileIntegrity(path string) error {
 	// Check for |9999|
 	// Note: It might be |9999| or |9999|CRLF or |9999|LF
 	if !bytes.Contains(buf, []byte("|9999|")) {
+		// DEBUG: Log what was actually found at the end
+		tailLen := 100
+		if len(buf) < tailLen {
+			tailLen = len(buf)
+		}
+		actualTail := string(buf[len(buf)-tailLen:])
+		fmt.Printf("Worker Integrity Failure: Expected |9999|, found at tail: [%q]\n", actualTail)
+		
 		return errors.New("missing trailing '|9999|' record - upload incomplete")
 	}
 	return nil
