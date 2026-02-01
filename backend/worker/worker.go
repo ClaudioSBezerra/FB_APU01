@@ -19,10 +19,9 @@ import (
 )
 
 func StartWorker(db *sql.DB) {
-	// Worker Pool Size: 5 concurrent workers
-	// This allows multiple files to be processed simultaneously
-	// DEPLOY TRIGGER: Force Rebuild 001
-	const WorkerPoolSize = 5
+	// Worker Pool Size: 2 concurrent workers (Optimized for 2 vCPU VPS)
+	// Prevents CPU starvation and 504 Gateway Timeouts
+	const WorkerPoolSize = 2
 
 	fmt.Printf("Starting Background Worker Pool (%d workers)...\n", WorkerPoolSize)
 
@@ -467,7 +466,7 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 				fmt.Printf("Worker: Warning updating checkpoint: %v\n", err)
 			}
 
-			// THROTTLE: Sleep 50ms to allow HTTP requests to be processed (Prevents 504 Timeout)
+			// THROTTLE: Sleep 50ms to allow HTTP requests to be processed (Prevents 504 Timeout on 2 vCPU)
 			time.Sleep(50 * time.Millisecond)
 
 			if err := startBatch(); err != nil {
