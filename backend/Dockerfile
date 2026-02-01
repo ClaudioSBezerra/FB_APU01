@@ -2,10 +2,18 @@
 FROM golang:1.22-alpine AS builder
 RUN apk add --no-cache git
 WORKDIR /app
+
+# Copy go.mod and go.sum from the backend directory
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
+
+# Copy the rest of the backend source code
 COPY backend/ .
+
+# Ensure dependencies are tidy
 RUN go mod tidy
+
+# Build the binary
 RUN CGO_ENABLED=0 GOOS=linux go build -v -ldflags="-w -s" -o server .
 
 # Run Stage
