@@ -11,12 +11,18 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"strconv"
 )
 
 type UploadResponse struct {
 	JobID    string `json:"job_id"`
 	Message  string `json:"message"`
 	Filename string `json:"filename"`
+}
+
+func castToInt(s string) int {
+	i, _ := strconv.Atoi(s)
+	return i
 }
 
 func UploadHandler(db *sql.DB) http.HandlerFunc {
@@ -36,8 +42,103 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		// Check for Chunked Upload
+		chunkIndex := r.FormValue("chunk_index")
+		totalChunks := r.FormValue("total_chunks")
+		uploadID := r.FormValue("upload_id")
+
+		if chunkIndex != "" && totalChunks != "" && uploadID != "" {
+			// CHUNKED UPLOAD LOGIC
+			uploadDir := "uploads"
+			tempDir := filepath.Join(uploadDir, "temp_chunks", uploadID)
+			
+			// Create temp dir
+			if err := os.MkdirAll(tempDir, 0755); err != nil {
+				http.Error(w, "Failed to create temp directory", http.StatusInternalServerError)
+				return
+			}
+
+			// Save individual chunk
+			file, _, err := r.FormFile("file")
+			if err != nil {
+				http.Error(w, "Error retrieving chunk: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			defer file.Close()
+
+			chunkPath := filepath.Join(tempDir, fmt.Sprintf("chunk_%s", chunkIndex))
+			dst, err := os.Create(chunkPath)
+			if err != nil {
+				http.Error(w, "Failed to save chunk", http.StatusInternalServerError)
+				return
+			}
+			defer dst.Close()
+			io.Copy(dst, file)
+
+			// If last chunk, merge everything
+			if chunkIndex == fmt.Sprintf("%d", castToInt(totalChunks)-1) {
+				// Sanitize filename and create unique name
+				// Get filename from first chunk request or current one (assuming it's passed)
+				originalName := r.FormValue("filename")
+				if originalName == "" {
+					originalName = "upload.txt"
+				}
+				
+				timestamp := time.Now().Format("20060102_150405")
+				safeFilename := fmt.Sprintf("%s_%s", timestamp, filepath.Base(originalName))
+				finalPath := filepath.Join(uploadDir, safeFilename)
+
+				finalFile, err := os.Create(finalPath)
+				if err != nil {
+					http.Error(w, "Failed to create final file", http.StatusInternalServerError)
+					return
+				}
+				defer finalFile.Close()
+
+				// Merge chunks
+				totalC := castToInt(totalChunks)
+				for i := 0; i < totalC; i++ {
+					cPath := filepath.Join(tempDir, fmt.Sprintf("chunk_%d", i))
+					cFile, err := os.Open(cPath)
+					if err != nil {
+						// Missing chunk?
+						log.Printf("Error missing chunk %d: %v", i, err)
+						http.Error(w, "Missing chunk during merge", http.StatusInternalServerError)
+						return
+					}
+					io.Copy(finalFile, cFile)
+					cFile.Close()
+				}
+
+				// Cleanup temp dir
+				os.RemoveAll(tempDir)
+
+				// Create Job
+				var jobID string
+				query := `INSERT INTO import_jobs (filename, status, message) VALUES ($1, $2, $3) RETURNING id`
+				err = db.QueryRow(query, safeFilename, "pending", "File uploaded via chunks").Scan(&jobID)
+				if err != nil {
+					http.Error(w, "Database error", http.StatusInternalServerError)
+					return
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(UploadResponse{
+					JobID:    jobID,
+					Message:  "Upload completed successfully (Chunked)",
+					Filename: safeFilename,
+				})
+				return
+			}
+
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// STANDARD UPLOAD LOGIC (Legacy / Small Files)
 		// Limit upload size:
 		// ParseMultipartForm maxMemory is set to 64MB.
+
 		// Files larger than 64MB will be stored in temporary files on disk.
 		// This prevents Out-Of-Memory (OOM) errors on the VPS while allowing files of ANY size (e.g. 2GB+).
 		// The actual rejection limit is handled by Nginx (client_max_body_size).
