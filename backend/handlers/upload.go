@@ -135,7 +135,7 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 								}
 							}
 						}
-						log.Printf("LOG API Integrity (Chunked): File=%s Lines=%s Size=%s ActualEnd=%s", safeFilename, expectedLines, expectedSize, actualLines)
+						fmt.Printf("LOG API Integrity (Chunked): File=%s Lines=%s Size=%s ActualEnd=%s\n", safeFilename, expectedLines, expectedSize, actualLines)
 					}
 				}
 				// ---------------------------------
@@ -259,12 +259,12 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 					}
 				}
 
-				log.Printf("LOG API Integrity: File=%s", safeFilename)
-				log.Printf("LOG API Frontend: Expected Lines=%s, Expected Size=%s", expectedLines, expectedSize)
-				log.Printf("LOG API Storage:  Registro Final %s, tamanho recebido final %d", actualLines, written)
+				fmt.Printf("LOG API Integrity: File=%s\n", safeFilename)
+				fmt.Printf("LOG API Frontend: Expected Lines=%s, Expected Size=%s\n", expectedLines, expectedSize)
+				fmt.Printf("LOG API Storage:  Registro Final %s, tamanho recebido final %d\n", actualLines, written)
 				
 				if expectedLines != "unknown" && expectedLines != actualLines {
-					log.Printf("LOG API WARNING: Line count mismatch! Frontend says %s, Storage found %s", expectedLines, actualLines)
+					fmt.Printf("LOG API WARNING: Line count mismatch! Frontend says %s, Storage found %s\n", expectedLines, actualLines)
 				}
 			}
 		}

@@ -77,21 +77,37 @@ export default function ImportarEFD() {
   const handleUpload = async () => {
     if (!selectedFile) return;
 
-    // Extract Metadata (Lines from |9999| and Size)
+    // Extract Metadata for Preview
     let expectedLines = "unknown";
+    let headerPreview = "";
+    let footerPreview = "";
+    
     try {
-      // Read last 4KB to find trailer
-      const blob = selectedFile.slice(Math.max(selectedFile.size - 4096, 0));
-      const text = await blob.text();
+      // Read Header (First 100 bytes)
+      const headerBlob = selectedFile.slice(0, 100);
+      headerPreview = await headerBlob.text();
+      
+      // Read Footer (Last 200 bytes)
+      const footerBlob = selectedFile.slice(Math.max(selectedFile.size - 200, 0));
+      footerPreview = await footerBlob.text();
+      
       // Look for |9999|count|
-      // SPED lines start and end with pipes. Regex: \|9999\|(\d+)\|
-      const match = text.match(/\|9999\|(\d+)\|/);
+      const match = footerPreview.match(/\|9999\|(\d+)\|/);
       if (match && match[1]) {
         expectedLines = match[1];
-        console.log(`Frontend Debug: Found trailer |9999|${expectedLines}|`);
       }
     } catch (err) {
-      console.warn("Could not read file trailer:", err);
+      console.warn("Could not read file preview:", err);
+    }
+
+    if (expectedLines === "unknown") {
+       const confirmUpload = window.confirm(
+         "AVISO: Não foi possível detectar o registro final '|9999|' neste arquivo.\n\n" +
+         "Isso indica que o arquivo pode estar corrompido, incompleto ou em formato inválido.\n" +
+         "Preview do Final: " + footerPreview + "\n\n" +
+         "Deseja continuar mesmo assim?"
+       );
+       if (!confirmUpload) return;
     }
 
     setUploadProgress({
@@ -194,7 +210,7 @@ export default function ImportarEFD() {
   return (
     <div className="container mx-auto p-6 space-y-6 animate-fade-in">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Importar EFD</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-primary">Importar EFD <span className="text-sm font-normal text-muted-foreground">(v2.1 Chunked)</span></h1>
         <p className="text-muted-foreground">
           Envie seus arquivos SPED EFD Contribuições para processamento.
         </p>
