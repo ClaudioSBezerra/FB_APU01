@@ -77,102 +77,146 @@ export default function ImportarEFD() {
   const handleUpload = async () => {
     if (!selectedFile) return;
 
-    // Extract Metadata for Preview
-    let expectedLines = "unknown";
-    let headerPreview = "";
-    let footerPreview = "";
+    // --- CLIENT-SIDE PARSING & FILTERING (PHASE 2 - DEV) ---
+    // Reads file locally, filters only relevant lines, stops at |D990|
+    // Creates a smaller Payload for upload.
     
-    try {
-      // Read Header (First 100 bytes)
-      const headerBlob = selectedFile.slice(0, 100);
-      headerPreview = await headerBlob.text();
-      
-      // Read Footer (Last 16KB to skip digital signatures)
-      const footerBlob = selectedFile.slice(Math.max(selectedFile.size - 16384, 0));
-      footerPreview = await footerBlob.text();
-      
-      // Look for |9999|count| anywhere in the footer block
-      // We use lastIndexOf to find the actual SPED trailer, ignoring appended signatures
-      const match = footerPreview.match(/\|9999\|(\d+)\|/g);
-      if (match && match.length > 0) {
-        // Get the last valid 9999 record found
-        const lastMatch = match[match.length - 1];
-        const countMatch = lastMatch.match(/\|9999\|(\d+)\|/);
-        if (countMatch) {
-            expectedLines = countMatch[1];
-        }
-      }
-    } catch (err) {
-      console.warn("Could not read file preview:", err);
-    }
-
-    if (expectedLines === "unknown") {
-       const confirmUpload = window.confirm(
-         "AVISO: Não foi possível detectar o registro final '|9999|' neste arquivo.\n\n" +
-         "Isso indica que o arquivo pode estar corrompido, incompleto ou em formato inválido.\n" +
-         "Preview do Final: " + footerPreview + "\n\n" +
-         "Deseja continuar mesmo assim?"
-       );
-       if (!confirmUpload) return;
-    }
-
     setUploadProgress({
       status: 'uploading',
       percentage: 0,
       bytesUploaded: 0,
-      bytesTotal: selectedFile.size,
+      bytesTotal: selectedFile.size, // Initial size estimation
       speed: 0,
       remainingTime: 0
     });
 
-    // --- SIMPLE STREAMING UPLOAD (XHR) ---
-    const startTime = Date.now();
-    const formData = new FormData();
-    formData.append('file', selectedFile);
-    formData.append('filename', selectedFile.name);
-    formData.append('expected_lines', expectedLines);
-    formData.append('expected_size', selectedFile.size.toString());
-
     try {
-        await new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/api/upload', true);
+      // 1. Filter Logic
+      const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB Read Buffer
+      let offset = 0;
+      let buffer = '';
+      const relevantPrefixes = ['|0000|', '|0150|', '|C100|', '|C190|', '|C500|', '|C600|', '|D100|', '|D500|', '|D990|'];
+      const filteredParts: string[] = [];
+      let finishedReading = false;
+      let processedBytes = 0;
+      let foundD990 = false;
+      const startTimeRead = Date.now();
 
-            // Progress Event
-            xhr.upload.onprogress = (e) => {
-                if (e.lengthComputable) {
-                    const percentage = Math.round((e.loaded / e.total) * 100);
-                    const elapsedTime = (Date.now() - startTime) / 1000;
-                    const speed = e.loaded / elapsedTime; // bytes per second
-                    const remainingBytes = e.total - e.loaded;
-                    const remainingTime = speed > 0 ? remainingBytes / speed : 0;
+      // Read Loop
+      while (offset < selectedFile.size && !finishedReading) {
+        const chunkBlob = selectedFile.slice(offset, offset + CHUNK_SIZE);
+        const chunkText = await chunkBlob.text();
+        
+        // Prepend previous buffer residue
+        const fullText = buffer + chunkText;
+        const lines = fullText.split('\n');
+        
+        // Save the last incomplete line for next iteration (unless EOF)
+        if (offset + CHUNK_SIZE < selectedFile.size) {
+            buffer = lines.pop() || '';
+        } else {
+            buffer = ''; // End of file
+        }
 
-                    setUploadProgress({
-                        status: 'uploading',
-                        percentage,
-                        bytesUploaded: e.loaded,
-                        bytesTotal: e.total,
-                        speed,
-                        remainingTime
-                    });
-                }
-            };
+        // Process Lines
+        for (const line of lines) {
+           // Fast Check: Must start with pipe
+           if (!line.startsWith('|')) continue;
 
-            // Load/Error Events
-            xhr.onload = () => {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    resolve(xhr.response);
-                } else {
-                    reject(new Error(xhr.statusText || 'Upload failed'));
-                }
-            };
-            xhr.onerror = () => reject(new Error('Network error during upload'));
-            xhr.send(formData);
-        });
+           // Check against whitelist
+           let isRelevant = false;
+           for (const p of relevantPrefixes) {
+             if (line.startsWith(p)) {
+               isRelevant = true;
+               if (p === '|D990|') {
+                 foundD990 = true;
+                 finishedReading = true;
+               }
+               break;
+             }
+           }
+
+           if (isRelevant) {
+             filteredParts.push(line + '\n');
+           }
+           if (finishedReading) break;
+        }
+
+        offset += CHUNK_SIZE;
+        processedBytes += chunkBlob.size;
+        
+        // Update UI (Filtering Phase)
+        setUploadProgress(prev => ({
+           ...prev,
+           percentage: Math.min(Math.round((processedBytes / selectedFile.size) * 50), 50), // 0-50% is filtering
+           speed: (processedBytes / ((Date.now() - startTimeRead)/1000))
+        }));
+      }
+
+      // Add Artificial Trailer for Backend Compatibility
+      if (foundD990) {
+        filteredParts.push('|9999|' + filteredParts.length + '|\n');
+      } else {
+        // Warning: File didn't reach D990, but we send what we have
+        console.warn("File ended before |D990|");
+        filteredParts.push('|9999|' + filteredParts.length + '|\n');
+      }
+
+      // 2. Create Filtered Blob
+      const filteredBlob = new Blob(filteredParts, { type: 'text/plain' });
+      const filteredFile = new File([filteredBlob], selectedFile.name, { type: 'text/plain' });
+      
+      console.log(`Original Size: ${selectedFile.size}, Filtered Size: ${filteredFile.size}`);
+
+      // 3. Upload Filtered File
+      const startTimeUpload = Date.now();
+      const formData = new FormData();
+      formData.append('file', filteredFile);
+      formData.append('filename', selectedFile.name);
+      formData.append('expected_lines', filteredParts.length.toString());
+      formData.append('expected_size', filteredFile.size.toString());
+
+      await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', '/api/upload', true);
+
+          xhr.upload.onprogress = (e) => {
+              if (e.lengthComputable) {
+                  // Map 0-100% upload to 50-100% total progress
+                  const percentUpload = (e.loaded / e.total) * 50; 
+                  const totalPercent = 50 + percentUpload;
+                  
+                  const elapsedTime = (Date.now() - startTimeUpload) / 1000;
+                  const speed = e.loaded / elapsedTime;
+                  const remainingBytes = e.total - e.loaded;
+                  const remainingTime = speed > 0 ? remainingBytes / speed : 0;
+
+                  setUploadProgress({
+                      status: 'uploading',
+                      percentage: Math.round(totalPercent),
+                      bytesUploaded: e.loaded,
+                      bytesTotal: e.total,
+                      speed,
+                      remainingTime
+                  });
+              }
+          };
+
+          xhr.onload = () => {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                  resolve(xhr.response);
+              } else {
+                  reject(new Error(xhr.statusText || 'Upload failed'));
+              }
+          };
+          xhr.onerror = () => reject(new Error('Network error during upload'));
+          xhr.send(formData);
+      });
 
       setUploadProgress(prev => ({ ...prev, status: 'completed', percentage: 100 }));
-      toast.success('Arquivo enviado com sucesso!');
+      toast.success(`Arquivo filtrado e enviado! (${(filteredFile.size/1024/1024).toFixed(2)} MB)`);
       setSelectedFile(null);
+      
       // Trigger job refresh
       const res = await fetch('/api/jobs');
       if (res.ok) {
@@ -183,7 +227,7 @@ export default function ImportarEFD() {
     } catch (error) {
       console.error('Upload error:', error);
       setUploadProgress(prev => ({ ...prev, status: 'error', errorMessage: String(error) }));
-      toast.error('Erro no upload. Tente novamente.');
+      toast.error('Erro no processamento/upload. Tente novamente.');
     }
   };
 
@@ -204,7 +248,7 @@ export default function ImportarEFD() {
   return (
     <div className="container mx-auto p-6 space-y-6 animate-fade-in">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Importar EFD <span className="text-sm font-normal text-muted-foreground">(v3.0 Streaming)</span></h1>
+        <h1 className="text-3xl font-bold tracking-tight text-primary">Importar EFD <span className="text-sm font-normal text-muted-foreground">(v3.1 Client-Filter)</span></h1>
         <p className="text-muted-foreground">
           Envie seus arquivos SPED EFD Contribuições para processamento.
         </p>

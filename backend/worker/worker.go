@@ -180,8 +180,8 @@ func validateFileIntegrity(path string) error {
 	}
 
 	// 2. TAIL CHECK (Should end with |9999|) - WARNING ONLY
-	// Read last 1KB
-	bufSize := int64(1024)
+	// Read last 16KB (to skip Digital Signatures)
+	bufSize := int64(16384)
 	if stat.Size() < bufSize {
 		bufSize = stat.Size()
 	}
@@ -191,9 +191,9 @@ func validateFileIntegrity(path string) error {
 		return err
 	}
 
-	// Check for |9999| (ANSI/UTF-8)
+	// Check for |9999| (ANSI/UTF-8) OR |D990| (Phase 2 DEV - Client Side Filter End)
 	// Note: It might be |9999| or |9999|CRLF or |9999|LF
-	if !bytes.Contains(buf, []byte("|9999|")) {
+	if !bytes.Contains(buf, []byte("|9999|")) && !bytes.Contains(buf, []byte("|D990|")) {
 		// Try checking for UTF-16LE pattern (common in Windows "Unicode" files)
 		// | (7C 00) 9 (39 00) 9 (39 00) 9 (39 00) 9 (39 00) | (7C 00)
 		utf16le := []byte{0x7C, 0x00, 0x39, 0x00, 0x39, 0x00, 0x39, 0x00, 0x39, 0x00, 0x7C, 0x00}
@@ -208,7 +208,7 @@ func validateFileIntegrity(path string) error {
 			tailLen = len(buf)
 		}
 		actualTail := string(buf[len(buf)-tailLen:])
-		fmt.Printf("Worker WARNING: Missing trailing '|9999|' record. Tail: [%q]. Continuing anyway...\n", actualTail)
+		fmt.Printf("Worker WARNING: Missing trailing '|9999|' or '|D990|' record. Tail: [%q]. Continuing anyway...\n", actualTail)
 		
 		// return nil to allow processing
 		return nil
@@ -482,18 +482,19 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// Skip empty lines
-		if strings.TrimSpace(line) == "" {
+		// Skip empty lines or too short lines
+		if len(line) < 7 {
 			continue
 		}
 
-		parts := strings.Split(line, "|")
-		if len(parts) < 2 {
+		// Optimize: Read first 6 chars to identify register (e.g. "|0000|")
+		// This avoids strings.Split() for lines we don't care about
+		if line[0] != '|' || line[5] != '|' {
 			continue
 		}
+		reg := line[1:5]
 
 		lineCount++
-		reg := parts[1]
 
 		// Progress Update & Checkpoint
 		if lineCount%1000 == 0 || lineCount%BatchSize == 0 {
@@ -504,10 +505,10 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 				lineCount, totalLines, float64(lineCount)/float64(totalLines)*100, m.Alloc/1024/1024, reg)
 		}
 
-		// Check for 9999 (End of File)
-		if reg == "9999" {
+		// Check for 9999 OR D990 (End of File)
+		if reg == "9999" || reg == "D990" {
 			foundEOF = true
-			fmt.Printf("Worker: Found End of File (9999) at line %d\n", lineCount)
+			fmt.Printf("Worker: Found End of File (%s) at line %d\n", reg, lineCount)
 		}
 
 		if lineCount%BatchSize == 0 {
@@ -521,17 +522,13 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 			}
 
 			// Update Progress
-			regType := "?"
-			if len(parts) > 1 {
-				regType = parts[1]
-			}
-
+			// We only split here for logging purposes if needed, or just use reg
 			var msg string
 			if totalLines > 0 {
 				percent := float64(lineCount) / float64(totalLines) * 100
-				msg = fmt.Sprintf("Processing line %d / %d (%.1f%%) - Reg %s (Batch Commit)...", lineCount, totalLines, percent, regType)
+				msg = fmt.Sprintf("Processing line %d / %d (%.1f%%) - Reg %s (Batch Commit)...", lineCount, totalLines, percent, reg)
 			} else {
-				msg = fmt.Sprintf("Processing line %d (Reg %s)...", lineCount, regType)
+				msg = fmt.Sprintf("Processing line %d (Reg %s)...", lineCount, reg)
 			}
 			fmt.Printf("Worker: %s\n", msg)
 			db.Exec("UPDATE import_jobs SET message=$1, updated_at=NOW() WHERE id=$2", msg, jobID)
@@ -555,42 +552,56 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 			}
 		}
 
+		// Only Split if it is a register we process
+		// We use switch/case on 'reg' for O(1) dispatch instead of if/else chain
+		switch reg {
+		case "0000":
+			parts := strings.Split(line, "|")
+			if len(parts) >= 8 {
+				dtIni = parts[4]
+				dtFin = parts[5]
+				company = parts[6]
+				// Sanitize CNPJ (remove ., /, -) to fit VARCHAR(14)
+				filialCNPJ = strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(parts[7], ".", ""), "/", ""), "-", "")
+				count0000++
+				// Update job metadata immediately (outside tx for visibility)
+				db.Exec("UPDATE import_jobs SET company_name=$1, cnpj=$2, dt_ini=$3, dt_fin=$4 WHERE id=$5", company, filialCNPJ, parseDate(dtIni), parseDate(dtFin), jobID)
 
-
-		if strings.HasPrefix(line, "|0000|") && len(parts) >= 8 {
-			dtIni = parts[4]
-			dtFin = parts[5]
-			company = parts[6]
-			// Sanitize CNPJ (remove ., /, -) to fit VARCHAR(14)
-			filialCNPJ = strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(parts[7], ".", ""), "/", ""), "-", "")
-			count0000++
-			// Update job metadata immediately (outside tx for visibility)
-			db.Exec("UPDATE import_jobs SET company_name=$1, cnpj=$2, dt_ini=$3, dt_fin=$4 WHERE id=$5", company, filialCNPJ, parseDate(dtIni), parseDate(dtFin), jobID)
-
-			if len(dtIni) == 8 {
-				year, _ := strconv.Atoi(dtIni[4:8])
-				if r, err := getTaxRates(db, year); err == nil {
-					rates = r
+				if len(dtIni) == 8 {
+					year, _ := strconv.Atoi(dtIni[4:8])
+					if r, err := getTaxRates(db, year); err == nil {
+						rates = r
+					}
 				}
 			}
-		} else if strings.HasPrefix(line, "|0150|") && len(parts) >= 14 {
-			count0150++
-			stmtPart.Exec(jobID, parts[2], parts[3], parts[4], parts[5], parts[6], parts[7], parts[8], parts[9], parts[10], parts[11], parts[12], parts[13])
-		} else if strings.HasPrefix(line, "|C100|") && len(parts) >= 29 {
-			countC100++
-			vlDoc := parseDecimal(parts[12])
-			vlIcms := parseDecimal(parts[22])
-			vlPis := parseDecimal(parts[26])
-			vlCofins := parseDecimal(parts[27])
-			vlIcmsProj := vlIcms * (1 - (rates.PercReducICMS / 100.0))
-			vlIbsProj := vlDoc * ((rates.PercIBS_UF + rates.PercIBS_Mun) / 100.0)
-			vlCbsProj := vlDoc * (rates.PercCBS / 100.0)
+		case "0150":
+			parts := strings.Split(line, "|")
+			if len(parts) >= 14 {
+				count0150++
+				stmtPart.Exec(jobID, parts[2], parts[3], parts[4], parts[5], parts[6], parts[7], parts[8], parts[9], parts[10], parts[11], parts[12], parts[13])
+			}
+		case "C100":
+			parts := strings.Split(line, "|")
+			if len(parts) >= 29 {
+				countC100++
+				vlDoc := parseDecimal(parts[12])
+				vlIcms := parseDecimal(parts[22])
+				vlPis := parseDecimal(parts[26])
+				vlCofins := parseDecimal(parts[27])
+				vlIcmsProj := vlIcms * (1 - (rates.PercReducICMS / 100.0))
+				vlIbsProj := vlDoc * ((rates.PercIBS_UF + rates.PercIBS_Mun) / 100.0)
+				vlCbsProj := vlDoc * (rates.PercCBS / 100.0)
 
-			stmtC100.QueryRow(jobID, filialCNPJ, parts[2], parts[3], parts[4], parts[5], parts[6], parts[7], parts[8], parts[9], parseDate(parts[10]), parseDate(parts[11]), vlDoc, vlIcms, vlPis, vlCofins, vlPis+vlCofins, vlIcmsProj, vlIbsProj, vlCbsProj).Scan(&currentC100ID)
-		} else if strings.HasPrefix(line, "|C190|") && len(parts) >= 12 && currentC100ID != "" {
-			countC190++
-			stmtC190.Exec(jobID, currentC100ID, parts[3], parseDecimal(parts[5]), parseDecimal(parts[6]), parseDecimal(parts[7]), parseDecimal(parts[8]), parseDecimal(parts[9]), parseDecimal(parts[10]), parseDecimal(parts[11]), parts[12])
-		} else if strings.HasPrefix(line, "|C500|") {
+				stmtC100.QueryRow(jobID, filialCNPJ, parts[2], parts[3], parts[4], parts[5], parts[6], parts[7], parts[8], parts[9], parseDate(parts[10]), parseDate(parts[11]), vlDoc, vlIcms, vlPis, vlCofins, vlPis+vlCofins, vlIcmsProj, vlIbsProj, vlCbsProj).Scan(&currentC100ID)
+			}
+		case "C190":
+			parts := strings.Split(line, "|")
+			if len(parts) >= 12 && currentC100ID != "" {
+				countC190++
+				stmtC190.Exec(jobID, currentC100ID, parts[3], parseDecimal(parts[5]), parseDecimal(parts[6]), parseDecimal(parts[7]), parseDecimal(parts[8]), parseDecimal(parts[9]), parseDecimal(parts[10]), parseDecimal(parts[11]), parts[12])
+			}
+		case "C500":
+			parts := strings.Split(line, "|")
 			// C500 Layout (User Defined Indices)
 			// 4: COD_PART, 11: DT_DOC, 13: VL_DOC, 20: VL_ICMS, 24: VL_PIS, 25: VL_COFINS
 
@@ -641,21 +652,17 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 					fmt.Printf("Worker: Error inserting C500 line %d: %v\n", lineCount, err)
 				}
 			}
-		} else if strings.HasPrefix(line, "|C600|") && len(parts) >= 10 {
-			countC600++
-			vlDoc := parseDecimal(parts[9])
-			vlIbsProj := vlDoc * ((rates.PercIBS_UF + rates.PercIBS_Mun) / 100.0)
-			vlCbsProj := vlDoc * (rates.PercCBS / 100.0)
-			stmtC600.Exec(jobID, filialCNPJ, parts[2], parts[3], parts[4], parts[5], parts[6], 0.0, parseDate(parts[8]), vlDoc, 0.0, 0.0, 0.0, 0.0, vlIbsProj, vlCbsProj)
-		} else if strings.HasPrefix(line, "|D100|") {
-			// D100 EFD ICMS/IPI
-			// 09: NUM_DOC
-			// 10: DT_DOC
-			// 11: DT_A_P
-			// 12: VL_DOC
-			// 22: VL_ICMS
-			// 25: VL_PIS
-			// 26: VL_COFINS
+		case "C600":
+			parts := strings.Split(line, "|")
+			if len(parts) >= 10 {
+				countC600++
+				vlDoc := parseDecimal(parts[9])
+				vlIbsProj := vlDoc * ((rates.PercIBS_UF + rates.PercIBS_Mun) / 100.0)
+				vlCbsProj := vlDoc * (rates.PercCBS / 100.0)
+				stmtC600.Exec(jobID, filialCNPJ, parts[2], parts[3], parts[4], parts[5], parts[6], 0.0, parseDate(parts[8]), vlDoc, 0.0, 0.0, 0.0, 0.0, vlIbsProj, vlCbsProj)
+			}
+		case "D100":
+			parts := strings.Split(line, "|")
 			if len(parts) >= 13 {
 				countD100++
 				vlDoc := parseDecimal(parts[12])
@@ -675,10 +682,8 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 				vlCbsProj := vlDoc * (rates.PercCBS / 100.0)
 				stmtD100.Exec(jobID, filialCNPJ, parts[2], parts[3], parts[4], parts[5], parts[6], parts[7], parts[9], "", parseDate(parts[10]), parseDate(parts[11]), vlDoc, vlIcms, vlPis, vlCofins, vlPis+vlCofins, vlIcmsProj, vlIbsProj, vlCbsProj)
 			}
-		} else if strings.HasPrefix(line, "|D500|") {
-			// D500 Layout (User Defined Indices)
-			// 4: COD_PART, 11: DT_A_P, 12: VL_DOC, 19: VL_ICMS, 21: VL_PIS, 22: VL_COFINS
-
+		case "D500":
+			parts := strings.Split(line, "|")
 			if len(parts) < 13 {
 				msg := fmt.Sprintf(" [DEBUG: D500 skipped (len=%d < 13)]", len(parts))
 				fmt.Println(msg)
