@@ -304,8 +304,8 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 		foundEOF                                                                               bool
 	)
 
-	fmt.Printf("Worker: Parsing SPED file %s (EFD ICMS Logic - Fixed Indices)...\n", filename)
-	fmt.Println("Worker: VERSION 5.0 - CLIENT-SIDE PARSING SUPPORT")
+	fmt.Printf("Worker: Parsing SPED file %s (EFD ICMS Logic - Optimized Parsing)...\n", filename)
+	fmt.Println("Worker: VERSION 5.0.1 - CLIENT-SIDE PARSING SUPPORT")
 
 	// Get file info for size
 	fileInfo, err := file.Stat()

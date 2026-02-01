@@ -77,8 +77,8 @@ export default function ImportarEFD() {
   const handleUpload = async () => {
     if (!selectedFile) return;
 
-    // --- CLIENT-SIDE PARSING & FILTERING (PHASE 2 - DEV) ---
-    // Reads file locally, filters only relevant lines, stops at |D990|
+    // --- CLIENT-SIDE PARSING & FILTERING (PHASE 2.1 - FULL SCAN) ---
+    // Reads file locally, filters only relevant lines, continues until EOF
     // Creates a smaller Payload for upload.
     
     setUploadProgress({
