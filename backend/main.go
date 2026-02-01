@@ -103,12 +103,17 @@ func main() {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Content-Type", "application/json")
 
+		dbStatus := "connected"
+		if err := db.Ping(); err != nil {
+			dbStatus = "error: " + err.Error()
+		}
+
 		response := HealthResponse{
 			Status:    "running",
 			Timestamp: time.Now().Format(time.RFC3339),
 			Service:   "FB_APU01 Fiscal Engine",
-			Version:   "0.1.0",
-			Database:  "connected",
+			Version:   "1.0.0",
+			Database:  dbStatus,
 		}
 
 		json.NewEncoder(w).Encode(response)
@@ -142,7 +147,17 @@ func main() {
 	http.HandleFunc("/api/config/cfop/import", handlers.ImportCFOPsHandler(db))
 
 	fmt.Printf("FB_APU01 Fiscal Engine (Go) starting on port %s...\n", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
+	
+	// Use custom server with timeouts (Inspired by production best practices)
+	server := &http.Server{
+		Addr:         ":" + port,
+		Handler:      nil, // Use DefaultServeMux
+		ReadTimeout:  0,   // Infinite for Uploads (Handled by Nginx)
+		WriteTimeout: 0,   // Infinite for Long Responses
+		IdleTimeout:  60 * time.Second,
+	}
+
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
