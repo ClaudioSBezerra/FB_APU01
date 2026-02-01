@@ -93,8 +93,6 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 					http.Error(w, "Failed to create final file", http.StatusInternalServerError)
 					return
 				}
-				defer finalFile.Close()
-
 				// Merge chunks
 				totalC := castToInt(totalChunks)
 				for i := 0; i < totalC; i++ {
@@ -109,6 +107,7 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 					io.Copy(finalFile, cFile)
 					cFile.Close()
 				}
+				finalFile.Close() // Explicitly close to ensure flush before integrity check
 
 				// Cleanup temp dir
 				os.RemoveAll(tempDir)

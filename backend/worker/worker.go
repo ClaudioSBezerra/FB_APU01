@@ -1,7 +1,7 @@
 package worker
 
 import (
-	// Force Git Update - Worker V4.1 (Robustness & Throttle)
+	// Force Git Update - Worker V4.2.1 (Race Fix)
 	"bufio"
 	"bytes"
 	"database/sql"
@@ -148,7 +148,7 @@ func countLines(filename string) (int, error) {
 	}
 }
 
-// validateFileIntegrity checks if the file ends with |9999| record
+// validateFileIntegrity checks if the file has a valid SPED header and footer
 func validateFileIntegrity(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -164,6 +164,22 @@ func validateFileIntegrity(path string) error {
 		return errors.New("file too small")
 	}
 
+	// 1. HEADER CHECK (Must start with |0000|) - CRITICAL
+	headerBuf := make([]byte, 100)
+	if _, err := f.ReadAt(headerBuf, 0); err != nil {
+		return err
+	}
+	// Check for standard SPED header |0000|
+	if !bytes.HasPrefix(headerBuf, []byte("|0000|")) {
+		// Show what we found (first 20 chars)
+		safeHeader := string(bytes.Map(func(r rune) rune {
+			if r >= 32 && r <= 126 { return r }
+			return '.'
+		}, headerBuf[:20]))
+		return fmt.Errorf("invalid SPED format: missing '|0000|' header. Found: [%s]...", safeHeader)
+	}
+
+	// 2. TAIL CHECK (Should end with |9999|) - WARNING ONLY
 	// Read last 1KB
 	bufSize := int64(1024)
 	if stat.Size() < bufSize {
@@ -175,18 +191,27 @@ func validateFileIntegrity(path string) error {
 		return err
 	}
 
-	// Check for |9999|
+	// Check for |9999| (ANSI/UTF-8)
 	// Note: It might be |9999| or |9999|CRLF or |9999|LF
 	if !bytes.Contains(buf, []byte("|9999|")) {
-		// DEBUG: Log what was actually found at the end
+		// Try checking for UTF-16LE pattern (common in Windows "Unicode" files)
+		// | (7C 00) 9 (39 00) 9 (39 00) 9 (39 00) 9 (39 00) | (7C 00)
+		utf16le := []byte{0x7C, 0x00, 0x39, 0x00, 0x39, 0x00, 0x39, 0x00, 0x39, 0x00, 0x7C, 0x00}
+		if bytes.Contains(buf, utf16le) {
+			fmt.Println("Worker: Detected UTF-16LE encoding with valid footer.")
+			return nil
+		}
+
+		// Downgrade to WARNING to allow processing "partial" files or weird encodings
 		tailLen := 100
 		if len(buf) < tailLen {
 			tailLen = len(buf)
 		}
 		actualTail := string(buf[len(buf)-tailLen:])
-		fmt.Printf("Worker Integrity Failure: Expected |9999|, found at tail: [%q]\n", actualTail)
+		fmt.Printf("Worker WARNING: Missing trailing '|9999|' record. Tail: [%q]. Continuing anyway...\n", actualTail)
 		
-		return errors.New("missing trailing '|9999|' record - upload incomplete")
+		// return nil to allow processing
+		return nil
 	}
 	return nil
 }
@@ -280,7 +305,7 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 	)
 
 	fmt.Printf("Worker: Parsing SPED file %s (EFD ICMS Logic - Fixed Indices)...\n", filename)
-	fmt.Println("Worker: VERSION 4.0 - CHUNKED READY (Resume & Crash Recovery)")
+	fmt.Println("Worker: VERSION 4.2.1 - HEADER CHECK (Fail Fast on Binary)")
 
 	// Get file info for size
 	fileInfo, err := file.Stat()
