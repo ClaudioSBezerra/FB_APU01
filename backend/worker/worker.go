@@ -20,6 +20,7 @@ import (
 func StartWorker(db *sql.DB) {
 	// Worker Pool Size: 5 concurrent workers
 	// This allows multiple files to be processed simultaneously
+	// DEPLOY TRIGGER: Force Rebuild 001
 	const WorkerPoolSize = 5
 
 	fmt.Printf("Starting Background Worker Pool (%d workers)...\n", WorkerPoolSize)
