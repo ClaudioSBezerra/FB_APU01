@@ -96,7 +96,7 @@ export default function ImportarEFD() {
       const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB Read Buffer
       let offset = 0;
       let buffer = '';
-      const relevantPrefixes = ['|0000|', '|0150|', '|C100|', '|C190|', '|C500|', '|C600|', '|D100|', '|D500|', '|D990|'];
+      const relevantPrefixes = ['|0000|', '|0150|', '|C100|', '|C190|', '|C500|', '|C600|', '|D100|', '|D500|', '|D590|', '|D990|'];
       const filteredParts: string[] = [];
       let finishedReading = false;
       let processedBytes = 0;

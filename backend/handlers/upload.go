@@ -171,8 +171,10 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 				// We search from end manually or iterate
 				lines := strings.Split(tailStr, "\n")
 				for i := len(lines) - 1; i >= 0; i-- {
-					if strings.Contains(lines[i], "|9999|") {
-						parts := strings.Split(lines[i], "|")
+					// STRICT CHECK: Must START with |9999| (LPAD style) to avoid false positives in descriptions
+					trimmed := strings.TrimSpace(lines[i])
+					if strings.HasPrefix(trimmed, "|9999|") {
+						parts := strings.Split(trimmed, "|")
 						// |9999|COUNT| -> index 0 is empty, 1 is 9999, 2 is COUNT
 						if len(parts) >= 3 && parts[1] == "9999" {
 							actualLines = parts[2]

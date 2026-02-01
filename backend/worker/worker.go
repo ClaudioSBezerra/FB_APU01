@@ -481,7 +481,7 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 	}
 
 	for scanner.Scan() {
-		line := scanner.Text()
+		line := strings.TrimSpace(scanner.Text())
 
 		// Skip empty lines or too short lines
 		if len(line) < 7 {
