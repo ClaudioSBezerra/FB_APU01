@@ -537,6 +537,7 @@ export default function GestaoAmbiente() {
                 >
                   <div className="overflow-hidden">
                     <p className="font-medium text-sm truncate">{group.name}</p>
+                    <p className="text-[10px] text-gray-400 font-mono truncate" title={group.id}>ID: {group.id}</p>
                     {group.description && <p className="text-xs text-gray-500 truncate">{group.description}</p>}
                   </div>
                   <Button
