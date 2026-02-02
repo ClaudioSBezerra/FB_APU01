@@ -135,12 +135,19 @@ func main() {
 	// Register Job Status Handler
 	http.HandleFunc("/api/jobs", handlers.ListJobsHandler(db))
 	http.HandleFunc("/api/jobs/", func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/participants") {
+		id := strings.TrimPrefix(r.URL.Path, "/api/jobs/")
+		if strings.HasSuffix(id, "/participants") {
 			handlers.GetJobParticipantsHandler(db)(w, r)
-		} else {
-			handlers.GetJobStatusHandler(db)(w, r)
+			return
 		}
+		handlers.GetJobStatusHandler(db)(w, r)
 	})
+
+	// Auth Routes
+	http.HandleFunc("/api/auth/register", handlers.RegisterHandler(db))
+	http.HandleFunc("/api/auth/login", handlers.LoginHandler(db))
+
+	http.HandleFunc("/api/mercadorias", handlers.MercadoriasHandler(db))
 
 	// Admin Endpoints
 	http.HandleFunc("/api/admin/reset-db", handlers.ResetDatabaseHandler(db))
