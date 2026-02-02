@@ -173,7 +173,9 @@ func validateFileIntegrity(path string) error {
 	if !bytes.HasPrefix(headerBuf, []byte("|0000|")) {
 		// Show what we found (first 20 chars)
 		safeHeader := string(bytes.Map(func(r rune) rune {
-			if r >= 32 && r <= 126 { return r }
+			if r >= 32 && r <= 126 {
+				return r
+			}
 			return '.'
 		}, headerBuf[:20]))
 		return fmt.Errorf("invalid SPED format: missing '|0000|' header. Found: [%s]...", safeHeader)
@@ -209,7 +211,7 @@ func validateFileIntegrity(path string) error {
 		}
 		actualTail := string(buf[len(buf)-tailLen:])
 		fmt.Printf("Worker WARNING: Missing trailing '|9999|' or '|D990|' record. Tail: [%q]. Continuing anyway...\n", actualTail)
-		
+
 		// return nil to allow processing
 		return nil
 	}
@@ -502,7 +504,7 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 			// Console Log for Real-time tracking with RAM usage
 			var m runtime.MemStats
 			runtime.ReadMemStats(&m)
-			fmt.Printf("Worker: Line %d / %d (%.1f%%) | RAM: %d MB | Reg: %s\n", 
+			fmt.Printf("Worker: Line %d / %d (%.1f%%) | RAM: %d MB | Reg: %s\n",
 				lineCount, totalLines, float64(lineCount)/float64(totalLines)*100, m.Alloc/1024/1024, reg)
 		}
 
@@ -618,7 +620,7 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 		case "C500":
 			parts := strings.Split(line, "|")
 			// C500 Layout (User Defined Indices)
-			// 4: COD_PART, 11: DT_DOC, 13: VL_DOC, 20: VL_ICMS, 24: VL_PIS, 25: VL_COFINS
+			// 4: COD_PART, 11: DT_DOC, 13: VL_DOC, 19: VL_ICMS, 24: VL_PIS, 25: VL_COFINS
 
 			if len(parts) < 14 {
 				msg := fmt.Sprintf(" [DEBUG: C500 skipped (len=%d < 14)]", len(parts))
@@ -639,8 +641,8 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 				vlDoc := parseDecimal(parts[13])
 
 				vlIcms := 0.0
-				if len(parts) > 20 {
-					vlIcms = parseDecimal(parts[20])
+				if len(parts) > 19 {
+					vlIcms = parseDecimal(parts[19])
 				}
 
 				vlPis := 0.0
@@ -678,24 +680,26 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 			}
 		case "D100":
 			parts := strings.Split(line, "|")
-			if len(parts) >= 13 {
+			// D100 Layout (Standard SPED)
+			// 9: NUM_DOC, 10: CHV_CTE, 11: DT_DOC, 12: DT_A_P, 15: VL_DOC, 20: VL_ICMS
+
+			if len(parts) >= 16 {
 				countD100++
-				vlDoc := parseDecimal(parts[12])
+				vlDoc := parseDecimal(parts[15])
 				vlIcms := 0.0
-				if len(parts) > 22 {
-					vlIcms = parseDecimal(parts[22])
+				if len(parts) > 20 {
+					vlIcms = parseDecimal(parts[20])
 				}
+
+				// D100 does not have PIS/COFINS in standard layout
 				vlPis := 0.0
 				vlCofins := 0.0
-				if len(parts) > 26 {
-					vlPis = parseDecimal(parts[25])
-					vlCofins = parseDecimal(parts[26])
-				}
 
 				vlIcmsProj := vlIcms * (1 - (rates.PercReducICMS / 100.0))
 				vlIbsProj := vlDoc * ((rates.PercIBS_UF + rates.PercIBS_Mun) / 100.0)
 				vlCbsProj := vlDoc * (rates.PercCBS / 100.0)
-				stmtD100.Exec(jobID, filialCNPJ, parts[2], parts[3], parts[4], parts[5], parts[6], parts[7], parts[9], "", parseDate(parts[10]), parseDate(parts[11]), vlDoc, vlIcms, vlPis, vlCofins, vlPis+vlCofins, vlIcmsProj, vlIbsProj, vlCbsProj)
+
+				stmtD100.Exec(jobID, filialCNPJ, parts[2], parts[3], parts[4], parts[5], parts[6], parts[7], parts[9], parts[10], parseDate(parts[11]), parseDate(parts[12]), vlDoc, vlIcms, vlPis, vlCofins, vlPis+vlCofins, vlIcmsProj, vlIbsProj, vlCbsProj)
 			}
 		case "D500":
 			parts := strings.Split(line, "|")
