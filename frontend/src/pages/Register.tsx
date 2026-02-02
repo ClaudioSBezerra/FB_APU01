@@ -49,9 +49,9 @@ const Register = () => {
         throw new Error(errorMessage || "Erro ao criar conta");
       }
 
-      login(data);
-      toast.success("Conta criada com sucesso! Bem-vindo ao sistema.");
-      navigate("/");
+      // login(data); // Removido para forçar login manual conforme solicitado
+      toast.success("Conta criada com sucesso! Faça login para continuar.");
+      navigate("/login");
     } catch (error: any) {
       toast.error("Erro no cadastro: " + error.message);
     } finally {

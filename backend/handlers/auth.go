@@ -192,7 +192,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 			tx.Rollback() // Ensure rollback before returning
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusConflict)
-			json.NewEncoder(w).Encode("User already registered")
+			json.NewEncoder(w).Encode("Este e-mail já está cadastrado.")
 			return
 		}
 
