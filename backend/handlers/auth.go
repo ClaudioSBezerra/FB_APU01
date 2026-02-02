@@ -159,15 +159,21 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 
 		// 3. Create User
 		var userID string
+		var role string
 		trialEnds := time.Now().Add(time.Hour * 24 * 14) // 14 days
+		// Ensure role column is populated (default 'user') and returned
 		err = tx.QueryRow(`
-			INSERT INTO users (email, password_hash, full_name, trial_ends_at, is_verified)
-			VALUES ($1, $2, $3, $4, $5)
-			RETURNING id
-		`, req.Email, hash, req.FullName, trialEnds, false).Scan(&userID) // Not verified by default
+			INSERT INTO users (email, password_hash, full_name, trial_ends_at, is_verified, role)
+			VALUES ($1, $2, $3, $4, $5, 'user')
+			RETURNING id, role
+		`, req.Email, hash, req.FullName, trialEnds, false).Scan(&userID, &role)
 
 		if err != nil {
-			http.Error(w, "Error creating user (email might be taken)", http.StatusConflict)
+			// Check specifically for unique constraint violation
+			tx.Rollback() // Ensure rollback before returning
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode("User already registered")
 			return
 		}
 
@@ -253,22 +259,29 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 		// Get User
 		var user User
 		var hash string
+		// Use COALESCE for role to handle cases where migration might have issues (though it should have default)
 		err := db.QueryRow(`
-			SELECT id, email, full_name, password_hash, is_verified, trial_ends_at, role, created_at
+			SELECT id, email, full_name, password_hash, is_verified, trial_ends_at, COALESCE(role, 'user'), created_at
 			FROM users WHERE email = $1
 		`, req.Email).Scan(&user.ID, &user.Email, &user.FullName, &hash, &user.IsVerified, &user.TrialEndsAt, &user.Role, &user.CreatedAt)
 
 		if err == sql.ErrNoRows {
-			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode("Invalid credentials")
 			return
 		} else if err != nil {
-			http.Error(w, "Database error", http.StatusInternalServerError)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode("Database error")
 			return
 		}
 
 		// Check Password
 		if !CheckPasswordHash(req.Password, hash) {
-			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode("Invalid credentials")
 			return
 		}
 

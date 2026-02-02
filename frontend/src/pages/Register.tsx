@@ -34,10 +34,19 @@ const Register = () => {
         }),
       });
 
-      const data = await res.json();
+      let data;
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        data = text || "Erro desconhecido";
+      }
 
       if (!res.ok) {
-        throw new Error(data || "Erro ao criar conta");
+        // Se data for string (erro simples) ou objeto (erro estruturado)
+        const errorMessage = typeof data === 'string' ? data : (data.error || JSON.stringify(data));
+        throw new Error(errorMessage || "Erro ao criar conta");
       }
 
       login(data);
