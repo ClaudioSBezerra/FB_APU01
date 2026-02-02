@@ -5,15 +5,13 @@ WORKDIR /app
 
 # Copy go.mod and go.sum from the backend directory
 COPY backend/go.mod backend/go.sum ./
-
-# Copy vendor directory
-COPY backend/vendor ./vendor
+RUN go mod download
 
 # Copy the rest of the backend source code
 COPY backend/ .
 
-# Build the binary using vendor directory
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -v -ldflags="-w -s" -o server .
+# Build the binary
+RUN CGO_ENABLED=0 GOOS=linux go build -v -ldflags="-w -s" -o server .
 
 # Run Stage
 FROM alpine:latest
