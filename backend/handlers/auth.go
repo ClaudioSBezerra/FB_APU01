@@ -199,24 +199,38 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 		// 4. Get Default Environment and Group
 		var envID, groupID, envName, groupName string
 
-		// Fetch default environment
+		// Fetch default environment or CREATE if not exists
 		err = tx.QueryRow("SELECT id, name FROM environments WHERE name = 'Ambiente de Testes' LIMIT 1").Scan(&envID, &envName)
 		if err != nil {
-			// Try to find ANY environment if default is missing (fallback)
-			err = tx.QueryRow("SELECT id, name FROM environments LIMIT 1").Scan(&envID, &envName)
-			if err != nil {
-				http.Error(w, "No environments available. System setup required.", http.StatusInternalServerError)
+			if err == sql.ErrNoRows {
+				// Create Environment
+				err = tx.QueryRow("INSERT INTO environments (name, description) VALUES ('Ambiente de Testes', 'Ambiente compartilhado para usuários trial') RETURNING id, name").Scan(&envID, &envName)
+				if err != nil {
+					tx.Rollback()
+					http.Error(w, "Error creating default environment", http.StatusInternalServerError)
+					return
+				}
+			} else {
+				tx.Rollback()
+				http.Error(w, "Database error fetching environment", http.StatusInternalServerError)
 				return
 			}
 		}
 
-		// Fetch default group in that environment
+		// Fetch default group in that environment or CREATE if not exists
 		err = tx.QueryRow("SELECT id, name FROM enterprise_groups WHERE environment_id = $1 AND name = 'Grupo de Empresas Testes' LIMIT 1", envID).Scan(&groupID, &groupName)
 		if err != nil {
-			// Try to find ANY group if default is missing
-			err = tx.QueryRow("SELECT id, name FROM enterprise_groups WHERE environment_id = $1 LIMIT 1", envID).Scan(&groupID, &groupName)
-			if err != nil {
-				http.Error(w, "No groups available. System setup required.", http.StatusInternalServerError)
+			if err == sql.ErrNoRows {
+				// Create Group
+				err = tx.QueryRow("INSERT INTO enterprise_groups (environment_id, name, description) VALUES ($1, 'Grupo de Empresas Testes', 'Grupo compartilhado para trial') RETURNING id, name", envID).Scan(&groupID, &groupName)
+				if err != nil {
+					tx.Rollback()
+					http.Error(w, "Error creating default group", http.StatusInternalServerError)
+					return
+				}
+			} else {
+				tx.Rollback()
+				http.Error(w, "Database error fetching group", http.StatusInternalServerError)
 				return
 			}
 		}
