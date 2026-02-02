@@ -66,9 +66,10 @@ func CheckPasswordHash(password, hash string) bool {
 	return err == nil
 }
 
-func GenerateToken(userID string) (string, error) {
+func GenerateToken(userID, role string) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,
+		"role":    role,
 		"exp":     time.Now().Add(time.Hour * 24).Unix(), // 24 hours
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -76,6 +77,57 @@ func GenerateToken(userID string) (string, error) {
 }
 
 // --- Handlers ---
+
+func AuthMiddleware(next http.HandlerFunc, requiredRole string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "Authorization header required", http.StatusUnauthorized)
+			return
+		}
+
+		tokenString := ""
+		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+			tokenString = authHeader[7:]
+		} else {
+			http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
+			return
+		}
+
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return jwtSecret, nil
+		})
+
+		if err != nil || !token.Valid {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			return
+		}
+
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+			return
+		}
+
+		role, ok := claims["role"].(string)
+		if !ok {
+			role = "user" // Default
+		}
+
+		if requiredRole != "" && requiredRole != role && role != "admin" {
+			// Admin can access everything, otherwise must match required role
+			// If requiredRole is "admin", then only admin can access.
+			// If requiredRole is "user", admin can also access.
+			// Logic:
+			if requiredRole == "admin" && role != "admin" {
+				http.Error(w, "Forbidden: Admins only", http.StatusForbidden)
+				return
+			}
+		}
+
+		next(w, r)
+	}
+}
 
 func RegisterHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
