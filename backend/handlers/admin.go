@@ -29,17 +29,19 @@ func ResetDatabaseHandler(db *sql.DB) http.HandlerFunc {
 		}
 		defer tx.Rollback()
 
-		// Delete all jobs.
-		// Due to ON DELETE CASCADE constraints defined in migrations,
-		// this will automatically delete:
-		// - participants
-		// - reg_0140, reg_c010, reg_c100, reg_c190, reg_c500, reg_c600, reg_d100, reg_d500, reg_d590, reg_9900
-		// - operacoes_comerciais, energia_agregado, frete_agregado, comunicacoes_agregado
-		result, err := tx.Exec("DELETE FROM import_jobs")
+		// Optimize: Use TRUNCATE CASCADE for instant clearing of large datasets.
+		// TRUNCATE is much faster than DELETE because it doesn't scan tables or log individual row deletions.
+		// CASCADE ensures all dependent tables (reg_*, aggregations) are also cleared.
+		_, err = tx.Exec("TRUNCATE TABLE import_jobs CASCADE")
 		if err != nil {
-			log.Printf("Error deleting import_jobs: %v", err)
-			http.Error(w, "Failed to reset database", http.StatusInternalServerError)
-			return
+			log.Printf("Error truncating import_jobs: %v", err)
+			// Fallback to DELETE if TRUNCATE fails (e.g. permissions)
+			_, err = tx.Exec("DELETE FROM import_jobs")
+			if err != nil {
+				log.Printf("Error deleting import_jobs (fallback): %v", err)
+				http.Error(w, "Failed to reset database", http.StatusInternalServerError)
+				return
+			}
 		}
 
 		if err := tx.Commit(); err != nil {
@@ -48,13 +50,12 @@ func ResetDatabaseHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		rowsAffected, _ := result.RowsAffected()
-		log.Printf("Database reset successful. Deleted %d jobs and their related data.", rowsAffected)
+		log.Printf("Database reset successful (TRUNCATE).")
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"message":      "Database reset successfully",
-			"jobs_deleted": rowsAffected,
+			"jobs_deleted": -1, // TRUNCATE doesn't return count
 		})
 	}
 }
