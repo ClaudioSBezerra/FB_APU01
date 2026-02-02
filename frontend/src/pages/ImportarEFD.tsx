@@ -1,10 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle, CheckCircle, Clock, FileText, Loader2, RefreshCw, Upload, XCircle, Trash2 } from 'lucide-react';
+import { CheckCircle, Clock, FileText, Loader2, Upload, XCircle, Trash2, FolderOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { UploadProgressDisplay, UploadProgressType } from '@/components/UploadProgress';
 import { useAuth } from '@/contexts/AuthContext';
@@ -20,8 +18,10 @@ interface ImportJob {
 
 export default function ImportarEFD() {
   const { token, user, cnpj, company, companyId } = useAuth();
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  
+  // Progress state for the current file being uploaded
   const [uploadProgress, setUploadProgress] = useState<UploadProgressType>({
     status: 'idle',
     percentage: 0,
@@ -30,6 +30,11 @@ export default function ImportarEFD() {
     speed: 0,
     remainingTime: 0
   });
+
+  // Global queue progress
+  const [currentFileIndex, setCurrentFileIndex] = useState<number>(-1);
+  const [isUploading, setIsUploading] = useState(false);
+
   const [jobs, setJobs] = useState<ImportJob[]>([]);
   const [scanStats, setScanStats] = useState({ scanned: 0, relevant: 0, phase: 'idle' });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -54,8 +59,13 @@ export default function ImportarEFD() {
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      const newFiles = Array.from(e.target.files);
+      setSelectedFiles(prev => [...prev, ...newFiles]);
+    }
+    // Reset input value to allow selecting same files again if needed
+    if (fileInputRef.current) {
+        fileInputRef.current.value = '';
     }
   };
 
@@ -72,14 +82,18 @@ export default function ImportarEFD() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setSelectedFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const newFiles = Array.from(e.dataTransfer.files);
+      setSelectedFiles(prev => [...prev, ...newFiles]);
     }
   };
 
-  const handleUpload = async () => {
-    if (!selectedFile) return;
+  const removeFile = (index: number) => {
+      if (isUploading) return;
+      setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
 
+  const processSingleFile = async (file: File) => {
     // --- CLIENT-SIDE PARSING & FILTERING (PHASE 2.1 - FULL SCAN) ---
     // Reads file locally, filters only relevant lines, continues until EOF
     // Creates a smaller Payload for upload.
@@ -88,150 +102,106 @@ export default function ImportarEFD() {
       status: 'uploading',
       percentage: 0,
       bytesUploaded: 0,
-      bytesTotal: selectedFile.size, // Initial size estimation
+      bytesTotal: file.size, // Initial size estimation
       speed: 0,
       remainingTime: 0
     });
+    setScanStats({ scanned: 0, relevant: 0, phase: 'scanning' });
 
     try {
       // 1. Filter Logic
       const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB Read Buffer
       let offset = 0;
       let buffer = '';
-      const relevantPrefixes = ['|0000|', '|0150|', '|C100|', '|C190|', '|C500|', '|C600|', '|D100|', '|D500|', '|D590|', '|D990|'];
-      const filteredParts: string[] = [];
-      let finishedReading = false;
-      let processedBytes = 0;
-      let foundD990 = false;
-      const startTimeRead = Date.now();
-
-      // Read Loop
-      console.log(`[DEBUG] Starting Client-Side Filter for: ${selectedFile.name}`);
+      const filteredParts: string[] = []; // Stores filtered chunks (strings)
+      let totalRelevantLines = 0;
       let totalLinesScanned = 0;
-      let relevantLinesFound = 0;
 
-      while (offset < selectedFile.size) { // Force read until end of file
-        const chunkBlob = selectedFile.slice(offset, offset + CHUNK_SIZE);
-        const chunkText = await chunkBlob.text();
+      // Relevant Registers
+      const RELEVANT_REGISTERS = new Set([
+        '0000', '0140', '0150', 
+        'C010', 'C100', 'C170', 'C190', 'C500', 'C600', 
+        'D010', 'D100', 'D500', 'D590',
+        '9999' // Trailer
+      ]);
+
+      // Phase 1: Scan & Filter
+      while (offset < file.size) {
+        const chunk = file.slice(offset, offset + CHUNK_SIZE);
+        const text = await chunk.text();
+        const rawPart = buffer + text;
         
-        // Prepend previous buffer residue
-        const fullText = buffer + chunkText;
-        const lines = fullText.split('\n');
-        
-        // Save the last incomplete line for next iteration (unless EOF)
-        if (offset + CHUNK_SIZE < selectedFile.size) {
-            buffer = lines.pop() || '';
-        } else {
-            buffer = ''; // End of file
+        let lastNewlineIndex = rawPart.lastIndexOf('\n');
+        // Handle EOF case (last chunk might not end with newline)
+        if (offset + CHUNK_SIZE >= file.size && lastNewlineIndex === -1) {
+             lastNewlineIndex = rawPart.length;
         }
 
-        // Process Lines
+        const processable = rawPart.substring(0, lastNewlineIndex);
+        buffer = rawPart.substring(lastNewlineIndex + 1);
+
+        const lines = processable.split('\n');
+        let chunkFiltered = '';
+        
         for (const line of lines) {
-           totalLinesScanned++;
-           // Fast Check: Must start with pipe
-           if (!line.startsWith('|')) continue;
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            totalLinesScanned++;
 
-           // STOP SCANNING IF |9999| IS FOUND
-           if (line.startsWith('|9999|')) {
-             console.log(`[DEBUG] Found |9999| at line ${totalLinesScanned}. Stopping scan.`);
-             finishedReading = true;
-             break;
-           }
-
-           // Check against whitelist
-           let isRelevant = false;
-           for (const p of relevantPrefixes) {
-             if (line.startsWith(p)) {
-               isRelevant = true;
-               
-               // DEBUG SAMPLING: Log first 5 occurrences of each register type or every 1000th relevant line
-               if (relevantLinesFound < 20 || relevantLinesFound % 5000 === 0) {
-                 console.log(`[DEBUG] Keeping Line #${totalLinesScanned}: ${line.substring(0, 50)}...`);
-               }
-
-               if (p === '|D990|') {
-                 foundD990 = true;
-                 console.log(`[DEBUG] FOUND |D990| at Line #${totalLinesScanned}. Keeping it and continuing scan to confirm no duplicates.`);
-               }
-               break;
-             }
-           }
-
-           if (isRelevant) {
-             filteredParts.push(line + '\n');
-             relevantLinesFound++;
-           }
+            // SPED format: |REG|...
+            if (trimmed.startsWith('|')) {
+                const reg = trimmed.split('|')[1];
+                if (RELEVANT_REGISTERS.has(reg)) {
+                    chunkFiltered += trimmed + '\n';
+                    totalRelevantLines++;
+                }
+            }
+        }
+        
+        if (chunkFiltered.length > 0) {
+            filteredParts.push(chunkFiltered);
         }
 
         offset += CHUNK_SIZE;
-        processedBytes += chunkBlob.size;
         
-        // Update UI (Filtering Phase)
-        if (totalLinesScanned % 5000 === 0 || offset >= selectedFile.size || finishedReading) {
-            setScanStats({ scanned: totalLinesScanned, relevant: relevantLinesFound, phase: 'scanning' });
-            // Yield to UI thread to prevent freeze
-            await new Promise(r => setTimeout(r, 0));
-        }
-
-        if (finishedReading) break;
-
-        setUploadProgress(prev => ({
-           ...prev,
-           percentage: Math.min(Math.round((processedBytes / selectedFile.size) * 50), 50), // 0-50% is filtering
-           speed: (processedBytes / ((Date.now() - startTimeRead)/1000))
-        }));
+        // Update UI for Scanning Phase
+        setScanStats({ scanned: totalLinesScanned, relevant: totalRelevantLines, phase: 'scanning' });
       }
 
-      // Add Artificial Trailer for Backend Compatibility
-      console.log(`[DEBUG] Filter Complete. Scanned: ${totalLinesScanned}, Kept: ${filteredParts.length}. D990 Found: ${foundD990}`);
-      
-      if (foundD990) {
-        filteredParts.push('|9999|' + filteredParts.length + '|\n');
-      } else {
-        // Warning: File didn't reach D990, but we send what we have
-        console.warn("File ended before |D990|");
-        filteredParts.push('|9999|' + filteredParts.length + '|\n');
-      }
+      setScanStats(prev => ({ ...prev, phase: 'uploading' }));
 
-      // 2. Create Filtered Blob
+      // 2. Create Optimized File
+      // Combine filtered parts into a single Blob
       const filteredBlob = new Blob(filteredParts, { type: 'text/plain' });
-      const filteredFile = new File([filteredBlob], selectedFile.name, { type: 'text/plain' });
-      
-      console.log(`Original Size: ${selectedFile.size}, Filtered Size: ${filteredFile.size}`);
+      const filteredFile = new File([filteredBlob], file.name, { type: 'text/plain' });
 
-      // 3. Upload Filtered File (CHUNKED UPLOAD STRATEGY)
-      const startTimeUpload = Date.now();
-      const UPLOAD_CHUNK_SIZE = 5 * 1024 * 1024; // 5MB Upload Chunks
+      console.log(`Optimization: Original ${file.size} bytes -> Filtered ${filteredFile.size} bytes`);
+      
+      // 3. Upload Optimized File (Chunked)
+      const UPLOAD_CHUNK_SIZE = 2 * 1024 * 1024; // 2MB Upload Chunks
       const totalChunks = Math.ceil(filteredFile.size / UPLOAD_CHUNK_SIZE);
-      const uploadID = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const uploadId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
-      console.log(`[DEBUG] Starting Chunked Upload. Total Chunks: ${totalChunks}, ID: ${uploadID}`);
-
+      let startTimeUpload = Date.now();
+      
       for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
         const start = chunkIndex * UPLOAD_CHUNK_SIZE;
         const end = Math.min(start + UPLOAD_CHUNK_SIZE, filteredFile.size);
         const chunk = filteredFile.slice(start, end);
 
         const formData = new FormData();
-        // IMPORTANT: Pass filename as 3rd argument so backend detects extension (.txt)
-        formData.append('file', chunk, selectedFile.name);
+        formData.append('file', chunk, filteredFile.name);
         formData.append('is_chunked', 'true');
-        formData.append('upload_id', uploadID);
+        formData.append('upload_id', uploadId);
         formData.append('chunk_index', chunkIndex.toString());
         formData.append('total_chunks', totalChunks.toString());
-        formData.append('filename', selectedFile.name); // Original name for reference
-        
-        // Only send metadata on last chunk to trigger validation
-        if (chunkIndex === totalChunks - 1) {
-             formData.append('expected_lines', filteredParts.length.toString());
-             formData.append('expected_size', filteredFile.size.toString());
-        }
 
-        // Upload Chunk with Retry Logic
-        let responseJson: any = null;
-        await new Promise((resolve, reject) => {
+        // Wait for chunk upload
+        const responseJson = await new Promise<any>((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open('POST', '/api/upload', true);
+            
+            // Inject Auth Token
             if (token) {
                 xhr.setRequestHeader('Authorization', `Bearer ${token}`);
             }
@@ -239,13 +209,12 @@ export default function ImportarEFD() {
             xhr.onload = () => {
                 if (xhr.status >= 200 && xhr.status < 300) {
                     try {
-                        responseJson = JSON.parse(xhr.response);
+                        resolve(JSON.parse(xhr.responseText));
                     } catch (e) {
-                        // ignore if not json
+                        resolve(null);
                     }
-                    resolve(xhr.response);
                 } else {
-                    reject(new Error(`Upload failed at chunk ${chunkIndex}: ${xhr.statusText}`));
+                    reject(new Error(`Upload failed: ${xhr.statusText}`));
                 }
             };
             xhr.onerror = () => reject(new Error(`Network error at chunk ${chunkIndex}`));
@@ -254,19 +223,13 @@ export default function ImportarEFD() {
 
         // Last Chunk Verification
         if (chunkIndex === totalChunks - 1 && responseJson && responseJson.detected_lines) {
-           const sentLines = filteredParts.length.toString();
            const receivedLines = responseJson.detected_lines;
-           
-           if (receivedLines !== 'not_found' && sentLines !== receivedLines) {
-             toast.warning(`Atenção: Backend reportou ${receivedLines} linhas, mas enviamos ${sentLines}. Verifique a integridade.`);
-           } else if (sentLines === receivedLines) {
-             toast.success(`Integridade Verificada: ${receivedLines} registros confirmados no servidor.`);
-           }
+           // Simple log for now
+           console.log(`Verification: Sent ~${totalRelevantLines} lines, Backend received ${receivedLines}`);
         }
 
         // Update Progress
-        const percentUpload = ((chunkIndex + 1) / totalChunks) * 50; 
-        const totalPercent = 50 + percentUpload;
+        const percentUpload = ((chunkIndex + 1) / totalChunks) * 100; 
         
         // Calculate speed based on total bytes uploaded so far
         const bytesUploadedSoFar = end;
@@ -277,7 +240,7 @@ export default function ImportarEFD() {
 
         setUploadProgress({
             status: 'uploading',
-            percentage: Math.round(totalPercent),
+            percentage: Math.round(percentUpload),
             bytesUploaded: bytesUploadedSoFar,
             bytesTotal: filteredFile.size,
             speed,
@@ -286,21 +249,46 @@ export default function ImportarEFD() {
       }
 
       setUploadProgress(prev => ({ ...prev, status: 'completed', percentage: 100 }));
-      toast.success(`Arquivo enviado! (${filteredParts.length} registros).`);
-      setSelectedFile(null);
+      toast.success(`Arquivo ${file.name} enviado!`);
       
-      // Trigger job refresh
-      const res = await fetch('/api/jobs');
-      if (res.ok) {
+    } catch (error) {
+      console.error(`Upload error for ${file.name}:`, error);
+      setUploadProgress(prev => ({ ...prev, status: 'error', errorMessage: String(error) }));
+      toast.error(`Erro ao enviar ${file.name}.`);
+      throw error; // Re-throw to stop sequence or handle in parent
+    }
+  };
+
+  const handleUploadAll = async () => {
+    if (selectedFiles.length === 0) return;
+
+    setIsUploading(true);
+    
+    // Process files sequentially
+    for (let i = 0; i < selectedFiles.length; i++) {
+        setCurrentFileIndex(i);
+        try {
+            await processSingleFile(selectedFiles[i]);
+        } catch (err) {
+            // Option: Continue to next file or stop?
+            // Let's continue but log error
+            console.error(`Failed to process file ${i}`, err);
+        }
+    }
+
+    setIsUploading(false);
+    setCurrentFileIndex(-1);
+    setSelectedFiles([]); // Clear selection after all done
+    setScanStats({ scanned: 0, relevant: 0, phase: 'idle' });
+    
+    // Trigger job refresh
+    const res = await fetch('/api/jobs');
+    if (res.ok) {
         const data = await res.json();
         setJobs(data);
-      }
-
-    } catch (error) {
-      console.error('Upload error:', error);
-      setUploadProgress(prev => ({ ...prev, status: 'error', errorMessage: String(error) }));
-      toast.error('Erro no processamento/upload. Tente novamente.');
     }
+    
+    toast.success("Processamento em lote finalizado!");
   };
 
   const handleCancelJob = async (id: string) => {
@@ -324,8 +312,6 @@ export default function ImportarEFD() {
 
     try {
         const authToken = token || localStorage.getItem('token');
-        console.log('Reset Database: Using Token:', authToken ? 'Present' : 'Missing');
-
         const res = await fetch('/api/admin/reset-db', { 
             method: 'DELETE',
             headers: {
@@ -350,7 +336,6 @@ export default function ImportarEFD() {
         return;
     }
     
-    // Display info
     const displayInfo = cnpj ? `(CNPJ: ${cnpj})` : `(ID: ${companyId.substring(0,8)}...)`;
 
     if (!window.confirm(`ATENÇÃO: Deseja APAGAR TODOS os dados da empresa ${company || 'selecionada'} ${displayInfo}? Essa ação não pode ser desfeita.`)) {
@@ -370,14 +355,13 @@ export default function ImportarEFD() {
 
         if (res.ok) {
             toast.success(`Dados da empresa ${company} limpos com sucesso!`);
-            // Refresh jobs list to reflect deletion
             const jobsRes = await fetch('/api/jobs');
             if (jobsRes.ok) {
                 const data = await jobsRes.json();
                 setJobs(data);
             }
         } else {
-            const err = await res.text(); // Get error message
+            const err = await res.text();
             toast.error(`Erro ao limpar dados: ${err}`);
         }
     } catch (error) {
@@ -390,14 +374,13 @@ export default function ImportarEFD() {
     <div className="container mx-auto p-6 space-y-6 animate-fade-in">
       <div className="flex justify-between items-start">
         <div className="flex flex-col gap-2">
-            <h1 className="text-3xl font-bold tracking-tight text-primary">Importar EFD <span className="text-sm font-normal text-muted-foreground">(v4.0 Chunked Upload)</span></h1>
+            <h1 className="text-3xl font-bold tracking-tight text-primary">Importar EFD <span className="text-sm font-normal text-muted-foreground">(Multi-File Upload)</span></h1>
             <p className="text-muted-foreground">
-            Envie seus arquivos SPED EFD Contribuições para processamento.
+            Envie seus arquivos SPED EFD Contribuições para processamento. Selecione múltiplos arquivos de uma vez.
             </p>
         </div>
         
         <div className="flex gap-2">
-            {/* Admin Global Reset */}
             {user?.role === 'admin' && (
                 <Button variant="destructive" size="sm" onClick={handleResetDatabase} className="gap-2">
                     <Trash2 className="h-4 w-4" />
@@ -405,7 +388,6 @@ export default function ImportarEFD() {
                 </Button>
             )}
 
-            {/* Company Specific Reset */}
             {companyId && (
                 <Button variant="outline" size="sm" onClick={handleResetCompanyData} className="gap-2 border-red-200 hover:bg-red-50 text-red-600">
                     <Trash2 className="h-4 w-4" />
@@ -421,7 +403,7 @@ export default function ImportarEFD() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Upload className="h-5 w-5" />
-              Novo Arquivo
+              Novos Arquivos
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -433,57 +415,106 @@ export default function ImportarEFD() {
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
             >
               <input
                 type="file"
                 ref={fileInputRef}
                 className="hidden"
                 accept=".txt"
+                multiple
+                onChange={handleFileChange}
+              />
+              <input
+                type="file"
+                ref={folderInputRef}
+                className="hidden"
+                {...({ webkitdirectory: "", directory: "" } as any)}
                 onChange={handleFileChange}
               />
               
               <div className="flex flex-col items-center gap-2">
                 <div className="p-4 bg-muted rounded-full">
-                  <FileText className="h-8 w-8 text-muted-foreground" />
+                  <FolderOpen className="h-8 w-8 text-muted-foreground" />
                 </div>
                 <div className="space-y-1">
                   <p className="text-sm font-medium">
-                    {selectedFile ? selectedFile.name : 'Clique para selecionar ou arraste aqui'}
+                    Arraste arquivos aqui
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <div className="flex gap-2 justify-center mt-2">
+                    <Button 
+                        variant="secondary" 
+                        size="sm"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            fileInputRef.current?.click();
+                        }}
+                    >
+                        Selecionar Arquivos
+                    </Button>
+                    <Button 
+                        variant="secondary" 
+                        size="sm"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            folderInputRef.current?.click();
+                        }}
+                    >
+                        Selecionar Pasta
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
                     Suporta arquivos .txt (SPED)
                   </p>
                 </div>
               </div>
             </div>
 
-            {selectedFile && (
-              <div className="flex items-center justify-between p-3 bg-muted rounded-md">
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <FileText className="h-4 w-4 flex-shrink-0" />
-                  <span className="text-sm truncate">{selectedFile.name}</span>
+            {selectedFiles.length > 0 && (
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                    <div className="flex justify-between items-center pb-2 border-b">
+                        <span className="text-sm font-semibold">{selectedFiles.length} arquivos selecionados</span>
+                        <Button 
+                            size="sm" 
+                            onClick={handleUploadAll}
+                            disabled={isUploading}
+                        >
+                            {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                            {isUploading ? 'Enviando...' : 'Enviar Todos'}
+                        </Button>
+                    </div>
+                    
+                    {selectedFiles.map((file, idx) => (
+                        <div key={idx} className={`flex items-center justify-between p-2 rounded-md text-sm ${idx === currentFileIndex ? 'bg-primary/10 border border-primary/20' : 'bg-muted/50'}`}>
+                             <div className="flex items-center gap-2 overflow-hidden">
+                                <FileText className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                                <span className="truncate max-w-[200px]">{file.name}</span>
+                                <span className="text-xs text-muted-foreground">({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
+                             </div>
+                             
+                             {idx === currentFileIndex && isUploading && (
+                                 <Badge variant="secondary" className="text-xs">Processando...</Badge>
+                             )}
+                             
+                             {!isUploading && (
+                                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeFile(idx)}>
+                                     <XCircle className="h-4 w-4 text-muted-foreground hover:text-red-500" />
+                                 </Button>
+                             )}
+                        </div>
+                    ))}
                 </div>
-                <Button 
-                  size="sm" 
-                  onClick={handleUpload}
-                  disabled={uploadProgress.status === 'uploading'}
-                >
-                  Enviar
-                </Button>
-              </div>
             )}
 
             {scanStats.phase === 'scanning' && (
               <div className="text-xs text-muted-foreground mt-2 text-center animate-pulse">
-                🔍 Analisando e Filtrando Arquivo... <br/>
+                🔍 Analisando e Filtrando Arquivo Atual... <br/>
                 {scanStats.scanned.toLocaleString()} linhas lidas | {scanStats.relevant.toLocaleString()} registros mantidos
               </div>
             )}
 
             <UploadProgressDisplay 
               progress={uploadProgress} 
-              fileName={selectedFile?.name || ''}
+              fileName={currentFileIndex >= 0 ? selectedFiles[currentFileIndex]?.name : ''}
             />
           </CardContent>
         </Card>
@@ -502,7 +533,7 @@ export default function ImportarEFD() {
                 <p>Nenhum processamento recente.</p>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
                 {jobs.map((job) => (
                   <div key={job.id} className="flex items-center justify-between p-3 border rounded-lg">
                     <div className="flex items-center gap-3">
@@ -513,7 +544,7 @@ export default function ImportarEFD() {
                       
                       <div className="flex flex-col flex-1 min-w-0">
                         <div className="flex justify-between items-center mb-1">
-                          <span className="text-sm font-medium truncate">{job.filename}</span>
+                          <span className="text-sm font-medium truncate max-w-[150px]" title={job.filename}>{job.filename}</span>
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-muted-foreground whitespace-nowrap">
                               {new Date(job.created_at).toLocaleString()}
