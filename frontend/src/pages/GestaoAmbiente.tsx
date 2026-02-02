@@ -608,6 +608,7 @@ export default function GestaoAmbiente() {
                 >
                   <div className="overflow-hidden">
                     <p className="font-medium text-sm truncate">{company.name}</p>
+                    <p className="text-[10px] text-gray-400 font-mono truncate" title={company.id}>ID: {company.id}</p>
                     <p className="text-xs text-gray-500 font-mono">{company.cnpj}</p>
                     {company.trade_name && <p className="text-xs text-gray-400 truncate">{company.trade_name}</p>}
                   </div>
