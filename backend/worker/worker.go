@@ -810,7 +810,7 @@ func runAggregations(tx *sql.Tx, jobID string, rates TaxRates) error {
 			SELECT 1 FROM reg_c190 c190
 			LEFT JOIN cfop c ON c190.cfop = c.cfop
 			WHERE c190.id_pai_c100 = c100.id
-			AND COALESCE(c.tipo, 'O') IN ('S', 'R', 'O')
+			AND COALESCE(c.tipo, 'O') IN ('S', 'R')
 		)
 		GROUP BY c100.job_id, c100.filial_cnpj, c100.cod_part, TO_CHAR(c100.dt_doc, 'MM/YYYY'), c100.ind_oper
 	`, jobID, rates.PercReducICMS, rates.PercIBS_UF, rates.PercIBS_Mun, rates.PercCBS)
