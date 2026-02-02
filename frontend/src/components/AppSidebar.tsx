@@ -54,7 +54,8 @@ const menuItems = [
     isActive: true, // Default open
     items: [
       { title: "Importar SPEDs", url: "/importar-efd", icon: FileSpreadsheet },
-      { title: "Operações Comerciais", url: "/mercadorias", icon: ShoppingCart },
+      { title: "Operações Comerciais", url: "/mercadorias?tab=comercial", icon: ShoppingCart },
+      { title: "Outras Operações", url: "/mercadorias?tab=outras", icon: ShoppingCart },
       { title: "Energia", url: "/energia", icon: Zap },
       { title: "Transporte", url: "/transporte", icon: Truck },
       { title: "Comunicação", url: "/comunicacoes", icon: Phone },

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -30,7 +31,10 @@ interface AggregatedData {
 }
 
 const Mercadorias = () => {
-  const [operationType, setOperationType] = useState("comercial");
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || "comercial";
+  
+  const [operationType, setOperationType] = useState(initialTab);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [selectedYear, setSelectedYear] = useState<string>("2027");
   const [selectedFilial, setSelectedFilial] = useState<string>("all");
@@ -42,6 +46,10 @@ const Mercadorias = () => {
 
   // Fetch data from backend
   useEffect(() => {
+    // Sync URL param with state if needed, or just let state drive
+    // but if we want deep linking to work on tab change we should update URL
+    // For now, simple initialization is enough as requested.
+    
     setLoading(true);
     fetch(`/api/reports/mercadorias?target_year=${selectedYear}&tipo_operacao=${operationType}`)
       .then(res => {
