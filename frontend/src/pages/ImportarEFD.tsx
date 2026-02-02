@@ -318,7 +318,15 @@ export default function ImportarEFD() {
     }
 
     try {
-        const res = await fetch('/api/admin/reset-db', { method: 'DELETE' });
+        const authToken = token || localStorage.getItem('token');
+        console.log('Reset Database: Using Token:', authToken ? 'Present' : 'Missing');
+
+        const res = await fetch('/api/admin/reset-db', { 
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
         if (res.ok) {
             toast.success('Base de dados limpa com sucesso!');
             setJobs([]); // Clear list immediately
