@@ -97,8 +97,18 @@ export default function ImportarEFD() {
     e.preventDefault();
     setIsDragOver(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const newFiles = Array.from(e.dataTransfer.files);
-      setSelectedFiles(prev => [...prev, ...newFiles]);
+      const allFiles = Array.from(e.dataTransfer.files);
+      const txtFiles = allFiles.filter(file => file.name.toLowerCase().endsWith('.txt'));
+
+      if (txtFiles.length < allFiles.length) {
+          toast.info(`${allFiles.length - txtFiles.length} arquivos ignorados (apenas .txt são permitidos).`);
+      }
+
+      if (txtFiles.length > 0) {
+        setSelectedFiles(prev => [...prev, ...txtFiles]);
+      } else if (allFiles.length > 0) {
+        toast.warning("Nenhum arquivo .txt válido encontrado. (Para pastas, use o botão 'Selecionar Pasta')");
+      }
     }
   };
 
