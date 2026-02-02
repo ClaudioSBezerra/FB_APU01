@@ -132,6 +132,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 
 		dbStatus := "connected"
+		stats := db.Stats()
 		if err := db.Ping(); err != nil {
 			dbStatus = "error: " + err.Error()
 		}
@@ -141,7 +142,7 @@ func main() {
 			Timestamp: time.Now().Format(time.RFC3339),
 			Service:   "FB_APU01 Fiscal Engine",
 			Version:   "1.0.0",
-			Database:  dbStatus,
+			Database:  fmt.Sprintf("%s (Open: %d, InUse: %d, Idle: %d, Wait: %v)", dbStatus, stats.OpenConnections, stats.InUse, stats.Idle, stats.WaitDuration),
 		}
 
 		json.NewEncoder(w).Encode(response)

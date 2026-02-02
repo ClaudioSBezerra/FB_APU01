@@ -296,11 +296,14 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 
 func LoginHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
 		var req LoginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid request", http.StatusBadRequest)
 			return
 		}
+
+		log.Printf("[Login] Attempting login for: %s", req.Email)
 
 		// Get User
 		var user User
@@ -312,11 +315,13 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 		`, req.Email).Scan(&user.ID, &user.Email, &user.FullName, &hash, &user.IsVerified, &user.TrialEndsAt, &user.Role, &user.CreatedAt)
 
 		if err == sql.ErrNoRows {
+			log.Printf("[Login] User not found: %s", req.Email)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode("E-mail não encontrado ou senha inválida")
 			return
 		} else if err != nil {
+			log.Printf("[Login] Database error fetching user: %v", err)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode("Erro no servidor")
@@ -325,6 +330,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 
 		// Check Password
 		if !CheckPasswordHash(req.Password, hash) {
+			log.Printf("[Login] Invalid password for: %s", req.Email)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode("E-mail não encontrado ou senha inválida")
@@ -334,34 +340,58 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 		// 2. Generate Token
 		token, err := GenerateToken(user.ID, user.Role)
 		if err != nil {
+			log.Printf("[Login] Error generating token: %v", err)
 			http.Error(w, "Error generating token", http.StatusInternalServerError)
 			return
 		}
 
 		// 4. Get Environment, Group, and Company Context
-		// FIX: Prioritize companies OWNED by the user first, then companies in their environment
+		// OPTIMIZATION: Split query to avoid complex joins and potential locks/slowdowns
 		var envName, groupName, companyName, companyID string
+
+		// Strategy A: Check if user OWNS a company (Fastest/Most Common)
 		err = db.QueryRow(`
 			SELECT e.name, eg.name, c.name, c.id
 			FROM companies c
 			JOIN enterprise_groups eg ON c.group_id = eg.id
 			JOIN environments e ON eg.environment_id = e.id
-			JOIN user_environments ue ON ue.environment_id = e.id
-			WHERE ue.user_id = $1 
-			ORDER BY 
-				CASE WHEN c.owner_id = $1 THEN 0 ELSE 1 END, -- Priority to owned companies
-				c.created_at DESC
+			WHERE c.owner_id = $1
+			ORDER BY c.created_at DESC
 			LIMIT 1
 		`, user.ID).Scan(&envName, &groupName, &companyName, &companyID)
 
 		if err == sql.ErrNoRows {
-			// No company owned, try to find one they have access to via environment?
-			// For now, leave empty or set placeholders
+			// Strategy B: If not owner, check via User Environment (Slower but necessary for team members)
+			log.Printf("[Login] User %s owns no company, checking memberships...", req.Email)
+			err = db.QueryRow(`
+				SELECT e.name, eg.name, c.name, c.id
+				FROM user_environments ue
+				JOIN environments e ON ue.environment_id = e.id
+				JOIN enterprise_groups eg ON eg.environment_id = e.id
+				JOIN companies c ON c.group_id = eg.id
+				WHERE ue.user_id = $1
+				ORDER BY c.created_at DESC
+				LIMIT 1
+			`, user.ID).Scan(&envName, &groupName, &companyName, &companyID)
+		}
+
+		if err == sql.ErrNoRows {
+			// No company found at all
+			log.Printf("[Login] No company context found for user: %s", req.Email)
 			envName = "Sem Ambiente"
 			groupName = "Sem Grupo"
 			companyName = "Sem Empresa"
 			companyID = ""
+		} else if err != nil {
+			log.Printf("[Login] Error fetching context: %v", err)
+			// Don't fail login, just return empty context
+			envName = "Erro"
+			groupName = "Erro"
+			companyName = "Erro"
+			companyID = ""
 		}
+
+		log.Printf("[Login] Success for %s. Duration: %v", req.Email, time.Since(start))
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(AuthResponse{
