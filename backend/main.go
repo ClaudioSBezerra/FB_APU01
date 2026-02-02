@@ -69,7 +69,7 @@ func resetStuckJobs(db *sql.DB) {
 }
 
 func main() {
-	// PrintVersion() // Removed to avoid build error
+	PrintVersion()
 	initDB()
 	defer db.Close()
 
