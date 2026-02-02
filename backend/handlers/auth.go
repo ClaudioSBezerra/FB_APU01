@@ -19,6 +19,7 @@ type User struct {
 	FullName    string    `json:"full_name"`
 	IsVerified  bool      `json:"is_verified"`
 	TrialEndsAt time.Time `json:"trial_ends_at"`
+	Role        string    `json:"role"`
 	CreatedAt   string    `json:"created_at"`
 }
 
@@ -169,7 +170,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// Generate Token
-		token, _ := GenerateToken(userID)
+		token, _ := GenerateToken(userID, "user")
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(AuthResponse{
@@ -180,6 +181,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 				FullName:    req.FullName,
 				IsVerified:  false,
 				TrialEndsAt: trialEnds,
+				Role:        "user",
 			},
 			Environment: envName,
 			Group:       groupName,
@@ -200,9 +202,9 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 		var user User
 		var hash string
 		err := db.QueryRow(`
-			SELECT id, email, full_name, password_hash, is_verified, trial_ends_at, created_at
+			SELECT id, email, full_name, password_hash, is_verified, trial_ends_at, role, created_at
 			FROM users WHERE email = $1
-		`, req.Email).Scan(&user.ID, &user.Email, &user.FullName, &hash, &user.IsVerified, &user.TrialEndsAt, &user.CreatedAt)
+		`, req.Email).Scan(&user.ID, &user.Email, &user.FullName, &hash, &user.IsVerified, &user.TrialEndsAt, &user.Role, &user.CreatedAt)
 
 		if err == sql.ErrNoRows {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
@@ -218,8 +220,8 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Generate Token
-		token, err := GenerateToken(user.ID)
+		// 2. Generate Token
+		token, err := GenerateToken(user.ID, user.Role)
 		if err != nil {
 			http.Error(w, "Error generating token", http.StatusInternalServerError)
 			return

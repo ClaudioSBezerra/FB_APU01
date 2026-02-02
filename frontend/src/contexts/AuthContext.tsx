@@ -5,6 +5,7 @@ interface User {
   email: string;
   full_name: string;
   trial_ends_at: string;
+  role?: string;
 }
 
 interface AuthContextType {

@@ -8,6 +8,7 @@ import Comunicacoes from './pages/Comunicacoes';
 import TabelaAliquotas from './pages/TabelaAliquotas';
 import TabelaCFOP from './pages/TabelaCFOP';
 import GestaoAmbiente from './pages/GestaoAmbiente';
+import AdminUsers from './pages/AdminUsers';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import { Button } from '@/components/ui/button';
@@ -15,7 +16,6 @@ import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/s
 import { AppSidebar } from '@/components/AppSidebar';
 import { Separator } from '@/components/ui/separator';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { Footer } from './components/Footer';
 
 function Home() {
   return (
@@ -54,6 +54,21 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, user } = useAuth();
+  const location = useLocation();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (user?.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function AppLayout() {
   return (
     <SidebarProvider>
@@ -81,8 +96,18 @@ function AppLayout() {
             {/* Configurações */}
             <Route path="/config/aliquotas" element={<TabelaAliquotas />} />
             <Route path="/config/cfop" element={<TabelaCFOP />} />
-            <Route path="/config/usuarios" element={<ComingSoon title="Gestão de Usuários" />} />
-            <Route path="/config/ambiente" element={<GestaoAmbiente />} />
+            
+            {/* Admin Routes */}
+            <Route path="/config/usuarios" element={
+              <AdminRoute>
+                <AdminUsers />
+              </AdminRoute>
+            } />
+            <Route path="/config/ambiente" element={
+              <AdminRoute>
+                <GestaoAmbiente />
+              </AdminRoute>
+            } />
             
             {/* Apuração */}
             <Route path="/apuracao/entrada" element={<ComingSoon title="Importar XMLs Entrada" />} />
@@ -93,7 +118,6 @@ function AppLayout() {
             <Route path="/rfb/importar" element={<ComingSoon title="Importar Apuração RFB" />} />
           </Routes>
         </div>
-        <Footer />
         <Toaster />
       </SidebarInset>
     </SidebarProvider>

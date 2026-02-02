@@ -150,7 +150,10 @@ func main() {
 	http.HandleFunc("/api/mercadorias", handlers.GetMercadoriasReportHandler(db))
 
 	// Admin Endpoints
-	http.HandleFunc("/api/admin/reset-db", handlers.ResetDatabaseHandler(db))
+	http.HandleFunc("/api/admin/reset-db", handlers.AuthMiddleware(handlers.ResetDatabaseHandler(db), "admin"))
+	http.HandleFunc("/api/admin/users", handlers.AuthMiddleware(handlers.ListUsersHandler(db), "admin"))
+	http.HandleFunc("/api/admin/users/promote", handlers.AuthMiddleware(handlers.PromoteUserHandler(db), "admin"))
+	http.HandleFunc("/api/admin/users/delete", handlers.AuthMiddleware(handlers.DeleteUserHandler(db), "admin"))
 
 	// Configuration Endpoints
 	http.HandleFunc("/api/config/aliquotas", handlers.GetTaxRatesHandler(db))

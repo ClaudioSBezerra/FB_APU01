@@ -82,6 +82,8 @@ const menuItems = [
 
 export function AppSidebar() {
   const location = useLocation();
+  const { user, company, logout } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   return (
     <Sidebar collapsible="icon">
@@ -118,7 +120,14 @@ export function AppSidebar() {
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <SidebarMenuSub>
-                        {item.items.map((subItem) => (
+                        {item.items.map((subItem) => {
+                           // Check for adminOnly
+                           // Note: TypeScript might complain if adminOnly is not in the type definition of subItem, 
+                           // but since menuItems is inferred, it should be fine if at least one item has it.
+                           // However, to be safe and cleaner:
+                           if ((subItem as any).adminOnly && !isAdmin) return null;
+                           
+                           return (
                           <SidebarMenuSubItem key={subItem.title}>
                             <SidebarMenuSubButton 
                               asChild 
@@ -132,7 +141,7 @@ export function AppSidebar() {
                               </Link>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
-                        ))}
+                        )})}
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </SidebarMenuItem>
@@ -143,8 +152,24 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <div className="px-4 py-2 text-xs text-muted-foreground text-center">
-          v1.0.0
+        <div className="p-2 border-t mt-auto">
+          {user && (
+            <div className="flex flex-col gap-2 p-2 bg-sidebar-accent/50 rounded-md">
+               <div className="font-semibold text-xs text-foreground truncate">
+                {company || "Empresa não identificada"}
+              </div>
+              <div className="flex flex-col gap-1">
+                <div className="text-xs truncate">{user.full_name}</div>
+                <div className="bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded text-[10px] font-medium border border-yellow-200 self-start">
+                   Vencimento: {new Date(user.trial_ends_at).toLocaleDateString()}
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" className="w-full justify-start h-7 px-0 text-muted-foreground hover:text-foreground" onClick={logout}>
+                <LogOut className="mr-2 h-3 w-3" />
+                <span className="text-xs">Sair</span>
+              </Button>
+            </div>
+          )}
         </div>
       </SidebarFooter>
       <SidebarRail />
