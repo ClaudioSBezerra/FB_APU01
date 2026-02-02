@@ -9,6 +9,9 @@ COPY backend/go.mod backend/go.sum ./
 # Copy vendor directory
 COPY backend/vendor ./vendor
 
+# Debug: Check vendor directory
+RUN ls -la vendor && cat vendor/modules.txt
+
 # Copy the rest of the backend source code
 COPY backend/ .
 
