@@ -26,9 +26,11 @@ interface AggregatedData {
   vl_ibs_projetado: number;
   vl_cbs_projetado: number;
   tipo: 'ENTRADA' | 'SAIDA';
+  tipo_cfop?: string;
 }
 
 const Mercadorias = () => {
+  const [operationType, setOperationType] = useState("comercial");
   const [activeTab, setActiveTab] = useState("dashboard");
   const [selectedYear, setSelectedYear] = useState<string>("2027");
   const [selectedFilial, setSelectedFilial] = useState<string>("all");
@@ -41,7 +43,7 @@ const Mercadorias = () => {
   // Fetch data from backend
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/reports/mercadorias?target_year=${selectedYear}`)
+    fetch(`/api/reports/mercadorias?target_year=${selectedYear}&tipo_operacao=${operationType}`)
       .then(res => {
         if (!res.ok) throw new Error(`Erro na API: ${res.status} ${res.statusText}`);
         return res.json();
@@ -56,7 +58,7 @@ const Mercadorias = () => {
         setError(err.message);
         setLoading(false);
       });
-  }, [selectedYear]);
+  }, [selectedYear, operationType]);
 
   if (loading) {
     return (
@@ -152,6 +154,14 @@ const Mercadorias = () => {
           <h1 className="text-3xl font-bold text-gray-900">Mercadorias</h1>
           <p className="text-gray-500 mt-1">Análise detalhada de movimentação fiscal</p>
         </div>
+
+        <Tabs value={operationType} onValueChange={setOperationType} className="w-[400px]">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="comercial">Operações Comerciais</TabsTrigger>
+            <TabsTrigger value="outras">Outras Operações</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         <div className="flex gap-2 items-center">
           <div className="flex items-center gap-2 bg-white p-1 rounded-md border">
             <span className="text-sm font-medium text-gray-700 ml-2">Simulação:</span>
@@ -279,6 +289,7 @@ const Mercadorias = () => {
                     <TableHead>Filial</TableHead>
                     <TableHead>Mês/Ano</TableHead>
                     <TableHead>Tipo</TableHead>
+                    <TableHead>Tipo CFOP</TableHead>
                     <TableHead className="text-right">Valor Contábil</TableHead>
                     <TableHead className="text-right">PIS/COFINS</TableHead>
                     <TableHead className="text-right">ICMS Atual</TableHead>
@@ -299,7 +310,8 @@ const Mercadorias = () => {
                           {row.tipo}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.valor)}</TableCell>
+                      <TableCell>{row.tipo_cfop || '-'}</TableCell>
+                      <TableCell className="text-right font-medium">{formatCurrency(row.valor)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(row.pis + row.cofins)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(row.icms)}</TableCell>
                       <TableCell className="text-right bg-blue-50 font-medium text-blue-700">{formatCurrency(row.vl_icms_projetado)}</TableCell>
