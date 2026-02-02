@@ -14,6 +14,7 @@ interface AuthContextType {
   environment: string | null;
   group: string | null;
   company: string | null;
+  cnpj: string | null;
   login: (data: any) => void;
   logout: () => void;
   isAuthenticated: boolean;
@@ -27,6 +28,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [environment, setEnvironment] = useState<string | null>(null);
   const [group, setGroup] = useState<string | null>(null);
   const [company, setCompany] = useState<string | null>(null);
+  const [cnpj, setCnpj] = useState<string | null>(null);
 
   useEffect(() => {
     // Restore session from localStorage
@@ -35,6 +37,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const storedEnv = localStorage.getItem('environment');
     const storedGroup = localStorage.getItem('group');
     const storedCompany = localStorage.getItem('company');
+    const storedCnpj = localStorage.getItem('cnpj');
 
     if (storedToken && storedUser) {
       setToken(storedToken);
@@ -42,6 +45,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setEnvironment(storedEnv);
       setGroup(storedGroup);
       setCompany(storedCompany);
+      setCnpj(storedCnpj);
     }
   }, []);
 
@@ -51,12 +55,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setEnvironment(data.environment_name);
     setGroup(data.group_name);
     setCompany(data.company_name);
+    setCnpj(data.cnpj);
 
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
     localStorage.setItem('environment', data.environment_name || '');
     localStorage.setItem('group', data.group_name || '');
     localStorage.setItem('company', data.company_name || '');
+    localStorage.setItem('cnpj', data.cnpj || '');
   };
 
   const logout = () => {
@@ -65,6 +71,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setEnvironment(null);
     setGroup(null);
     setCompany(null);
+    setCnpj(null);
     localStorage.clear();
     window.location.href = '/login';
   };
@@ -75,7 +82,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       token, 
       environment, 
       group, 
-      company, 
+      company,
+      cnpj,
       login, 
       logout,
       isAuthenticated: !!user 

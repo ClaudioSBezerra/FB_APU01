@@ -4,8 +4,8 @@ import "fmt"
 
 // Version information for backend deployment validation
 const (
-	BackendVersion = "4.6.4"
-	FeatureSet     = "Reset Admin Password (123456)"
+	BackendVersion = "4.7.0"
+	FeatureSet     = "Company Data Reset & Segregation"
 )
 
 func GetVersionInfo() string {

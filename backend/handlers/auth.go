@@ -48,6 +48,7 @@ type AuthResponse struct {
 	Environment string `json:"environment_name"`
 	Group       string `json:"group_name"`
 	Company     string `json:"company_name"`
+	CNPJ        string `json:"cnpj"` // Added CNPJ for company context
 }
 
 // --- Utils ---
@@ -258,6 +259,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 			Environment: envName,
 			Group:       groupName,
 			Company:     req.CompanyName,
+			CNPJ:        req.CNPJ,
 		})
 	}
 }
@@ -307,17 +309,17 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// Get Context Info (Try to find company owned by user)
-		var envName, groupName, companyName string
+		var envName, groupName, companyName, companyCNPJ string
 
 		err = db.QueryRow(`
-			SELECT e.name, eg.name, c.name
+			SELECT e.name, eg.name, c.name, c.cnpj
 			FROM companies c
 			JOIN enterprise_groups eg ON c.group_id = eg.id
 			JOIN environments e ON eg.environment_id = e.id
 			WHERE c.owner_id = $1
 			ORDER BY c.created_at DESC
 			LIMIT 1
-		`, user.ID).Scan(&envName, &groupName, &companyName)
+		`, user.ID).Scan(&envName, &groupName, &companyName, &companyCNPJ)
 
 		if err == sql.ErrNoRows {
 			// No company owned, try to find one they have access to via environment?
@@ -325,6 +327,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			envName = "Sem Ambiente"
 			groupName = "Sem Grupo"
 			companyName = "Sem Empresa"
+			companyCNPJ = ""
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -334,6 +337,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			Environment: envName,
 			Group:       groupName,
 			Company:     companyName,
+			CNPJ:        companyCNPJ,
 		})
 	}
 }

@@ -164,6 +164,7 @@ func main() {
 
 	// Admin Endpoints
 	http.HandleFunc("/api/admin/reset-db", handlers.AuthMiddleware(handlers.ResetDatabaseHandler(db), "admin"))
+	http.HandleFunc("/api/company/reset-data", handlers.AuthMiddleware(handlers.ResetCompanyDataHandler(db), "")) // Authenticated users can reset their own data
 	http.HandleFunc("/api/admin/users", handlers.AuthMiddleware(handlers.ListUsersHandler(db), "admin"))
 	http.HandleFunc("/api/admin/users/promote", handlers.AuthMiddleware(handlers.PromoteUserHandler(db), "admin"))
 	http.HandleFunc("/api/admin/users/delete", handlers.AuthMiddleware(handlers.DeleteUserHandler(db), "admin"))

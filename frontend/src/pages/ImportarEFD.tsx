@@ -19,7 +19,7 @@ interface ImportJob {
 }
 
 export default function ImportarEFD() {
-  const { token } = useAuth();
+  const { token, user, cnpj, company } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgressType>({
@@ -341,6 +341,41 @@ export default function ImportarEFD() {
     }
   };
 
+  const handleResetCompanyData = async () => {
+    if (!cnpj) return;
+    if (!window.confirm(`ATENÇÃO: Deseja APAGAR TODOS os dados da empresa ${company || 'selecionada'} (CNPJ: ${cnpj})? Essa ação não pode ser desfeita.`)) {
+        return;
+    }
+
+    try {
+        const authToken = token || localStorage.getItem('token');
+        const res = await fetch('/api/company/reset-data', { 
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ cnpj })
+        });
+
+        if (res.ok) {
+            toast.success(`Dados da empresa ${company} limpos com sucesso!`);
+            // Refresh jobs list to reflect deletion
+            const jobsRes = await fetch('/api/jobs');
+            if (jobsRes.ok) {
+                const data = await jobsRes.json();
+                setJobs(data);
+            }
+        } else {
+            const err = await res.text(); // Get error message
+            toast.error(`Erro ao limpar dados: ${err}`);
+        }
+    } catch (error) {
+        console.error('Error resetting company data:', error);
+        toast.error('Erro de conexão.');
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6 animate-fade-in">
       <div className="flex justify-between items-start">
@@ -350,10 +385,24 @@ export default function ImportarEFD() {
             Envie seus arquivos SPED EFD Contribuições para processamento.
             </p>
         </div>
-        <Button variant="destructive" size="sm" onClick={handleResetDatabase} className="gap-2">
-            <Trash2 className="h-4 w-4" />
-            Zerar Base
-        </Button>
+        
+        <div className="flex gap-2">
+            {/* Admin Global Reset */}
+            {user?.role === 'admin' && (
+                <Button variant="destructive" size="sm" onClick={handleResetDatabase} className="gap-2">
+                    <Trash2 className="h-4 w-4" />
+                    Zerar Tudo (Admin)
+                </Button>
+            )}
+
+            {/* Company Specific Reset */}
+            {cnpj && (
+                <Button variant="outline" size="sm" onClick={handleResetCompanyData} className="gap-2 border-red-200 hover:bg-red-50 text-red-600">
+                    <Trash2 className="h-4 w-4" />
+                    Limpar {company}
+                </Button>
+            )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

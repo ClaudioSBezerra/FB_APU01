@@ -5,8 +5,84 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
+
+// ResetCompanyDataRequest struct
+type ResetCompanyDataRequest struct {
+	CNPJ string `json:"cnpj"`
+}
+
+// ResetCompanyDataHandler deletes all import jobs for a specific CNPJ
+// It allows users to clean their own company data, or admins to clean any company.
+func ResetCompanyDataHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req ResetCompanyDataRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		// Sanitize CNPJ (digits only)
+		cnpj := strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(req.CNPJ, ".", ""), "/", ""), "-", "")
+		if len(cnpj) != 14 {
+			http.Error(w, "Invalid CNPJ format", http.StatusBadRequest)
+			return
+		}
+
+		// Get User Context
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+		role := claims["role"].(string)
+
+		// Authorization Check
+		if role != "admin" {
+			// Verify if user owns this company
+			var exists bool
+			err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM companies WHERE owner_id=$1 AND cnpj=$2)", userID, cnpj).Scan(&exists)
+			if err != nil {
+				log.Printf("Error checking company ownership: %v", err)
+				http.Error(w, "Database error", http.StatusInternalServerError)
+				return
+			}
+			if !exists {
+				http.Error(w, "Forbidden: You do not own this company", http.StatusForbidden)
+				return
+			}
+		}
+
+		log.Printf("ResetCompanyData: User %s deleting data for CNPJ %s", userID, cnpj)
+
+		// Execute Deletion
+		res, err := db.Exec("DELETE FROM import_jobs WHERE cnpj = $1", cnpj)
+		if err != nil {
+			log.Printf("Error deleting jobs for CNPJ %s: %v", cnpj, err)
+			http.Error(w, "Failed to delete company data", http.StatusInternalServerError)
+			return
+		}
+
+		rowsDeleted, _ := res.RowsAffected()
+		log.Printf("ResetCompanyData: Deleted %d jobs for CNPJ %s", rowsDeleted, cnpj)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message":      "Company data deleted successfully",
+			"jobs_deleted": rowsDeleted,
+		})
+	}
+}
 
 // ResetDatabaseHandler deletes all records from import_jobs,
 // which cascades to all related SPED data tables (participants, regs, aggregations).
