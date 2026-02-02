@@ -147,7 +147,7 @@ func main() {
 	http.HandleFunc("/api/auth/register", handlers.RegisterHandler(db))
 	http.HandleFunc("/api/auth/login", handlers.LoginHandler(db))
 
-	http.HandleFunc("/api/mercadorias", handlers.MercadoriasHandler(db))
+	http.HandleFunc("/api/mercadorias", handlers.GetMercadoriasReportHandler(db))
 
 	// Admin Endpoints
 	http.HandleFunc("/api/admin/reset-db", handlers.ResetDatabaseHandler(db))
