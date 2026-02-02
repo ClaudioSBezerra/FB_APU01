@@ -60,12 +60,26 @@ export default function ImportarEFD() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const newFiles = Array.from(e.target.files);
-      setSelectedFiles(prev => [...prev, ...newFiles]);
+      const allFiles = Array.from(e.target.files);
+      // Filter only .txt files
+      const txtFiles = allFiles.filter(file => file.name.toLowerCase().endsWith('.txt'));
+      
+      if (txtFiles.length < allFiles.length) {
+          toast.info(`${allFiles.length - txtFiles.length} arquivos ignorados (apenas .txt são permitidos).`);
+      }
+
+      if (txtFiles.length > 0) {
+        setSelectedFiles(prev => [...prev, ...txtFiles]);
+      } else if (allFiles.length > 0) {
+        toast.warning("Nenhum arquivo .txt encontrado na seleção.");
+      }
     }
     // Reset input value to allow selecting same files again if needed
     if (fileInputRef.current) {
         fileInputRef.current.value = '';
+    }
+    if (folderInputRef.current) {
+        folderInputRef.current.value = '';
     }
   };
 
