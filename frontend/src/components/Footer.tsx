@@ -9,27 +9,14 @@ export function Footer() {
 
   return (
     <footer className="border-t bg-muted/50 py-2 px-4 text-xs text-muted-foreground mt-auto">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <span>
-            <strong>Usuário:</strong> {user.full_name}
-          </span>
-          <span className="hidden sm:inline">|</span>
-          <span>
-            <strong>Ambiente:</strong> {environment || "N/A"}
-          </span>
-          <span className="hidden sm:inline">|</span>
-          <span>
-            <strong>Grupo:</strong> {group || "N/A"}
-          </span>
-          <span className="hidden sm:inline">|</span>
-          <span>
-            <strong>Empresa:</strong> {company || "N/A"}
-          </span>
+      <div className="flex flex-col gap-1">
+        <div className="font-semibold text-sm text-foreground">
+          {company || "Empresa não identificada"}
         </div>
-        <div>
-          <span>
-            <strong>Trial expira em:</strong> {new Date(user.trial_ends_at).toLocaleDateString()}
+        <div className="flex items-center gap-2">
+          <span>{user.full_name}</span>
+          <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded text-[10px] font-medium border border-yellow-200 ml-1">
+             Vencimento: {new Date(user.trial_ends_at).toLocaleDateString()}
           </span>
         </div>
       </div>
