@@ -39,6 +39,7 @@ function ComingSoon({ title }: { title: string }) {
 }
 
 function App() {
+  console.log("App Version: 0.2.0 - Mercadorias Tabs Enabled");
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <SidebarProvider>
