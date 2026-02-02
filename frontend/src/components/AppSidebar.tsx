@@ -15,7 +15,8 @@ import {
   Globe,
   Download,
   ChevronRight,
-  Database
+  Database,
+  LogOut
 } from "lucide-react"
 import {
   Sidebar,
@@ -35,6 +36,8 @@ import {
 } from "@/components/ui/sidebar"
 import { Link, useLocation } from "react-router-dom"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Button } from "@/components/ui/button"
+import { useAuth } from "@/contexts/AuthContext"
 
 // Menu definition
 const menuItems = [
