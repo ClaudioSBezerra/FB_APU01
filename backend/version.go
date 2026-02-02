@@ -4,8 +4,8 @@ import "fmt"
 
 // Version information for backend deployment validation
 const (
-	BackendVersion = "4.4.2-01022026"
-	FeatureSet     = "Stable Release 01022026 - Garbage Loop Fix + Strict 9999"
+	BackendVersion = "4.5.0"
+	FeatureSet     = "Reset Database Admin Tool"
 )
 
 // PrintVersion prints the backend version to the console

@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle, CheckCircle, Clock, FileText, Loader2, RefreshCw, Upload, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, FileText, Loader2, RefreshCw, Upload, XCircle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { UploadProgressDisplay, UploadProgressType } from '@/components/UploadProgress';
 
@@ -312,13 +312,38 @@ export default function ImportarEFD() {
     }
   };
 
+  const handleResetDatabase = async () => {
+    if (!window.confirm('ATENÇÃO: Tem certeza que deseja APAGAR TODOS os dados importados? Essa ação não pode ser desfeita.')) {
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/admin/reset-db', { method: 'DELETE' });
+        if (res.ok) {
+            toast.success('Base de dados limpa com sucesso!');
+            setJobs([]); // Clear list immediately
+        } else {
+            toast.error('Erro ao limpar base de dados.');
+        }
+    } catch (error) {
+        console.error('Error resetting database:', error);
+        toast.error('Erro de conexão.');
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6 animate-fade-in">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Importar EFD <span className="text-sm font-normal text-muted-foreground">(v4.0 Chunked Upload)</span></h1>
-        <p className="text-muted-foreground">
-          Envie seus arquivos SPED EFD Contribuições para processamento.
-        </p>
+      <div className="flex justify-between items-start">
+        <div className="flex flex-col gap-2">
+            <h1 className="text-3xl font-bold tracking-tight text-primary">Importar EFD <span className="text-sm font-normal text-muted-foreground">(v4.0 Chunked Upload)</span></h1>
+            <p className="text-muted-foreground">
+            Envie seus arquivos SPED EFD Contribuições para processamento.
+            </p>
+        </div>
+        <Button variant="destructive" size="sm" onClick={handleResetDatabase} className="gap-2">
+            <Trash2 className="h-4 w-4" />
+            Zerar Base
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

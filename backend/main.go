@@ -142,24 +142,27 @@ func main() {
 		}
 	})
 
+	// Admin Endpoints
+	http.HandleFunc("/api/admin/reset-db", handlers.ResetDatabaseHandler(db))
+
 	// Configuration Endpoints
 	http.HandleFunc("/api/config/aliquotas", handlers.GetTaxRatesHandler(db))
 	http.HandleFunc("/api/config/cfop", handlers.ListCFOPsHandler(db))
 	http.HandleFunc("/api/config/cfop/import", handlers.ImportCFOPsHandler(db))
 
 	fmt.Printf("FB_APU01 Fiscal Engine (Go) starting on port %s...\n", port)
-	
+
 	// Print Version (Force Rebuild V4.1)
 	fmt.Println("==================================================")
 	fmt.Println("   FB_APU01 BACKEND - V4.1 (CHUNKED UPLOAD)       ")
 	fmt.Println("==================================================")
-	
+
 	// Use custom server with timeouts (Inspired by production best practices)
 	server := &http.Server{
 		Addr:         ":" + port,
-		Handler:      nil, // Use DefaultServeMux
-		ReadTimeout:  300 * time.Second,   // 5 minutes for Uploads
-		WriteTimeout: 300 * time.Second,   // 5 minutes for Long Responses
+		Handler:      nil,               // Use DefaultServeMux
+		ReadTimeout:  300 * time.Second, // 5 minutes for Uploads
+		WriteTimeout: 300 * time.Second, // 5 minutes for Long Responses
 		IdleTimeout:  60 * time.Second,
 	}
 
