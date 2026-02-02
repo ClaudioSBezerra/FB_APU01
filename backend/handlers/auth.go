@@ -328,7 +328,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// 4. Get Environment, Group, and Company Context
-		// Modified to check for environment access (role='admin') instead of strict ownership
+		// FIX: Prioritize companies OWNED by the user first, then companies in their environment
 		var envName, groupName, companyName, companyID string
 		err = db.QueryRow(`
 			SELECT e.name, eg.name, c.name, c.id
@@ -336,8 +336,10 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			JOIN enterprise_groups eg ON c.group_id = eg.id
 			JOIN environments e ON eg.environment_id = e.id
 			JOIN user_environments ue ON ue.environment_id = e.id
-			WHERE ue.user_id = $1 AND ue.role = 'admin'
-			ORDER BY c.created_at DESC
+			WHERE ue.user_id = $1 
+			ORDER BY 
+				CASE WHEN c.owner_id = $1 THEN 0 ELSE 1 END, -- Priority to owned companies
+				c.created_at DESC
 			LIMIT 1
 		`, user.ID).Scan(&envName, &groupName, &companyName, &companyID)
 
