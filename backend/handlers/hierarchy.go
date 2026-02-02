@@ -55,30 +55,25 @@ func GetUserHierarchyHandler(db *sql.DB) http.HandlerFunc {
 
 		// 4. Get Company Details (First company in the group)
 		var company Company
-		var companyCNPJ string
+		// var companyCNPJ string // CNPJ removed from companies table
 		if group.ID != "" {
-			err = db.QueryRow("SELECT id, group_id, cnpj, name, COALESCE(trade_name, ''), created_at FROM companies WHERE group_id = $1 LIMIT 1", group.ID).Scan(&company.ID, &company.GroupID, &company.CNPJ, &company.Name, &company.TradeName, &company.CreatedAt)
-			if err == nil {
-				companyCNPJ = company.CNPJ
+			// Removed 'cnpj' from SELECT list as it no longer exists in companies table
+			err = db.QueryRow("SELECT id, group_id, name, COALESCE(trade_name, ''), created_at FROM companies WHERE group_id = $1 LIMIT 1", group.ID).Scan(&company.ID, &company.GroupID, &company.Name, &company.TradeName, &company.CreatedAt)
+			if err != nil && err != sql.ErrNoRows {
+				// Log error if needed
 			}
 		}
 
-		// 5. Get Branches (Filiais) from import_jobs
+		// 5. Get Branches (Filiais) from import_jobs using Company ID
 		var branches []Branch
-		if companyCNPJ != "" {
-			// Match first 8 digits of CNPJ
-			rootCNPJ := companyCNPJ
-			if len(rootCNPJ) >= 8 {
-				rootCNPJ = rootCNPJ[:8]
-			}
-
-			// Query import_jobs for unique CNPJ/Company Names matching root
+		if company.ID != "" {
+			// Query import_jobs for unique CNPJ/Company Names linked to this company_id
 			rows, err := db.Query(`
                 SELECT DISTINCT cnpj, company_name 
                 FROM import_jobs 
-                WHERE cnpj LIKE $1 || '%' AND status = 'completed'
+                WHERE company_id = $1 AND status = 'completed'
                 ORDER BY cnpj
-            `, rootCNPJ)
+            `, company.ID)
 
 			if err == nil {
 				defer rows.Close()
