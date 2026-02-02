@@ -4,8 +4,8 @@ import "fmt"
 
 // Version information for backend deployment validation
 const (
-	BackendVersion = "4.6.0"
-	FeatureSet     = "Split Mercadorias Report by CFOP Type"
+	BackendVersion = "4.6.1"
+	FeatureSet     = "CFOP Fallback to Type O & Aggregation Filter Update"
 )
 
 func GetVersionInfo() string {

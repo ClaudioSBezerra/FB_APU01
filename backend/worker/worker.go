@@ -808,9 +808,9 @@ func runAggregations(tx *sql.Tx, jobID string, rates TaxRates) error {
 		WHERE c100.job_id = $1
 		AND EXISTS (
 			SELECT 1 FROM reg_c190 c190
-			JOIN cfop c ON c190.cfop = c.cfop
+			LEFT JOIN cfop c ON c190.cfop = c.cfop
 			WHERE c190.id_pai_c100 = c100.id
-			AND c.tipo IN ('S', 'R')
+			AND COALESCE(c.tipo, 'O') IN ('S', 'R', 'O')
 		)
 		GROUP BY c100.job_id, c100.filial_cnpj, c100.cod_part, TO_CHAR(c100.dt_doc, 'MM/YYYY'), c100.ind_oper
 	`, jobID, rates.PercReducICMS, rates.PercIBS_UF, rates.PercIBS_Mun, rates.PercCBS)
