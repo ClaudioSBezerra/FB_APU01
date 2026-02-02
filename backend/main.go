@@ -179,6 +179,19 @@ func main() {
 		}
 	})
 
+	http.HandleFunc("/api/config/companies", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetCompaniesHandler(db)(w, r)
+		case http.MethodPost:
+			handlers.CreateCompanyHandler(db)(w, r)
+		case http.MethodDelete:
+			handlers.DeleteCompanyHandler(db)(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	fmt.Printf("FB_APU01 Fiscal Engine (Go) starting on port %s...\n", port)
 
 	// Print Version (Force Rebuild V4.1)

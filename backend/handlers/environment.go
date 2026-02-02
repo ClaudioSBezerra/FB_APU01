@@ -27,7 +27,7 @@ type Company struct {
 	GroupID   string `json:"group_id"`
 	CNPJ      string `json:"cnpj"`
 	Name      string `json:"name"`
-	TradeName string `json:"trade_name"`
+	TradeName string `json:"trade_name"` // Fantasia
 	CreatedAt string `json:"created_at"`
 }
 
@@ -191,6 +191,89 @@ func DeleteGroupHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		_, err := db.Exec("DELETE FROM enterprise_groups WHERE id = $1", id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// --- Company Handlers ---
+
+func GetCompaniesHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		groupID := r.URL.Query().Get("group_id")
+		query := "SELECT id, group_id, cnpj, name, COALESCE(trade_name, ''), created_at FROM companies"
+		args := []interface{}{}
+
+		if groupID != "" {
+			query += " WHERE group_id = $1"
+			args = append(args, groupID)
+		}
+		query += " ORDER BY name"
+
+		rows, err := db.Query(query, args...)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		var companies []Company
+		for rows.Next() {
+			var c Company
+			if err := rows.Scan(&c.ID, &c.GroupID, &c.CNPJ, &c.Name, &c.TradeName, &c.CreatedAt); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			companies = append(companies, c)
+		}
+
+		if companies == nil {
+			companies = []Company{}
+		}
+		json.NewEncoder(w).Encode(companies)
+	}
+}
+
+func CreateCompanyHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var c Company
+		if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Basic validation
+		if c.CNPJ == "" || c.Name == "" || c.GroupID == "" {
+			http.Error(w, "Missing required fields (cnpj, name, group_id)", http.StatusBadRequest)
+			return
+		}
+
+		err := db.QueryRow(
+			"INSERT INTO companies (group_id, cnpj, name, trade_name) VALUES ($1, $2, $3, $4) RETURNING id, created_at",
+			c.GroupID, c.CNPJ, c.Name, c.TradeName,
+		).Scan(&c.ID, &c.CreatedAt)
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		json.NewEncoder(w).Encode(c)
+	}
+}
+
+func DeleteCompanyHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "Missing id parameter", http.StatusBadRequest)
+			return
+		}
+
+		_, err := db.Exec("DELETE FROM companies WHERE id = $1", id)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

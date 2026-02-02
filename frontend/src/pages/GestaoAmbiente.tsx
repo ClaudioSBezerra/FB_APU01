@@ -26,7 +26,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Building, Layers } from "lucide-react";
+import { Plus, Trash2, Building, Layers, Factory } from "lucide-react";
 import { toast } from "sonner";
 
 interface Environment {
@@ -44,20 +44,35 @@ interface EnterpriseGroup {
   created_at: string;
 }
 
+interface Company {
+  id: string;
+  group_id: string;
+  cnpj: string;
+  name: string;
+  trade_name: string;
+  created_at: string;
+}
+
 export default function GestaoAmbiente() {
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [selectedEnv, setSelectedEnv] = useState<Environment | null>(null);
   const [groups, setGroups] = useState<EnterpriseGroup[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<EnterpriseGroup | null>(null);
+  const [companies, setCompanies] = useState<Company[]>([]);
   
   // Modal states
   const [isEnvModalOpen, setIsEnvModalOpen] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   
   // Form states
   const [newEnvName, setNewEnvName] = useState("");
   const [newEnvDesc, setNewEnvDesc] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupDesc, setNewGroupDesc] = useState("");
+  const [newCompanyCNPJ, setNewCompanyCNPJ] = useState("");
+  const [newCompanyName, setNewCompanyName] = useState("");
+  const [newCompanyTradeName, setNewCompanyTradeName] = useState("");
 
   const [loading, setLoading] = useState(false);
 
@@ -70,10 +85,24 @@ export default function GestaoAmbiente() {
   useEffect(() => {
     if (selectedEnv) {
       fetchGroups(selectedEnv.id);
+      setGroups([]);
+      setSelectedGroup(null);
+      setCompanies([]);
     } else {
       setGroups([]);
+      setSelectedGroup(null);
+      setCompanies([]);
     }
   }, [selectedEnv]);
+
+  // Load Companies when Group selected
+  useEffect(() => {
+    if (selectedGroup) {
+      fetchCompanies(selectedGroup.id);
+    } else {
+      setCompanies([]);
+    }
+  }, [selectedGroup]);
 
   const fetchEnvironments = async () => {
     try {
@@ -103,6 +132,18 @@ export default function GestaoAmbiente() {
     } catch (error) {
       console.error(error);
       toast.error("Erro ao carregar grupos de empresas");
+    }
+  };
+
+  const fetchCompanies = async (groupId: string) => {
+    try {
+      const res = await fetch(`/api/config/companies?group_id=${groupId}`);
+      if (!res.ok) throw new Error("Failed to fetch companies");
+      const data = await res.json();
+      setCompanies(data);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro ao carregar empresas");
     }
   };
 
@@ -161,8 +202,40 @@ export default function GestaoAmbiente() {
     }
   };
 
+  const handleCreateCompany = async () => {
+    if (!selectedGroup) return;
+    if (!newCompanyCNPJ || !newCompanyName) {
+      toast.error("CNPJ e Razão Social são obrigatórios");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/config/companies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          group_id: selectedGroup.id,
+          cnpj: newCompanyCNPJ,
+          name: newCompanyName,
+          trade_name: newCompanyTradeName
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to create");
+      
+      toast.success("Empresa cadastrada com sucesso!");
+      setIsCompanyModalOpen(false);
+      setNewCompanyCNPJ("");
+      setNewCompanyName("");
+      setNewCompanyTradeName("");
+      fetchCompanies(selectedGroup.id);
+    } catch (error) {
+      toast.error("Erro ao criar empresa");
+    }
+  };
+
   const handleDeleteEnvironment = async (id: string) => {
-    if (!confirm("Tem certeza? Isso apagará TODOS os grupos vinculados.")) return;
+    if (!confirm("Tem certeza? Isso apagará TODOS os grupos e empresas vinculados.")) return;
     
     try {
       const res = await fetch(`/api/config/environments?id=${id}`, { method: "DELETE" });
@@ -176,186 +249,250 @@ export default function GestaoAmbiente() {
   };
 
   const handleDeleteGroup = async (id: string) => {
-    if (!confirm("Tem certeza?")) return;
+    if (!confirm("Tem certeza? Isso apagará TODAS as empresas vinculadas.")) return;
     
     try {
       const res = await fetch(`/api/config/groups?id=${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete");
       toast.success("Grupo removido");
+      if (selectedGroup?.id === id) setSelectedGroup(null);
       if (selectedEnv) fetchGroups(selectedEnv.id);
     } catch (error) {
       toast.error("Erro ao remover grupo");
     }
   };
 
+  const handleDeleteCompany = async (id: string) => {
+    if (!confirm("Tem certeza?")) return;
+    
+    try {
+      const res = await fetch(`/api/config/companies?id=${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      toast.success("Empresa removida");
+      if (selectedGroup) fetchCompanies(selectedGroup.id);
+    } catch (error) {
+      toast.error("Erro ao remover empresa");
+    }
+  };
+
   return (
-    <div className="container mx-auto p-6 space-y-8">
+    <div className="container mx-auto p-4 space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Gestão de Ambientes</h1>
         <p className="text-gray-500 mt-1">
-          Gerencie ambientes e grupos de empresas para multi-tenancy.
+          Configuração Hierárquica: Ambiente &gt; Grupo &gt; Empresa
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Left Column: Environments List */}
-        <div className="md:col-span-1 space-y-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-medium">Ambientes</CardTitle>
-              <Dialog open={isEnvModalOpen} onOpenChange={setIsEnvModalOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" variant="outline"><Plus className="w-4 h-4" /></Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Novo Ambiente</DialogTitle>
-                    <DialogDescription>Crie um novo ambiente isolado (Ex: Produção, Homologação).</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label>Nome do Ambiente</Label>
-                      <Input value={newEnvName} onChange={(e) => setNewEnvName(e.target.value)} placeholder="Ex: Ambiente Produção" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Descrição</Label>
-                      <Input value={newEnvDesc} onChange={(e) => setNewEnvDesc(e.target.value)} placeholder="Descrição opcional" />
-                    </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[calc(100vh-12rem)]">
+        {/* Column 1: Environments */}
+        <div className="flex flex-col space-y-4 h-full">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Layers className="w-5 h-5" /> Ambientes
+            </h2>
+            <Dialog open={isEnvModalOpen} onOpenChange={setIsEnvModalOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline"><Plus className="w-4 h-4" /></Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Novo Ambiente</DialogTitle>
+                  <DialogDescription>Crie um novo ambiente (Ex: Produção, Homologação).</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Nome</Label>
+                    <Input value={newEnvName} onChange={(e) => setNewEnvName(e.target.value)} placeholder="Ex: Ambiente Produção" />
                   </div>
-                  <DialogFooter>
-                    <Button onClick={handleCreateEnvironment}>Criar Ambiente</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {loading && <p className="text-sm text-muted-foreground">Carregando...</p>}
-                {!loading && environments.length === 0 && (
-                  <p className="text-sm text-muted-foreground">Nenhum ambiente criado.</p>
-                )}
-                {environments.map((env) => (
-                  <div
-                    key={env.id}
-                    className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                      selectedEnv?.id === env.id
-                        ? "bg-primary/10 border-primary"
-                        : "hover:bg-gray-50 border-gray-200"
-                    }`}
-                    onClick={() => setSelectedEnv(env)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Layers className="w-4 h-4 text-gray-500" />
-                      <div>
-                        <p className="font-medium text-sm">{env.name}</p>
-                        {env.description && <p className="text-xs text-gray-500">{env.description}</p>}
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteEnvironment(env.id);
-                      }}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                  <div className="space-y-2">
+                    <Label>Descrição</Label>
+                    <Input value={newEnvDesc} onChange={(e) => setNewEnvDesc(e.target.value)} placeholder="Opcional" />
                   </div>
-                ))}
+                </div>
+                <DialogFooter>
+                  <Button onClick={handleCreateEnvironment}>Criar</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto space-y-2 border rounded-md p-2 bg-gray-50/50">
+            {loading && <p className="text-sm text-muted-foreground p-2">Carregando...</p>}
+            {!loading && environments.length === 0 && (
+              <p className="text-sm text-muted-foreground p-2">Nenhum ambiente.</p>
+            )}
+            {environments.map((env) => (
+              <div
+                key={env.id}
+                className={`flex items-center justify-between p-3 rounded-md border cursor-pointer transition-all ${
+                  selectedEnv?.id === env.id
+                    ? "bg-white border-primary shadow-sm ring-1 ring-primary"
+                    : "bg-white border-gray-200 hover:border-primary/50"
+                }`}
+                onClick={() => setSelectedEnv(env)}
+              >
+                <div className="overflow-hidden">
+                  <p className="font-medium text-sm truncate">{env.name}</p>
+                  {env.description && <p className="text-xs text-gray-500 truncate">{env.description}</p>}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-gray-400 hover:text-red-500"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteEnvironment(env.id);
+                  }}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
               </div>
-            </CardContent>
-          </Card>
+            ))}
+          </div>
         </div>
 
-        {/* Right Column: Groups List (Detail) */}
-        <div className="md:col-span-2 space-y-4">
-          <Card className="h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <div>
-                <CardTitle className="text-lg font-medium">Grupos de Empresas</CardTitle>
-                <CardDescription>
-                  {selectedEnv 
-                    ? `Vinculados ao ambiente: ${selectedEnv.name}` 
-                    : "Selecione um ambiente para ver os grupos"}
-                </CardDescription>
-              </div>
-              <Dialog open={isGroupModalOpen} onOpenChange={setIsGroupModalOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" disabled={!selectedEnv}><Plus className="w-4 h-4 mr-2" /> Novo Grupo</Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Novo Grupo de Empresas</DialogTitle>
-                    <DialogDescription>Crie um grupo para consolidar empresas.</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label>Nome do Grupo</Label>
-                      <Input value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} placeholder="Ex: Grupo Varejo X" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Descrição</Label>
-                      <Input value={newGroupDesc} onChange={(e) => setNewGroupDesc(e.target.value)} placeholder="Descrição opcional" />
-                    </div>
+        {/* Column 2: Groups */}
+        <div className="flex flex-col space-y-4 h-full">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Building className="w-5 h-5" /> Grupos
+            </h2>
+            <Dialog open={isGroupModalOpen} onOpenChange={setIsGroupModalOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" disabled={!selectedEnv}><Plus className="w-4 h-4" /></Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Novo Grupo</DialogTitle>
+                  <DialogDescription>Vinculado a: {selectedEnv?.name}</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Nome do Grupo</Label>
+                    <Input value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} placeholder="Ex: Grupo Varejo X" />
                   </div>
-                  <DialogFooter>
-                    <Button onClick={handleCreateGroup}>Criar Grupo</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </CardHeader>
-            <CardContent>
-              {!selectedEnv ? (
-                <div className="flex flex-col items-center justify-center py-10 text-gray-400">
-                  <Layers className="w-12 h-12 mb-2 opacity-20" />
-                  <p>Selecione um ambiente à esquerda</p>
+                  <div className="space-y-2">
+                    <Label>Descrição</Label>
+                    <Input value={newGroupDesc} onChange={(e) => setNewGroupDesc(e.target.value)} placeholder="Opcional" />
+                  </div>
                 </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome do Grupo</TableHead>
-                      <TableHead>Descrição</TableHead>
-                      <TableHead>Criado em</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {groups.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center py-8 text-gray-500">
-                          Nenhum grupo cadastrado neste ambiente.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      groups.map((group) => (
-                        <TableRow key={group.id}>
-                          <TableCell className="font-medium flex items-center gap-2">
-                            <Building className="w-4 h-4 text-gray-500" />
-                            {group.name}
-                          </TableCell>
-                          <TableCell>{group.description}</TableCell>
-                          <TableCell>{new Date(group.created_at).toLocaleDateString()}</TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => handleDeleteGroup(group.id)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+                <DialogFooter>
+                  <Button onClick={handleCreateGroup}>Criar</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <div className="flex-1 overflow-y-auto space-y-2 border rounded-md p-2 bg-gray-50/50">
+            {!selectedEnv ? (
+              <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                Selecione um ambiente
+              </div>
+            ) : groups.length === 0 ? (
+               <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                Nenhum grupo cadastrado
+              </div>
+            ) : (
+              groups.map((group) => (
+                <div
+                  key={group.id}
+                  className={`flex items-center justify-between p-3 rounded-md border cursor-pointer transition-all ${
+                    selectedGroup?.id === group.id
+                      ? "bg-white border-primary shadow-sm ring-1 ring-primary"
+                      : "bg-white border-gray-200 hover:border-primary/50"
+                  }`}
+                  onClick={() => setSelectedGroup(group)}
+                >
+                  <div className="overflow-hidden">
+                    <p className="font-medium text-sm truncate">{group.name}</p>
+                    {group.description && <p className="text-xs text-gray-500 truncate">{group.description}</p>}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-gray-400 hover:text-red-500"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteGroup(group.id);
+                    }}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Column 3: Companies */}
+        <div className="flex flex-col space-y-4 h-full">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Factory className="w-5 h-5" /> Empresas
+            </h2>
+            <Dialog open={isCompanyModalOpen} onOpenChange={setIsCompanyModalOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" disabled={!selectedGroup}><Plus className="w-4 h-4" /></Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Nova Empresa</DialogTitle>
+                  <DialogDescription>Vinculada a: {selectedGroup?.name}</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>CNPJ (apenas números)</Label>
+                    <Input value={newCompanyCNPJ} onChange={(e) => setNewCompanyCNPJ(e.target.value)} placeholder="00000000000000" maxLength={14} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Razão Social</Label>
+                    <Input value={newCompanyName} onChange={(e) => setNewCompanyName(e.target.value)} placeholder="Empresa S/A" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Nome Fantasia</Label>
+                    <Input value={newCompanyTradeName} onChange={(e) => setNewCompanyTradeName(e.target.value)} placeholder="Empresa X" />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button onClick={handleCreateCompany}>Cadastrar</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <div className="flex-1 overflow-y-auto space-y-2 border rounded-md p-2 bg-gray-50/50">
+             {!selectedGroup ? (
+              <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                Selecione um grupo
+              </div>
+            ) : companies.length === 0 ? (
+               <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                Nenhuma empresa cadastrada
+              </div>
+            ) : (
+              companies.map((company) => (
+                <div
+                  key={company.id}
+                  className="flex items-center justify-between p-3 rounded-md border bg-white border-gray-200 hover:border-primary/50 transition-all"
+                >
+                  <div className="overflow-hidden">
+                    <p className="font-medium text-sm truncate">{company.name}</p>
+                    <p className="text-xs text-gray-500 font-mono">{company.cnpj}</p>
+                    {company.trade_name && <p className="text-xs text-gray-400 truncate">{company.trade_name}</p>}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-gray-400 hover:text-red-500"
+                    onClick={() => handleDeleteCompany(company.id)}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>
