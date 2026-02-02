@@ -158,7 +158,7 @@ export function AppSidebar() {
         <div className="p-2 border-t mt-auto">
           {user && (
             <div className="flex flex-col gap-2 p-2 bg-sidebar-accent/50 rounded-md">
-              <div className="text-xs italic truncate text-foreground">
+              <div className="text-xs italic truncate">
                 {company || "Empresa não identificada"}
               </div>
               <div className="flex flex-col gap-1">
