@@ -246,15 +246,15 @@ func CreateCompanyHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// Basic validation
-		if c.CNPJ == "" || c.Name == "" || c.GroupID == "" {
-			http.Error(w, "Missing required fields (cnpj, name, group_id)", http.StatusBadRequest)
-			return
-		}
+	if c.Name == "" || c.GroupID == "" {
+		http.Error(w, "Missing required fields (name, group_id)", http.StatusBadRequest)
+		return
+	}
 
-		err := db.QueryRow(
-			"INSERT INTO companies (group_id, cnpj, name, trade_name) VALUES ($1, $2, $3, $4) RETURNING id, created_at",
-			c.GroupID, c.CNPJ, c.Name, c.TradeName,
-		).Scan(&c.ID, &c.CreatedAt)
+	err := db.QueryRow(
+		"INSERT INTO companies (group_id, cnpj, name, trade_name) VALUES ($1, $2, $3, $4) RETURNING id, created_at",
+		c.GroupID, c.CNPJ, c.Name, c.TradeName,
+	).Scan(&c.ID, &c.CreatedAt)
 
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

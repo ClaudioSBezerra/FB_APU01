@@ -204,8 +204,8 @@ export default function GestaoAmbiente() {
 
   const handleCreateCompany = async () => {
     if (!selectedGroup) return;
-    if (!newCompanyCNPJ || !newCompanyName) {
-      toast.error("CNPJ e Razão Social são obrigatórios");
+    if (!newCompanyName) {
+      toast.error("Razão Social é obrigatória");
       return;
     }
 
@@ -443,7 +443,7 @@ export default function GestaoAmbiente() {
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
                     <Label>CNPJ (apenas números)</Label>
-                    <Input value={newCompanyCNPJ} onChange={(e) => setNewCompanyCNPJ(e.target.value)} placeholder="00000000000000" maxLength={14} />
+                    <Input value={newCompanyCNPJ} onChange={(e) => setNewCompanyCNPJ(e.target.value)} placeholder="Opcional" maxLength={14} />
                   </div>
                   <div className="space-y-2">
                     <Label>Razão Social</Label>
