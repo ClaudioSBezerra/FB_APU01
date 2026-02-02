@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -14,7 +14,6 @@ const Register = () => {
   const [companyName, setCompanyName] = useState("");
   const [cnpj, setCnpj] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
   const navigate = useNavigate();
   const { login } = useAuth();
 
@@ -42,17 +41,10 @@ const Register = () => {
       }
 
       login(data);
-      toast({
-        title: "Conta criada com sucesso!",
-        description: "Bem-vindo ao sistema.",
-      });
+      toast.success("Conta criada com sucesso! Bem-vindo ao sistema.");
       navigate("/");
     } catch (error: any) {
-      toast({
-        title: "Erro no cadastro",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast.error("Erro no cadastro: " + error.message);
     } finally {
       setIsLoading(false);
     }
