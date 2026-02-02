@@ -48,7 +48,8 @@ type AuthResponse struct {
 	Environment string `json:"environment_name"`
 	Group       string `json:"group_name"`
 	Company     string `json:"company_name"`
-	CNPJ        string `json:"cnpj"` // Added CNPJ for company context
+	CompanyID   string `json:"company_id"` // Added CompanyID
+	CNPJ        string `json:"cnpj"`       // Added CNPJ for company context
 }
 
 // --- Utils ---
@@ -227,10 +228,10 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 		// 6. Create Company with owner_id
 		var companyID string
 		err = tx.QueryRow(`
-			INSERT INTO companies (group_id, cnpj, name, trade_name, owner_id)
-			VALUES ($1, $2, $3, $3, $4)
+			INSERT INTO companies (group_id, name, trade_name, owner_id)
+			VALUES ($1, $2, $2, $3)
 			RETURNING id
-		`, groupID, req.CNPJ, req.CompanyName, userID).Scan(&companyID)
+		`, groupID, req.CompanyName, userID).Scan(&companyID)
 		if err != nil {
 			http.Error(w, "Error creating company", http.StatusInternalServerError)
 			return
@@ -259,7 +260,8 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 			Environment: envName,
 			Group:       groupName,
 			Company:     req.CompanyName,
-			CNPJ:        req.CNPJ,
+			CompanyID:   companyID,
+			CNPJ:        "", // CNPJ removed from company
 		})
 	}
 }
@@ -308,18 +310,19 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Get Context Info (Try to find company owned by user)
-		var envName, groupName, companyName, companyCNPJ string
-
+		// 4. Get Environment, Group, and Company Context
+		// Modified to check for environment access (role='admin') instead of strict ownership
+		var envName, groupName, companyName, companyID string
 		err = db.QueryRow(`
-			SELECT e.name, eg.name, c.name, c.cnpj
+			SELECT e.name, eg.name, c.name, c.id
 			FROM companies c
 			JOIN enterprise_groups eg ON c.group_id = eg.id
 			JOIN environments e ON eg.environment_id = e.id
-			WHERE c.owner_id = $1
+			JOIN user_environments ue ON ue.environment_id = e.id
+			WHERE ue.user_id = $1 AND ue.role = 'admin'
 			ORDER BY c.created_at DESC
 			LIMIT 1
-		`, user.ID).Scan(&envName, &groupName, &companyName, &companyCNPJ)
+		`, user.ID).Scan(&envName, &groupName, &companyName, &companyID)
 
 		if err == sql.ErrNoRows {
 			// No company owned, try to find one they have access to via environment?
@@ -327,7 +330,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			envName = "Sem Ambiente"
 			groupName = "Sem Grupo"
 			companyName = "Sem Empresa"
-			companyCNPJ = ""
+			companyID = ""
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -337,7 +340,8 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			Environment: envName,
 			Group:       groupName,
 			Company:     companyName,
-			CNPJ:        companyCNPJ,
+			CompanyID:   companyID,
+			CNPJ:        "", // CNPJ removed from company
 		})
 	}
 }

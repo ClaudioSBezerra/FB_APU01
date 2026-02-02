@@ -142,7 +142,7 @@ func main() {
 	worker.StartWorker(db)
 
 	// Register Upload Handler
-	http.HandleFunc("/api/upload", handlers.UploadHandler(db))
+	http.HandleFunc("/api/upload", handlers.AuthMiddleware(handlers.UploadHandler(db), ""))
 
 	// Register Job Status Handler
 	http.HandleFunc("/api/jobs", handlers.ListJobsHandler(db))

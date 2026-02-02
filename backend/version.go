@@ -4,8 +4,8 @@ import "fmt"
 
 // Version information for backend deployment validation
 const (
-	BackendVersion = "4.7.0"
-	FeatureSet     = "Company Data Reset & Segregation"
+	BackendVersion = "4.8.0"
+	FeatureSet     = "Migration: CompanyID for Data Ownership (Removed CNPJ Dependency)"
 )
 
 func GetVersionInfo() string {

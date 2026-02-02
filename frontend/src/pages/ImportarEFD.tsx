@@ -19,7 +19,7 @@ interface ImportJob {
 }
 
 export default function ImportarEFD() {
-  const { token, user, cnpj, company } = useAuth();
+  const { token, user, cnpj, company, companyId } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgressType>({
@@ -232,6 +232,9 @@ export default function ImportarEFD() {
         await new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open('POST', '/api/upload', true);
+            if (token) {
+                xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            }
 
             xhr.onload = () => {
                 if (xhr.status >= 200 && xhr.status < 300) {
@@ -342,8 +345,15 @@ export default function ImportarEFD() {
   };
 
   const handleResetCompanyData = async () => {
-    if (!cnpj) return;
-    if (!window.confirm(`ATENÇÃO: Deseja APAGAR TODOS os dados da empresa ${company || 'selecionada'} (CNPJ: ${cnpj})? Essa ação não pode ser desfeita.`)) {
+    if (!companyId) {
+        toast.error("Erro: Identificador da empresa não encontrado. Tente logar novamente.");
+        return;
+    }
+    
+    // Display info
+    const displayInfo = cnpj ? `(CNPJ: ${cnpj})` : `(ID: ${companyId.substring(0,8)}...)`;
+
+    if (!window.confirm(`ATENÇÃO: Deseja APAGAR TODOS os dados da empresa ${company || 'selecionada'} ${displayInfo}? Essa ação não pode ser desfeita.`)) {
         return;
     }
 
@@ -355,7 +365,7 @@ export default function ImportarEFD() {
                 'Authorization': `Bearer ${authToken}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ cnpj })
+            body: JSON.stringify({ company_id: companyId })
         });
 
         if (res.ok) {
@@ -396,7 +406,7 @@ export default function ImportarEFD() {
             )}
 
             {/* Company Specific Reset */}
-            {cnpj && (
+            {companyId && (
                 <Button variant="outline" size="sm" onClick={handleResetCompanyData} className="gap-2 border-red-200 hover:bg-red-50 text-red-600">
                     <Trash2 className="h-4 w-4" />
                     Limpar {company}

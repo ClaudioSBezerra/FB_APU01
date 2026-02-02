@@ -14,13 +14,12 @@ interface AuthContextType {
   environment: string | null;
   group: string | null;
   company: string | null;
+  companyId: string | null;
   cnpj: string | null;
   login: (data: any) => void;
   logout: () => void;
   isAuthenticated: boolean;
 }
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -28,6 +27,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [environment, setEnvironment] = useState<string | null>(null);
   const [group, setGroup] = useState<string | null>(null);
   const [company, setCompany] = useState<string | null>(null);
+  const [companyId, setCompanyId] = useState<string | null>(null);
   const [cnpj, setCnpj] = useState<string | null>(null);
 
   useEffect(() => {
@@ -37,6 +37,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const storedEnv = localStorage.getItem('environment');
     const storedGroup = localStorage.getItem('group');
     const storedCompany = localStorage.getItem('company');
+    const storedCompanyId = localStorage.getItem('companyId');
     const storedCnpj = localStorage.getItem('cnpj');
 
     if (storedToken && storedUser) {
@@ -45,6 +46,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setEnvironment(storedEnv);
       setGroup(storedGroup);
       setCompany(storedCompany);
+      setCompanyId(storedCompanyId);
       setCnpj(storedCnpj);
     }
   }, []);
@@ -55,6 +57,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setEnvironment(data.environment_name);
     setGroup(data.group_name);
     setCompany(data.company_name);
+    setCompanyId(data.company_id);
     setCnpj(data.cnpj);
 
     localStorage.setItem('token', data.token);
@@ -62,6 +65,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     localStorage.setItem('environment', data.environment_name || '');
     localStorage.setItem('group', data.group_name || '');
     localStorage.setItem('company', data.company_name || '');
+    localStorage.setItem('companyId', data.company_id || '');
     localStorage.setItem('cnpj', data.cnpj || '');
   };
 
@@ -71,6 +75,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setEnvironment(null);
     setGroup(null);
     setCompany(null);
+    setCompanyId(null);
     setCnpj(null);
     localStorage.clear();
     window.location.href = '/login';
@@ -83,6 +88,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       environment, 
       group, 
       company,
+      companyId,
       cnpj,
       login, 
       logout,

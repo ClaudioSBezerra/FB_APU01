@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -13,10 +12,10 @@ import (
 
 // ResetCompanyDataRequest struct
 type ResetCompanyDataRequest struct {
-	CNPJ string `json:"cnpj"`
+	CompanyID string `json:"company_id"`
 }
 
-// ResetCompanyDataHandler deletes all import jobs for a specific CNPJ
+// ResetCompanyDataHandler deletes all import jobs for a specific Company ID
 // It allows users to clean their own company data, or admins to clean any company.
 func ResetCompanyDataHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -31,10 +30,8 @@ func ResetCompanyDataHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Sanitize CNPJ (digits only)
-		cnpj := strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(req.CNPJ, ".", ""), "/", ""), "-", "")
-		if len(cnpj) != 14 {
-			http.Error(w, "Invalid CNPJ format", http.StatusBadRequest)
+		if req.CompanyID == "" {
+			http.Error(w, "Company ID is required", http.StatusBadRequest)
 			return
 		}
 
@@ -47,34 +44,45 @@ func ResetCompanyDataHandler(db *sql.DB) http.HandlerFunc {
 		userID := claims["user_id"].(string)
 		role := claims["role"].(string)
 
-		// Authorization Check
+		// Authorization Check: Must be Admin OR Environment Admin for the company
 		if role != "admin" {
-			// Verify if user owns this company
 			var exists bool
-			err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM companies WHERE owner_id=$1 AND cnpj=$2)", userID, cnpj).Scan(&exists)
+			// Check if user has 'admin' role in the environment that owns the company
+			err := db.QueryRow(`
+				SELECT EXISTS(
+					SELECT 1 
+					FROM companies c
+					JOIN enterprise_groups eg ON c.group_id = eg.id
+					JOIN user_environments ue ON ue.environment_id = eg.environment_id
+					WHERE ue.user_id = $1 
+					  AND c.id = $2 
+					  AND ue.role = 'admin'
+				)`, userID, req.CompanyID).Scan(&exists)
+
 			if err != nil {
-				log.Printf("Error checking company ownership: %v", err)
-				http.Error(w, "Database error", http.StatusInternalServerError)
+				log.Printf("Error checking permission: %v", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 				return
 			}
+
 			if !exists {
-				http.Error(w, "Forbidden: You do not own this company", http.StatusForbidden)
+				http.Error(w, "Forbidden: You do not have permission to reset this company's data", http.StatusForbidden)
 				return
 			}
 		}
 
-		log.Printf("ResetCompanyData: User %s deleting data for CNPJ %s", userID, cnpj)
+		log.Printf("ResetCompanyData: User %s deleting data for CompanyID %s", userID, req.CompanyID)
 
 		// Execute Deletion
-		res, err := db.Exec("DELETE FROM import_jobs WHERE cnpj = $1", cnpj)
+		res, err := db.Exec("DELETE FROM import_jobs WHERE company_id = $1", req.CompanyID)
 		if err != nil {
-			log.Printf("Error deleting jobs for CNPJ %s: %v", cnpj, err)
+			log.Printf("Error deleting jobs for CompanyID %s: %v", req.CompanyID, err)
 			http.Error(w, "Failed to delete company data", http.StatusInternalServerError)
 			return
 		}
 
 		rowsDeleted, _ := res.RowsAffected()
-		log.Printf("ResetCompanyData: Deleted %d jobs for CNPJ %s", rowsDeleted, cnpj)
+		log.Printf("ResetCompanyData: Deleted %d jobs for CompanyID %s", rowsDeleted, req.CompanyID)
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{

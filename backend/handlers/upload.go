@@ -44,6 +44,31 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		// Get User Context
+		userID := GetUserIDFromContext(r)
+		if userID == "" {
+			http.Error(w, "Unauthorized: User ID not found", http.StatusUnauthorized)
+			return
+		}
+
+		var companyID string
+		// Find company linked to user
+		err := db.QueryRow(`
+			SELECT c.id
+			FROM companies c
+			JOIN enterprise_groups eg ON c.group_id = eg.id
+			JOIN user_environments ue ON ue.environment_id = eg.environment_id
+			WHERE ue.user_id = $1
+			ORDER BY c.created_at DESC
+			LIMIT 1
+		`, userID).Scan(&companyID)
+
+		if err != nil {
+			log.Printf("Error finding company for user %s: %v", userID, err)
+			http.Error(w, "User not linked to any company", http.StatusForbidden)
+			return
+		}
+
 		// STANDARD STREAMING UPLOAD LOGIC
 		// Uses ParseMultipartForm with 64MB memory limit, spilling to disk for larger files.
 		// Nginx handles the absolute max body size (2GB+).
@@ -82,7 +107,7 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 			}
 			safeFilename = uploadID + "_" + filepath.Base(header.Filename)
 			savePath = filepath.Join("uploads", safeFilename)
-			
+
 			// Open in Append mode or Create if it's the first chunk
 			flags := os.O_APPEND | os.O_CREATE | os.O_WRONLY
 			if chunkIndex == "0" {
@@ -95,7 +120,7 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 				http.Error(w, "Failed to open chunk file", http.StatusInternalServerError)
 				return
 			}
-			
+
 			// Copy chunk
 			wBytes, err := io.Copy(dst, file)
 			dst.Close()
@@ -111,7 +136,7 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 				json.NewEncoder(w).Encode(map[string]string{"status": "chunk_received", "chunk": chunkIndex})
 				return
 			}
-			
+
 			// If it IS the last chunk, proceed to Job Creation logic below...
 			log.Printf("Chunked Upload Complete: %s\n", safeFilename)
 
@@ -134,9 +159,9 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 				http.Error(w, "Unable to create the file on server", http.StatusInternalServerError)
 				return
 			}
-			
+
 			wBytes, err := io.Copy(dst, file)
-			dst.Close() 
+			dst.Close()
 			if err != nil {
 				http.Error(w, "Unable to save the file content", http.StatusInternalServerError)
 				return
@@ -160,14 +185,16 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 			written := fi.Size()
 			tailBuf := make([]byte, 16384) // 16KB buffer
 			startPos := int64(0)
-			if written > 16384 { startPos = written - 16384 }
-			
+			if written > 16384 {
+				startPos = written - 16384
+			}
+
 			if fCheck, err := os.Open(savePath); err == nil {
 				fCheck.ReadAt(tailBuf, startPos)
 				fCheck.Close()
-				
+
 				tailStr := string(tailBuf)
-				
+
 				// Look for last valid |9999| occurrence
 				// Regex to find |9999|COUNT|
 				// We search from end manually or iterate
@@ -192,7 +219,7 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 				fmt.Printf("LOG API Integrity: File=%s\n", safeFilename)
 				fmt.Printf("LOG API Frontend: Expected Lines=%s, Expected Size=%s\n", expectedLines, expectedSize)
 				fmt.Printf("LOG API Storage:  Registro Final %s, tamanho recebido final %d\n", actualLines, written)
-				
+
 				if expectedLines != "unknown" && expectedLines != actualLines {
 					fmt.Printf("LOG API WARNING: Line count mismatch! Frontend says %s, Storage found %s\n", expectedLines, actualLines)
 				}
@@ -202,8 +229,8 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 
 		// Insert job into database
 		var jobID string
-		query := `INSERT INTO import_jobs (filename, status, message) VALUES ($1, $2, $3) RETURNING id`
-		err = db.QueryRow(query, safeFilename, "pending", "File received and saved").Scan(&jobID)
+		query := `INSERT INTO import_jobs (filename, status, message, company_id) VALUES ($1, $2, $3, $4) RETURNING id`
+		err = db.QueryRow(query, safeFilename, "pending", "File received and saved", companyID).Scan(&jobID)
 		if err != nil {
 			// Try to cleanup file if DB fails
 			os.Remove(savePath)
