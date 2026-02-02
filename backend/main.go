@@ -56,6 +56,18 @@ func initDB() {
 	log.Fatalf("Could not connect to database after retries: %v", err)
 }
 
+func resetStuckJobs(db *sql.DB) {
+	res, err := db.Exec("UPDATE import_jobs SET status='failed', message=message || ' [Interrupted by server restart]' WHERE status='processing'")
+	if err != nil {
+		log.Printf("Error resetting stuck jobs: %v", err)
+		return
+	}
+	count, _ := res.RowsAffected()
+	if count > 0 {
+		fmt.Printf("Startup: Reset %d stuck jobs to 'failed' status.\n", count)
+	}
+}
+
 func main() {
 	PrintVersion()
 	initDB()

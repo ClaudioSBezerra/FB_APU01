@@ -47,44 +47,10 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 
 		var typeFilter string
 		if opType == "comercial" {
-			typeFilter = "f.tipo = 'R'" // Revenda
+			typeFilter = "COALESCE(f.tipo, 'O') IN ('R', 'S')" // Revenda (incluindo Legacy S)
 		} else {
-			typeFilter = "f.tipo IN ('A', 'C')" // Ativo / Consumo
+			typeFilter = "COALESCE(f.tipo, 'O') IN ('A', 'C', 'O', 'T')" // Ativo, Consumo, Outros, Transferencia
 		}
-
-		// IMPORTANT: For C190, the values are in C190 (vl_opr, vl_icms, etc).
-		// We use C190 values instead of C100 header values to avoid duplication/errors when splitting by CFOP.
-		// However, C190 does not have PIS/COFINS explicitly broken down in standard SPED C190 fields usually (it has vl_opr, vl_bc_icms, vl_icms).
-		// Wait, standard C190 does not have PIS/COFINS values. C100 header has them.
-		// If we split by CFOP using C190, we can't easily attribute PIS/COFINS from header unless we assume proportionality or if C190 has them (our migration table has vl_opr, vl_bc_icms, vl_icms, etc. but not pis/cofins).
-		// Checking migration 010: reg_c190 has: vl_opr, vl_bc_icms, vl_icms, vl_bc_icms_st, vl_icms_st, vl_red_bc, vl_ipi, cod_obs.
-		// NO PIS/COFINS in C190 table.
-		// C100 header has vl_pis, vl_cofins.
-		// If we want to split PIS/COFINS by CFOP, we have a problem if a note has mixed CFOPs.
-		// However, usually "Mercadorias" (Revenda) and "Uso/Consumo" might be on separate notes or mixed.
-		// If mixed, we can't strictly split PIS/COFINS without item-level data (C170) which we don't have.
-		// User request: "No lugar do CFOP com TIPO 'R' de Revenda você trará 'A' de Ativo e 'C' de consumo".
-		// Assumption: For the purpose of this report, we will use C190.vl_opr as the 'Valor' basis.
-		// For PIS/COFINS/ICMS:
-		// ICMS is in C190.
-		// PIS/COFINS are NOT in C190.
-		// We will project PIS/COFINS based on C190.vl_opr * (header ratio? or just 0?)
-		// OR we can assume that for 'Comercial' vs 'Outras', we care mostly about the Tax Reform projection (IBS/CBS) which is based on Valor (vl_opr).
-		// Existing columns: Valor, Pis, Cofins, Icms, IcmsProjetado, Ibs, Cbs.
-		// I will output 0 for PIS/COFINS in this granular view if I can't determine it, OR I will calculate it proportionally if possible.
-		// But simpler: Just use C190.vl_opr for Valor.
-		// Use C190.vl_icms for ICMS.
-		// PIS/COFINS: Since we don't have it in C190, we might have to ignore it or return 0 for now, or fetch from C100 if we assume 1:1 mapping (risky).
-		// Let's assume 0 for PIS/COFINS in the granular breakdown for now, or maybe the user doesn't care about legacy PIS/COFINS in this projection view?
-		// Actually, standard C190 doesn't have PIS/COFINS. C170 does. We don't have C170.
-		// I will assume PIS/COFINS = 0 for the breakdown to avoid misleading data, or use C100 header if the note only has one CFOP type.
-		// Let's stick to C190 values where possible.
-
-		// Logic:
-		// 1. C190 data (granular).
-		// 2. D100/C500/C600: These are usually Consumption (C) or Service.
-		//    If opType == 'comercial', we generally EXCLUDE them if they are not resale.
-		//    If opType == 'outras', we INCLUDE them.
 
 		var query string
 
@@ -94,7 +60,7 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 				COALESCE(j.company_name, 'Desconhecida') as filial_nome,
 				COALESCE(TO_CHAR(c.dt_doc, 'MM/YYYY'), 'ND') as mes_ano,
 				CASE WHEN c.ind_oper = '0' THEN 'ENTRADA' ELSE 'SAIDA' END as tipo,
-				MAX(f.tipo) as tipo_cfop,
+				MAX(COALESCE(f.tipo, 'O')) as tipo_cfop,
 				COALESCE(SUM(c190.vl_opr), 0) as valor,
 				0 as pis, -- Not available in C190
 				0 as cofins, -- Not available in C190
@@ -105,7 +71,7 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 			FROM reg_c190 c190
 			JOIN reg_c100 c ON c.id = c190.id_pai_c100
 			JOIN import_jobs j ON j.id = c.job_id
-			JOIN cfop f ON c190.cfop = f.cfop
+			LEFT JOIN cfop f ON c190.cfop = f.cfop
 			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($1, CAST(TO_CHAR(c.dt_doc, 'YYYY') AS INTEGER))
 			WHERE %s
 			GROUP BY 1, 2, 3
