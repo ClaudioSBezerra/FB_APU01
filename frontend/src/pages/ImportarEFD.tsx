@@ -38,6 +38,7 @@ export default function ImportarEFD() {
   const [jobs, setJobs] = useState<ImportJob[]>([]);
   const [scanStats, setScanStats] = useState({ scanned: 0, relevant: 0, phase: 'idle' });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   // Poll jobs list
   useEffect(() => {
