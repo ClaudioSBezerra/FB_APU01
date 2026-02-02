@@ -23,9 +23,9 @@ type EnterpriseGroup struct {
 }
 
 type Company struct {
-	ID        string `json:"id"`
-	GroupID   string `json:"group_id"`
-	CNPJ      string `json:"cnpj"`
+	ID      string `json:"id"`
+	GroupID string `json:"group_id"`
+	// CNPJ      string `json:"cnpj"` // Deprecated
 	Name      string `json:"name"`
 	TradeName string `json:"trade_name"` // Fantasia
 	CreatedAt string `json:"created_at"`
@@ -204,7 +204,7 @@ func DeleteGroupHandler(db *sql.DB) http.HandlerFunc {
 func GetCompaniesHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		groupID := r.URL.Query().Get("group_id")
-		query := "SELECT id, group_id, cnpj, name, COALESCE(trade_name, ''), created_at FROM companies"
+		query := "SELECT id, group_id, name, COALESCE(trade_name, ''), created_at FROM companies"
 		args := []interface{}{}
 
 		if groupID != "" {
@@ -223,7 +223,7 @@ func GetCompaniesHandler(db *sql.DB) http.HandlerFunc {
 		var companies []Company
 		for rows.Next() {
 			var c Company
-			if err := rows.Scan(&c.ID, &c.GroupID, &c.CNPJ, &c.Name, &c.TradeName, &c.CreatedAt); err != nil {
+			if err := rows.Scan(&c.ID, &c.GroupID, &c.Name, &c.TradeName, &c.CreatedAt); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -246,15 +246,15 @@ func CreateCompanyHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// Basic validation
-	if c.Name == "" || c.GroupID == "" {
-		http.Error(w, "Missing required fields (name, group_id)", http.StatusBadRequest)
-		return
-	}
+		if c.Name == "" || c.GroupID == "" {
+			http.Error(w, "Missing required fields (name, group_id)", http.StatusBadRequest)
+			return
+		}
 
-	err := db.QueryRow(
-		"INSERT INTO companies (group_id, cnpj, name, trade_name) VALUES ($1, $2, $3, $4) RETURNING id, created_at",
-		c.GroupID, c.CNPJ, c.Name, c.TradeName,
-	).Scan(&c.ID, &c.CreatedAt)
+		err := db.QueryRow(
+			"INSERT INTO companies (group_id, name, trade_name) VALUES ($1, $2, $3) RETURNING id, created_at",
+			c.GroupID, c.Name, c.TradeName,
+		).Scan(&c.ID, &c.CreatedAt)
 
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
