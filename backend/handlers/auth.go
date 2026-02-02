@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"time"
@@ -164,6 +165,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 		// 1. Hash Password
 		hash, err := HashPassword(req.Password)
 		if err != nil {
+			log.Printf("[Register] Error hashing password: %v", err)
 			http.Error(w, "Error hashing password", http.StatusInternalServerError)
 			return
 		}
@@ -171,6 +173,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 		// 2. Start Transaction
 		tx, err := db.Begin()
 		if err != nil {
+			log.Printf("[Register] Error starting transaction: %v", err)
 			http.Error(w, "Database error", http.StatusInternalServerError)
 			return
 		}
@@ -188,6 +191,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 		`, req.Email, hash, req.FullName, trialEnds, false).Scan(&userID, &role)
 
 		if err != nil {
+			log.Printf("[Register] Error creating user: %v", err)
 			// Check specifically for unique constraint violation
 			tx.Rollback() // Ensure rollback before returning
 			w.Header().Set("Content-Type", "application/json")
@@ -206,11 +210,13 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 				// Create Environment
 				err = tx.QueryRow("INSERT INTO environments (name, description) VALUES ('Ambiente de Testes', 'Ambiente compartilhado para usuários trial') RETURNING id, name").Scan(&envID, &envName)
 				if err != nil {
+					log.Printf("[Register] Error creating environment: %v", err)
 					tx.Rollback()
 					http.Error(w, "Error creating default environment", http.StatusInternalServerError)
 					return
 				}
 			} else {
+				log.Printf("[Register] Error fetching environment: %v", err)
 				tx.Rollback()
 				http.Error(w, "Database error fetching environment", http.StatusInternalServerError)
 				return
@@ -224,11 +230,13 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 				// Create Group
 				err = tx.QueryRow("INSERT INTO enterprise_groups (environment_id, name, description) VALUES ($1, 'Grupo de Empresas Testes', 'Grupo compartilhado para trial') RETURNING id, name", envID).Scan(&groupID, &groupName)
 				if err != nil {
+					log.Printf("[Register] Error creating group: %v", err)
 					tx.Rollback()
 					http.Error(w, "Error creating default group", http.StatusInternalServerError)
 					return
 				}
 			} else {
+				log.Printf("[Register] Error fetching group: %v", err)
 				tx.Rollback()
 				http.Error(w, "Database error fetching group", http.StatusInternalServerError)
 				return
@@ -238,6 +246,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 		// 5. Link User to Environment
 		_, err = tx.Exec("INSERT INTO user_environments (user_id, environment_id, role) VALUES ($1, $2, 'admin')", userID, envID)
 		if err != nil {
+			log.Printf("[Register] Error linking user to environment: %v", err)
 			http.Error(w, "Error linking user to environment", http.StatusInternalServerError)
 			return
 		}
@@ -250,12 +259,14 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 			RETURNING id
 		`, groupID, req.CompanyName, userID).Scan(&companyID)
 		if err != nil {
+			log.Printf("[Register] Error creating company: %v", err)
 			http.Error(w, "Error creating company", http.StatusInternalServerError)
 			return
 		}
 
 		// Commit
 		if err := tx.Commit(); err != nil {
+			log.Printf("[Register] Error committing transaction: %v", err)
 			http.Error(w, "Transaction commit failed", http.StatusInternalServerError)
 			return
 		}
