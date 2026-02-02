@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Trash2, Building, Layers, Factory } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Environment {
   id: string;
@@ -53,6 +54,18 @@ interface Company {
   created_at: string;
 }
 
+interface Branch {
+  cnpj: string;
+  company_name: string;
+}
+
+interface UserHierarchy {
+  environment: Environment;
+  group: EnterpriseGroup;
+  company: Company;
+  branches: Branch[];
+}
+
 export default function GestaoAmbiente() {
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [selectedEnv, setSelectedEnv] = useState<Environment | null>(null);
@@ -75,11 +88,17 @@ export default function GestaoAmbiente() {
   const [newCompanyTradeName, setNewCompanyTradeName] = useState("");
 
   const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
+  const [userHierarchy, setUserHierarchy] = useState<UserHierarchy | null>(null);
 
   // Initial Load
   useEffect(() => {
-    fetchEnvironments();
-  }, []);
+    if (user?.role === 'admin') {
+      fetchEnvironments();
+    } else if (user) {
+      fetchUserHierarchy();
+    }
+  }, [user]);
 
   // Load Groups when Env selected
   useEffect(() => {
@@ -103,6 +122,26 @@ export default function GestaoAmbiente() {
       setCompanies([]);
     }
   }, [selectedGroup]);
+
+  const fetchUserHierarchy = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const res = await fetch("/api/user/hierarchy", {
+        headers: { 
+            "Authorization": `Bearer ${token}` 
+        }
+      });
+      if (!res.ok) throw new Error("Failed to fetch hierarchy");
+      const data = await res.json();
+      setUserHierarchy(data);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro ao carregar dados do usuário");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchEnvironments = async () => {
     try {
@@ -274,6 +313,97 @@ export default function GestaoAmbiente() {
       toast.error("Erro ao remover empresa");
     }
   };
+
+  if (user?.role !== 'admin') {
+    return (
+      <div className="container mx-auto p-4 space-y-6">
+        <div>
+            <h1 className="text-3xl font-bold text-gray-900">Meu Ambiente</h1>
+            <p className="text-gray-500 mt-1">
+                Visualização dos dados vinculados ao seu usuário
+            </p>
+        </div>
+
+        {loading ? (
+             <p>Carregando...</p>
+        ) : !userHierarchy ? (
+             <p>Nenhum dado encontrado. Contate o administrador.</p>
+        ) : (
+            <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Environment */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Layers className="h-5 w-5" />
+                            Ambiente
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                         <div className="text-lg font-medium">{userHierarchy.environment.name}</div>
+                         <div className="text-sm text-muted-foreground">{userHierarchy.environment.description}</div>
+                    </CardContent>
+                </Card>
+
+                {/* Group */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Building className="h-5 w-5" />
+                            Grupo
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                         <div className="text-lg font-medium">{userHierarchy.group.name}</div>
+                         <div className="text-sm text-muted-foreground">{userHierarchy.group.description}</div>
+                    </CardContent>
+                </Card>
+
+                {/* Company */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Factory className="h-5 w-5" />
+                            Empresa
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                         <div className="text-lg font-medium">{userHierarchy.company.name}</div>
+                         <div className="text-sm text-muted-foreground">CNPJ: {userHierarchy.company.cnpj}</div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <div className="space-y-4">
+                <h2 className="text-xl font-semibold">Filiais Importadas</h2>
+                <div className="border rounded-md p-4 bg-white">
+                    {userHierarchy.branches.length === 0 ? (
+                        <p className="text-muted-foreground">Nenhuma filial identificada nas importações.</p>
+                    ) : (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>CNPJ</TableHead>
+                                    <TableHead>Razão Social (Importada)</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {userHierarchy.branches.map((branch, idx) => (
+                                    <TableRow key={idx}>
+                                        <TableCell className="font-mono">{branch.cnpj}</TableCell>
+                                        <TableCell>{branch.company_name}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    )}
+                </div>
+            </div>
+            </>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-4 space-y-6">

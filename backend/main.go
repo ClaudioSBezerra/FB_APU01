@@ -146,6 +146,7 @@ func main() {
 	// Auth Routes
 	http.HandleFunc("/api/auth/register", handlers.RegisterHandler(db))
 	http.HandleFunc("/api/auth/login", handlers.LoginHandler(db))
+	http.HandleFunc("/api/user/hierarchy", handlers.AuthMiddleware(handlers.GetUserHierarchyHandler(db), ""))
 
 	http.HandleFunc("/api/mercadorias", handlers.GetMercadoriasReportHandler(db))
 

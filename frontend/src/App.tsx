@@ -104,9 +104,9 @@ function AppLayout() {
               </AdminRoute>
             } />
             <Route path="/config/ambiente" element={
-              <AdminRoute>
+              <ProtectedRoute>
                 <GestaoAmbiente />
-              </AdminRoute>
+              </ProtectedRoute>
             } />
             
             {/* Apuração */}

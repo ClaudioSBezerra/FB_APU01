@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -12,6 +13,10 @@ import (
 )
 
 // --- Structs ---
+
+type contextKey string
+
+const ClaimsKey contextKey = "claims"
 
 type User struct {
 	ID          string    `json:"id"`
@@ -104,29 +109,38 @@ func AuthMiddleware(next http.HandlerFunc, requiredRole string) http.HandlerFunc
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
+		if !ok || !token.Valid {
 			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
 			return
 		}
 
-		role, ok := claims["role"].(string)
+		// Check role
+		userRole, ok := claims["role"].(string)
 		if !ok {
-			role = "user" // Default
+			http.Error(w, "Role not found in token", http.StatusUnauthorized)
+			return
 		}
 
-		if requiredRole != "" && requiredRole != role && role != "admin" {
-			// Admin can access everything, otherwise must match required role
-			// If requiredRole is "admin", then only admin can access.
-			// If requiredRole is "user", admin can also access.
-			// Logic:
-			if requiredRole == "admin" && role != "admin" {
-				http.Error(w, "Forbidden: Admins only", http.StatusForbidden)
-				return
-			}
+		if requiredRole != "" && userRole != requiredRole && userRole != "admin" {
+			http.Error(w, "Forbidden: insufficient permissions", http.StatusForbidden)
+			return
 		}
 
-		next(w, r)
+		ctx := context.WithValue(r.Context(), ClaimsKey, claims)
+		next(w, r.WithContext(ctx))
 	}
+}
+
+func GetUserIDFromContext(r *http.Request) string {
+	claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+	if !ok {
+		return ""
+	}
+	userID, ok := claims["user_id"].(string)
+	if !ok {
+		return ""
+	}
+	return userID
 }
 
 func RegisterHandler(db *sql.DB) http.HandlerFunc {
