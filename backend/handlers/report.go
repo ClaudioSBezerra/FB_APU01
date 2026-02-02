@@ -199,7 +199,6 @@ func GetTransporteReportHandler(db *sql.DB) http.HandlerFunc {
 			// The query above returns 10 columns.
 			// The struct has 11 fields.
 			// We need to scan explicitly.
-			var tipoCfop sql.NullString // Placeholder or ignore
 
 			// Re-ordered scan to match query columns:
 			// filial_nome, mes_ano, tipo, valor, pis, cofins, icms, icms_proj, ibs_proj, cbs_proj

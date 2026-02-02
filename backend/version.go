@@ -11,3 +11,7 @@ const (
 func GetVersionInfo() string {
 	return fmt.Sprintf("Backend Version: %s | Features: %s", BackendVersion, FeatureSet)
 }
+
+func PrintVersion() {
+	fmt.Println(GetVersionInfo())
+}
