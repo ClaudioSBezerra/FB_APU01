@@ -1,0 +1,200 @@
+package handlers
+
+import (
+	"database/sql"
+	"encoding/json"
+	"net/http"
+)
+
+// Structures
+type Environment struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	CreatedAt   string `json:"created_at"`
+}
+
+type EnterpriseGroup struct {
+	ID            string `json:"id"`
+	EnvironmentID string `json:"environment_id"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	CreatedAt     string `json:"created_at"`
+}
+
+type Company struct {
+	ID        string `json:"id"`
+	GroupID   string `json:"group_id"`
+	CNPJ      string `json:"cnpj"`
+	Name      string `json:"name"`
+	TradeName string `json:"trade_name"`
+	CreatedAt string `json:"created_at"`
+}
+
+// --- Environment Handlers ---
+
+func GetEnvironmentsHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rows, err := db.Query("SELECT id, name, COALESCE(description, ''), created_at FROM environments ORDER BY name")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		var envs []Environment
+		for rows.Next() {
+			var e Environment
+			if err := rows.Scan(&e.ID, &e.Name, &e.Description, &e.CreatedAt); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			envs = append(envs, e)
+		}
+
+		if envs == nil {
+			envs = []Environment{}
+		}
+		json.NewEncoder(w).Encode(envs)
+	}
+}
+
+func CreateEnvironmentHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var e Environment
+		if err := json.NewDecoder(r.Body).Decode(&e); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		err := db.QueryRow(
+			"INSERT INTO environments (name, description) VALUES ($1, $2) RETURNING id, created_at",
+			e.Name, e.Description,
+		).Scan(&e.ID, &e.CreatedAt)
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		json.NewEncoder(w).Encode(e)
+	}
+}
+
+func UpdateEnvironmentHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Expects ID in URL or Body. For simplicity, we take from body now or just update based on ID
+		var e Environment
+		if err := json.NewDecoder(r.Body).Decode(&e); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		_, err := db.Exec(
+			"UPDATE environments SET name = $1, description = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
+			e.Name, e.Description, e.ID,
+		)
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(e)
+	}
+}
+
+func DeleteEnvironmentHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "Missing id parameter", http.StatusBadRequest)
+			return
+		}
+
+		_, err := db.Exec("DELETE FROM environments WHERE id = $1", id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// --- Group Handlers ---
+
+func GetGroupsHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		envID := r.URL.Query().Get("environment_id")
+		query := "SELECT id, environment_id, name, COALESCE(description, ''), created_at FROM enterprise_groups"
+		args := []interface{}{}
+
+		if envID != "" {
+			query += " WHERE environment_id = $1"
+			args = append(args, envID)
+		}
+		query += " ORDER BY name"
+
+		rows, err := db.Query(query, args...)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		var groups []EnterpriseGroup
+		for rows.Next() {
+			var g EnterpriseGroup
+			if err := rows.Scan(&g.ID, &g.EnvironmentID, &g.Name, &g.Description, &g.CreatedAt); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			groups = append(groups, g)
+		}
+
+		if groups == nil {
+			groups = []EnterpriseGroup{}
+		}
+		json.NewEncoder(w).Encode(groups)
+	}
+}
+
+func CreateGroupHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var g EnterpriseGroup
+		if err := json.NewDecoder(r.Body).Decode(&g); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		err := db.QueryRow(
+			"INSERT INTO enterprise_groups (environment_id, name, description) VALUES ($1, $2, $3) RETURNING id, created_at",
+			g.EnvironmentID, g.Name, g.Description,
+		).Scan(&g.ID, &g.CreatedAt)
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		json.NewEncoder(w).Encode(g)
+	}
+}
+
+func DeleteGroupHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "Missing id parameter", http.StatusBadRequest)
+			return
+		}
+
+		_, err := db.Exec("DELETE FROM enterprise_groups WHERE id = $1", id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}

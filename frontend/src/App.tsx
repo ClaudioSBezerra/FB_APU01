@@ -7,6 +7,7 @@ import Transporte from './pages/Transporte';
 import Comunicacoes from './pages/Comunicacoes';
 import TabelaAliquotas from './pages/TabelaAliquotas';
 import TabelaCFOP from './pages/TabelaCFOP';
+import GestaoAmbiente from './pages/GestaoAmbiente';
 import { Button } from '@/components/ui/button';
 import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
@@ -68,7 +69,7 @@ function App() {
               <Route path="/config/aliquotas" element={<TabelaAliquotas />} />
               <Route path="/config/cfop" element={<TabelaCFOP />} />
               <Route path="/config/usuarios" element={<ComingSoon title="Gestão de Usuários" />} />
-              <Route path="/config/ambiente" element={<ComingSoon title="Gestão de Ambiente" />} />
+              <Route path="/config/ambiente" element={<GestaoAmbiente />} />
               
               {/* Apuração */}
               <Route path="/apuracao/entrada" element={<ComingSoon title="Importar XMLs Entrada" />} />

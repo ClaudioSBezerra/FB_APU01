@@ -150,6 +150,35 @@ func main() {
 	http.HandleFunc("/api/config/cfop", handlers.ListCFOPsHandler(db))
 	http.HandleFunc("/api/config/cfop/import", handlers.ImportCFOPsHandler(db))
 
+	// Environment & Groups Endpoints
+	http.HandleFunc("/api/config/environments", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetEnvironmentsHandler(db)(w, r)
+		case http.MethodPost:
+			handlers.CreateEnvironmentHandler(db)(w, r)
+		case http.MethodPut:
+			handlers.UpdateEnvironmentHandler(db)(w, r)
+		case http.MethodDelete:
+			handlers.DeleteEnvironmentHandler(db)(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	http.HandleFunc("/api/config/groups", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.GetGroupsHandler(db)(w, r)
+		case http.MethodPost:
+			handlers.CreateGroupHandler(db)(w, r)
+		case http.MethodDelete:
+			handlers.DeleteGroupHandler(db)(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	fmt.Printf("FB_APU01 Fiscal Engine (Go) starting on port %s...\n", port)
 
 	// Print Version (Force Rebuild V4.1)
