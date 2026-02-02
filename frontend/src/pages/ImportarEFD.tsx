@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { AlertCircle, CheckCircle, Clock, FileText, Loader2, RefreshCw, Upload, XCircle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { UploadProgressDisplay, UploadProgressType } from '@/components/UploadProgress';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ImportJob {
   id: string;
@@ -18,6 +19,7 @@ interface ImportJob {
 }
 
 export default function ImportarEFD() {
+  const { token } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgressType>({
