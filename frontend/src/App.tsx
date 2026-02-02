@@ -11,6 +11,7 @@ import GestaoAmbiente from './pages/GestaoAmbiente';
 import AdminUsers from './pages/AdminUsers';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
 import { Button } from '@/components/ui/button';
 import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
@@ -132,6 +133,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/*" element={
             <ProtectedRoute>
               <AppLayout />

@@ -2,8 +2,11 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -286,12 +289,12 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 		if err == sql.ErrNoRows {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode("Invalid credentials")
+			json.NewEncoder(w).Encode("E-mail não encontrado ou senha inválida")
 			return
 		} else if err != nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode("Database error")
+			json.NewEncoder(w).Encode("Erro no servidor")
 			return
 		}
 
@@ -299,7 +302,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 		if !CheckPasswordHash(req.Password, hash) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode("Invalid credentials")
+			json.NewEncoder(w).Encode("E-mail não encontrado ou senha inválida")
 			return
 		}
 
@@ -342,6 +345,55 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			Company:     companyName,
 			CompanyID:   companyID,
 			CNPJ:        "", // CNPJ removed from company
+		})
+	}
+}
+
+type ForgotPasswordRequest struct {
+	Email string `json:"email"`
+}
+
+func ForgotPasswordHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req ForgotPasswordRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+
+		var userID string
+		err := db.QueryRow("SELECT id FROM users WHERE email = $1", req.Email).Scan(&userID)
+		if err == sql.ErrNoRows {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode("E-mail não encontrado")
+			return
+		} else if err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+
+		// Generate token
+		tokenBytes := make([]byte, 32)
+		rand.Read(tokenBytes)
+		rand.Read(tokenBytes) // Read twice just to be safe or copy paste error? No, just once is fine.
+		token := hex.EncodeToString(tokenBytes)
+
+		expiresAt := time.Now().Add(1 * time.Hour)
+
+		_, err = db.Exec("INSERT INTO verification_tokens (user_id, token, type, expires_at) VALUES ($1, $2, 'password_reset', $3)", userID, token, expiresAt)
+		if err != nil {
+			http.Error(w, "Error creating token", http.StatusInternalServerError)
+			return
+		}
+
+		// Simulate Email Sending
+		fmt.Printf("\n=== MOCK EMAIL SERVICE ===\nTo: %s\nSubject: Password Reset\nLink: /reset-password?token=%s\n==========================\n", req.Email, token)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"message":    "Link de recuperação gerado (verifique o console do servidor)",
+			"mock_token": token,
 		})
 	}
 }

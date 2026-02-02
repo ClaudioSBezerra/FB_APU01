@@ -158,6 +158,7 @@ func main() {
 	// Auth Routes
 	http.HandleFunc("/api/auth/register", handlers.RegisterHandler(db))
 	http.HandleFunc("/api/auth/login", handlers.LoginHandler(db))
+	http.HandleFunc("/api/auth/forgot-password", handlers.ForgotPasswordHandler(db))
 	http.HandleFunc("/api/user/hierarchy", handlers.AuthMiddleware(handlers.GetUserHierarchyHandler(db), ""))
 
 	http.HandleFunc("/api/mercadorias", handlers.GetMercadoriasReportHandler(db))
@@ -218,9 +219,9 @@ func main() {
 
 	fmt.Printf("FB_APU01 Fiscal Engine (Go) starting on port %s...\n", port)
 
-	// Print Version (Force Rebuild V4.1)
+	// Print Version (Force Rebuild V4.2)
 	fmt.Println("==================================================")
-	fmt.Println("   FB_APU01 BACKEND - V4.1 (CHUNKED UPLOAD)       ")
+	fmt.Println("   FB_APU01 BACKEND - V4.2 (AUTH RECOVERY)       ")
 	fmt.Println("==================================================")
 
 	// Use custom server with timeouts (Inspired by production best practices)
