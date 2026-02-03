@@ -37,6 +37,7 @@ type HealthResponse struct {
 	Timestamp string `json:"timestamp"`
 	Service   string `json:"service"`
 	Version   string `json:"version"`
+	Features  string `json:"features"`
 	Database  string `json:"database"`
 }
 
@@ -155,7 +156,8 @@ func main() {
 			Status:    "running",
 			Timestamp: time.Now().Format(time.RFC3339),
 			Service:   "FB_APU01 Fiscal Engine",
-			Version:   "1.0.0",
+			Version:   BackendVersion,
+			Features:  FeatureSet,
 			Database:  fmt.Sprintf("%s (Open: %d, InUse: %d, Idle: %d, Wait: %v)", dbStatus, stats.OpenConnections, stats.InUse, stats.Idle, stats.WaitDuration),
 		}
 
