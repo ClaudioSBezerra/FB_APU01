@@ -123,7 +123,28 @@ const Mercadorias = () => {
     );
   }
 
-  // Extract unique values for filters
+  // Helper to map operation types to user-friendly labels
+  const getCategoryLabel = (tipo: string, tipoCfop?: string) => {
+    if (!tipoCfop) return tipo === 'ENTRADA' ? 'Entrada (Outros)' : 'Saída (Outros)';
+    
+    // Detalha Entradas Revenda, Saida Revenda, Entrada Uso Consumo e Entrada Imobilizado
+    if (tipo === 'ENTRADA' && tipoCfop === 'R') return 'Entrada Revenda';
+    if (tipo === 'SAIDA' && tipoCfop === 'R') return 'Saída Revenda'; // Assuming Saída Revenda follows R
+    if (tipo === 'SAIDA' && tipoCfop === 'S') return 'Saída Revenda'; // Often S is used for output in some contexts, but sticking to R based on user request. 
+    // Correction: In previous context, S=Saída/Serviço. User asked for "Saida Revenda". If mapping matches, good.
+    // Let's assume the backend filters (R, S) for Commercial. 
+    // If it's S, maybe label as "Saída (Venda/Serviço)" or just "Saída Revenda" if that's the domain term.
+    // User specifically asked: "Detalha Entradas Revenda, Saida Revenda..."
+    // I will map 'S' to "Saída Venda" or similar if 'R' isn't the only one.
+    if (tipo === 'SAIDA' && (tipoCfop === 'R' || tipoCfop === 'S')) return 'Saída Revenda'; 
+
+    if (tipo === 'ENTRADA' && tipoCfop === 'C') return 'Entrada Uso Consumo';
+    if (tipo === 'ENTRADA' && tipoCfop === 'A') return 'Entrada Imobilizado';
+    
+    // Fallback for others
+    return `${tipo === 'ENTRADA' ? 'Entrada' : 'Saída'} (${tipoCfop})`;
+  };
+
   const uniqueFiliais = Array.from(new Set(data.map(item => item.filial_nome))).sort();
   const uniqueMonths = Array.from(new Set(data.map(item => item.mes_ano))).sort((a, b) => {
     const [ma, ya] = a.split('/').map(Number);
@@ -162,16 +183,27 @@ const Mercadorias = () => {
   const totalCreditos = totals.entradas.icmsProj + totals.entradas.ibsProj + totals.entradas.cbsProj;
 
   const handleExport = () => {
-    const exportData = filteredData.map(item => ({
-      'Filial': item.filial_nome,
-      'Mês/Ano': item.mes_ano,
-      'Tipo': item.tipo,
-      'Valor Total': item.valor,
-      'ICMS': item.icms,
-      'ICMS Projetado': item.vl_icms_projetado,
-      'IBS Projetado': item.vl_ibs_projetado,
-      'CBS Projetado': item.vl_cbs_projetado
-    }));
+    const exportData = filteredData.map(item => {
+      const totalAtual = (item.icms || 0);
+      const baseIbsCbs = (item.valor || 0) - (item.vl_icms_projetado || 0);
+      const totalReforma = (item.vl_icms_projetado || 0) + (item.vl_ibs_projetado || 0) + (item.vl_cbs_projetado || 0);
+      const diferenca = totalAtual - totalReforma;
+
+      return {
+        'Filial': item.filial_nome,
+        'Mês/Ano': item.mes_ano,
+        'Detalhe': getCategoryLabel(item.tipo, item.tipo_cfop),
+        'Valor': item.valor,
+        'ICMS': item.icms,
+        'ICMS Proj.': item.vl_icms_projetado,
+        'Base IBS/CBS': baseIbsCbs,
+        'IBS Proj.': item.vl_ibs_projetado,
+        'CBS Proj.': item.vl_cbs_projetado,
+        'Total Atual (ICMS)': totalAtual,
+        'Total Reforma': totalReforma,
+        'Diferença': diferenca
+      };
+    });
     exportToExcel(exportData, 'relatorio_mercadorias');
   };
 
@@ -391,23 +423,21 @@ const Mercadorias = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-[100px]">Filial</TableHead>
-                      <TableHead className="w-[80px]">Mês</TableHead>
-                      <TableHead className="w-[80px]">Tipo</TableHead>
+                      <TableHead className="w-[80px]">Mês/Ano</TableHead>
+                      <TableHead className="w-[150px]">Detalhe</TableHead>
                       <TableHead className="text-right">Valor</TableHead>
                       <TableHead className="text-right text-xs">ICMS</TableHead>
-                      <TableHead className="text-right font-bold border-r">Tot. Atual</TableHead>
-                      
-                      <TableHead className="text-right text-xs bg-blue-50">Base Calc.</TableHead>
                       <TableHead className="text-right text-xs bg-blue-50">ICMS Proj.</TableHead>
-                      <TableHead className="text-right text-xs bg-blue-50">IBS</TableHead>
-                      <TableHead className="text-right text-xs bg-blue-50">CBS</TableHead>
-                      <TableHead className="text-right font-bold bg-blue-100 border-l border-blue-200">Tot. Reforma</TableHead>
-                      <TableHead className="text-right font-bold">Dif.</TableHead>
+                      <TableHead className="text-right text-xs bg-blue-50">Base IBS/CBS</TableHead>
+                      <TableHead className="text-right text-xs bg-blue-50">IBS Proj.</TableHead>
+                      <TableHead className="text-right text-xs bg-blue-50">CBS Proj.</TableHead>
+                      <TableHead className="text-right font-bold border-l border-r bg-gray-50">Total Atual (ICMS)</TableHead>
+                      <TableHead className="text-right font-bold bg-blue-100 border-r border-blue-200">Total Reforma</TableHead>
+                      <TableHead className="text-right font-bold">Diferença</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredData.map((row, i) => {
-                      // Removed PIS/COFINS references as they are not used in projection anymore
                       const totalAtual = (row.icms || 0);
                       const baseIbsCbs = (row.valor || 0) - (row.vl_icms_projetado || 0);
                       const totalReforma = (row.vl_icms_projetado || 0) + (row.vl_ibs_projetado || 0) + (row.vl_cbs_projetado || 0);
@@ -418,21 +448,21 @@ const Mercadorias = () => {
                           <TableCell className="font-medium text-xs">{row.filial_nome}</TableCell>
                           <TableCell className="text-xs">{row.mes_ano}</TableCell>
                           <TableCell>
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            <span className={`px-2 py-1 rounded text-[11px] font-bold ${
                               row.tipo === 'SAIDA' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
                             }`}>
-                              {row.tipo.substring(0, 1)}
+                              {getCategoryLabel(row.tipo, row.tipo_cfop)}
                             </span>
                           </TableCell>
                           <TableCell className="text-right text-xs">{formatCurrency(row.valor)}</TableCell>
                           <TableCell className="text-right text-xs text-gray-500">{formatCurrency(row.icms)}</TableCell>
-                          <TableCell className="text-right text-xs font-bold border-r bg-gray-50">{formatCurrency(totalAtual)}</TableCell>
-                          
-                          <TableCell className="text-right text-xs text-gray-400 bg-blue-50">{formatCurrency(baseIbsCbs)}</TableCell>
                           <TableCell className="text-right text-xs text-blue-600 bg-blue-50">{formatCurrency(row.vl_icms_projetado)}</TableCell>
+                          <TableCell className="text-right text-xs text-gray-400 bg-blue-50">{formatCurrency(baseIbsCbs)}</TableCell>
                           <TableCell className="text-right text-xs text-blue-600 bg-blue-50">{formatCurrency(row.vl_ibs_projetado)}</TableCell>
                           <TableCell className="text-right text-xs text-blue-600 bg-blue-50">{formatCurrency(row.vl_cbs_projetado)}</TableCell>
-                          <TableCell className="text-right text-xs font-bold bg-blue-100 text-blue-800 border-l border-blue-200">{formatCurrency(totalReforma)}</TableCell>
+                          
+                          <TableCell className="text-right text-xs font-bold border-l border-r bg-gray-50">{formatCurrency(totalAtual)}</TableCell>
+                          <TableCell className="text-right text-xs font-bold bg-blue-100 text-blue-800 border-r border-blue-200">{formatCurrency(totalReforma)}</TableCell>
                           
                           <TableCell className={`text-right text-xs font-bold ${diferenca > 0 ? 'text-green-600' : 'text-red-600'}`}>
                             {formatCurrency(diferenca)}
