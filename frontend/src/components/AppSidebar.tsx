@@ -6,9 +6,6 @@ import {
   Calculator,
   FileSpreadsheet,
   ShoppingCart,
-  Zap,
-  Truck,
-  Phone,
   LayoutDashboard,
   FileText,
   Upload,
@@ -58,10 +55,6 @@ const menuItems = [
     items: [
       { title: "Importar SPEDs", url: "/importar-efd", icon: FileSpreadsheet },
       { title: "Operações Comerciais", url: "/mercadorias?tab=comercial", icon: ShoppingCart },
-      { title: "Outras Operações", url: "/mercadorias?tab=outras", icon: ShoppingCart },
-      { title: "Energia", url: "/energia", icon: Zap },
-      { title: "Transporte", url: "/transporte", icon: Truck },
-      { title: "Comunicação", url: "/comunicacoes", icon: Phone },
       { title: "Dashboards", url: "/dashboards", icon: LayoutDashboard, disabled: true },
     ]
   },
