@@ -220,6 +220,10 @@ export default function ImportarEFD() {
         formData.append('upload_id', uploadId);
         formData.append('chunk_index', chunkIndex.toString());
         formData.append('total_chunks', totalChunks.toString());
+        // Fix: Send company_id to backend to ensure data is linked to the correct company
+        if (companyId) {
+            formData.append('company_id', companyId);
+        }
 
         // Wait for chunk upload
         const responseJson = await new Promise<any>((resolve, reject) => {

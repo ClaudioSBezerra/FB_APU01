@@ -49,9 +49,11 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 
 		var typeFilter string
 		if opType == "comercial" {
-			typeFilter = "COALESCE(f.tipo, 'O') IN ('R', 'S')" // Revenda (incluindo Legacy S)
+			// FIXED: Include 'O' (Outros) temporarily to ensure data appears even if CFOP is missing in the mapping table.
+			// This prevents "Nenhum dado encontrado" when using valid CFOPs that are not yet seeded in the database.
+			typeFilter = "COALESCE(f.tipo, 'O') IN ('R', 'S', 'O')" 
 		} else {
-			typeFilter = "COALESCE(f.tipo, 'O') IN ('A', 'C', 'O', 'T')" // Ativo, Consumo, Outros, Transferencia
+			typeFilter = "COALESCE(f.tipo, 'O') IN ('A', 'C', 'T')"
 		}
 
 		var query string
