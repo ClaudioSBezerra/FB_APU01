@@ -91,21 +91,6 @@ const Mercadorias = () => {
     );
   }
 
-  if (data.length === 0) {
-    return (
-      <div className="container mx-auto p-6 space-y-8">
-         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <h1 className="text-3xl font-bold text-gray-900">Mercadorias</h1>
-         </div>
-         <div className="text-center py-20 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-            <h2 className="text-xl font-semibold text-gray-700">Nenhum dado encontrado</h2>
-            <p className="text-gray-500 mt-2">O banco de dados está vazio ou a importação falhou.</p>
-            <Button className="mt-4" onClick={() => window.location.reload()}>Tentar Novamente</Button>
-         </div>
-      </div>
-    );
-  }
-
   // Extract unique values for filters
   const uniqueFiliais = Array.from(new Set(data.map(item => item.filial_nome))).sort();
   const uniqueMonths = Array.from(new Set(data.map(item => item.mes_ano))).sort((a, b) => {
