@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Download, Filter, FileText, Calculator } from "lucide-react";
+import { Download, Filter, FileText, Calculator, RefreshCcw } from "lucide-react";
 import { exportToExcel } from "@/lib/exportToExcel";
 import { formatCurrency } from "@/lib/utils";
 
@@ -47,11 +47,7 @@ const Mercadorias = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Fetch data from backend
-  useEffect(() => {
-    // Sync URL param with state if needed, or just let state drive
-    // but if we want deep linking to work on tab change we should update URL
-    // For now, simple initialization is enough as requested.
-    
+  const fetchData = useCallback(() => {
     setLoading(true);
     fetch(`/api/reports/mercadorias?target_year=${selectedYear}&tipo_operacao=${operationType}`)
       .then(res => {
@@ -69,6 +65,10 @@ const Mercadorias = () => {
         setLoading(false);
       });
   }, [selectedYear, operationType]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   if (loading) {
     return (
@@ -244,6 +244,10 @@ const Mercadorias = () => {
           <Button variant="default" size="sm" onClick={handleExport}>
             <Download className="w-4 h-4 mr-2" />
             Exportar
+          </Button>
+
+          <Button variant="outline" size="icon" onClick={fetchData} title="Atualizar dados">
+            <RefreshCcw className="w-4 h-4" />
           </Button>
         </div>
       </div>
