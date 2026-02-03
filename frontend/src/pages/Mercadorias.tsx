@@ -154,25 +154,47 @@ const Mercadorias = () => {
   // Helper to map operation types to user-friendly labels
   const maskCnpj = (cnpj: string) => {
     if (!cnpj) return "";
-    const parts = cnpj.split('/');
-    if (parts.length === 2) {
-      return `**.***.***/${parts[1]}`;
-    }
-    return cnpj;
+    
+    // Remove characters that are not digits
+    const raw = cnpj.replace(/\D/g, '');
+    
+    // Check valid length
+    if (raw.length !== 14) return cnpj;
+    
+    // Format: XX.XXX.XXX/YYYY-ZZ
+    // We want to mask everything before the slash: **.***.***/YYYY-ZZ
+    
+    // Extract the suffix (YYYY-ZZ)
+    const suffix = raw.slice(8); // 000128
+    const formattedSuffix = `${suffix.slice(0, 4)}-${suffix.slice(4)}`;
+    
+    return `**.***.***/${formattedSuffix}`;
   };
 
   const getCategoryLabel = (tipo: string, tipoCfop?: string, origem?: string, tipoOperacao?: string) => {
     // Priority: use tipoOperacao from backend if available
     if (tipoOperacao) {
       switch (tipoOperacao) {
-        case 'Entrada_Revenda': return 'R de Entrada do bloco C100/C190';
-        case 'Entradas_Frete': return 'R de Entradas Frete';
-        case 'Entradas_Consumo': return 'C Entradas Consumo';
-        case 'Entradas_Imobilizado': return 'A Entradas Ativo';
-        case 'Saidas_Revenda': return 'R de Saidas Bloco C100/C190';
-        case 'Entradas_Energia_Agua': return 'Entradas Energia/Água (C500)';
-        case 'Entradas_Comunicações': return 'Entradas Comunicações (D500)';
-        case 'Saidas_Energia_Agua': return 'Saídas Energia/Água (C600)';
+        // Entradas
+        case 'Entrada_Revenda': return 'R - Entrada Revenda (C100/C190)';
+        case 'Entradas_Frete': return 'R - Entrada Frete (D100)';
+        case 'Entradas_Consumo': return 'C - Entrada Uso e Consumo';
+        case 'Entradas_Imobilizado': return 'A - Entrada Ativo Imobilizado';
+        case 'Entradas_Transferencia': return 'T - Entrada Transferência';
+        case 'Entradas_Outros': return 'O - Outras Entradas';
+        case 'Entradas_Energia_Agua': return 'Entrada Energia/Água (C500)';
+        case 'Entradas_Comunicações': return 'Entrada Comunicações (D500)';
+        case 'Entradas_NaoIdent': return 'Entrada Não Identificada';
+        
+        // Saídas
+        case 'Saidas_Revenda': return 'R - Saída Revenda';
+        case 'Saidas_Consumo': return 'C - Saída Uso e Consumo';
+        case 'Saidas_Transferencia': return 'T - Saída Transferência';
+        case 'Saidas_Imobilizado': return 'A - Saída Ativo Imobilizado';
+        case 'Saidas_Outros': return 'O - Outras Saídas';
+        case 'Saidas_Energia_Agua': return 'Saída Energia/Água (C600)';
+        case 'Saidas_NaoIdent': return 'Saída Não Identificada';
+        
         default: return tipoOperacao.replace(/_/g, ' ');
       }
     }
