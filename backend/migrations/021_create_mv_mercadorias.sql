@@ -24,4 +24,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_mercadorias_agregada
 ON mv_mercadorias_agregada (filial_nome, mes_ano, ano, tipo, tipo_cfop);
 
 -- Down
-DROP MATERIALIZED VIEW IF EXISTS mv_mercadorias_agregada;
+-- DROP MATERIALIZED VIEW IF EXISTS mv_mercadorias_agregada;
