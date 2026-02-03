@@ -181,6 +181,14 @@ func ResetDatabaseHandler(db *sql.DB) http.HandlerFunc {
 
 		log.Printf("Database reset successful (TRUNCATE).")
 
+		// REFRESH VIEW: Ensure the view is empty after truncating data
+		log.Println("Admin: Refreshing Materialized View (mv_mercadorias_agregada) after reset...")
+		if _, err := db.Exec("REFRESH MATERIALIZED VIEW mv_mercadorias_agregada"); err != nil {
+			log.Printf("Error refreshing view after reset: %v", err)
+		} else {
+			log.Println("Admin: View refreshed successfully (Empty).")
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"message":      "Database reset successfully",
