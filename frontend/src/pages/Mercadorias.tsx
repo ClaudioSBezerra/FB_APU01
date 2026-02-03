@@ -39,6 +39,7 @@ interface AggregatedData {
   tipo: 'ENTRADA' | 'SAIDA';
   tipo_cfop?: string;
   origem?: string;
+  tipo_operacao?: string;
 }
 
 interface TaxRate {
@@ -160,7 +161,22 @@ const Mercadorias = () => {
     return cnpj;
   };
 
-  const getCategoryLabel = (tipo: string, tipoCfop?: string, origem?: string) => {
+  const getCategoryLabel = (tipo: string, tipoCfop?: string, origem?: string, tipoOperacao?: string) => {
+    // Priority: use tipoOperacao from backend if available
+    if (tipoOperacao) {
+      switch (tipoOperacao) {
+        case 'Entrada_Revenda': return 'R de Entrada do bloco C100/C190';
+        case 'Entradas_Frete': return 'R de Entradas Frete';
+        case 'Entradas_Consumo': return 'C Entradas Consumo';
+        case 'Entradas_Imobilizado': return 'A Entradas Ativo';
+        case 'Saidas_Revenda': return 'R de Saidas Bloco C100/C190';
+        case 'Entradas_Energia_Agua': return 'Entradas Energia/Água (C500)';
+        case 'Entradas_Comunicações': return 'Entradas Comunicações (D500)';
+        case 'Saidas_Energia_Agua': return 'Saídas Energia/Água (C600)';
+        default: return tipoOperacao.replace(/_/g, ' ');
+      }
+    }
+
     if (!tipoCfop) return tipo === 'ENTRADA' ? 'Entrada (Outros)' : 'Saída (Outros)';
     
     // R de Entrada do bloco C100/C190
@@ -205,7 +221,7 @@ const Mercadorias = () => {
   });
   
   const uniqueOperationTypes = Array.from(new Set(data.map(item => 
-    getCategoryLabel(item.tipo, item.tipo_cfop, item.origem)
+    getCategoryLabel(item.tipo, item.tipo_cfop, item.origem, item.tipo_operacao)
   ))).sort();
 
   // Filter data
@@ -213,7 +229,7 @@ const Mercadorias = () => {
     const matchFilial = selectedFilial === "all" || item.filial_nome === selectedFilial;
     const matchMonth = selectedMonth === "all" || item.mes_ano === selectedMonth;
     const matchOperation = selectedOperationType === "all" || 
-      getCategoryLabel(item.tipo, item.tipo_cfop, item.origem) === selectedOperationType;
+      getCategoryLabel(item.tipo, item.tipo_cfop, item.origem, item.tipo_operacao) === selectedOperationType;
     return matchFilial && matchMonth && matchOperation;
   });
 
@@ -287,7 +303,7 @@ const Mercadorias = () => {
       return {
         'Filial': item.filial_nome,
         'Mês/Ano': item.mes_ano,
-        'Detalhe': getCategoryLabel(item.tipo, item.tipo_cfop, item.origem),
+        'Detalhe': getCategoryLabel(item.tipo, item.tipo_cfop, item.origem, item.tipo_operacao),
         'Valor': item.valor,
         'ICMS': item.icms,
         'ICMS Proj.': item.vl_icms_projetado,
@@ -620,7 +636,7 @@ const Mercadorias = () => {
                         <span className={`px-2 py-1 rounded text-[10px] font-bold ${
                           row.tipo === 'SAIDA' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
                         }`}>
-                          {getCategoryLabel(row.tipo, row.tipo_cfop, row.origem)}
+                          {getCategoryLabel(row.tipo, row.tipo_cfop, row.origem, row.tipo_operacao)}
                         </span>
                       </TableCell>
                       <TableCell className="text-right text-[10px]">{formatNumber(row.valor)}</TableCell>
