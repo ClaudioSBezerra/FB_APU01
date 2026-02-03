@@ -79,8 +79,18 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 				SUM(mv.valor_contabil) as valor,
 				SUM(mv.vl_icms_origem) as icms,
 				SUM(mv.vl_icms_origem * (1 - (COALESCE(ta.perc_reduc_icms, 0) / 100.0))) as icms_projetado,
-				SUM((mv.valor_contabil - (mv.vl_icms_origem * (1 - (COALESCE(ta.perc_reduc_icms, 0) / 100.0)))) * ((COALESCE(NULLIF(ta.perc_ibs_uf, 0), 9.0) + COALESCE(NULLIF(ta.perc_ibs_mun, 0), 8.7)) / 100.0)) as ibs_projetado,
-				SUM((mv.valor_contabil - (mv.vl_icms_origem * (1 - (COALESCE(ta.perc_reduc_icms, 0) / 100.0)))) * (COALESCE(NULLIF(ta.perc_cbs, 0), 8.80) / 100.0)) as cbs_projetado
+				SUM(
+					CASE 
+						WHEN mv.tipo_cfop IN ('T', 'O') THEN 0
+						ELSE (mv.valor_contabil - (mv.vl_icms_origem * (1 - (COALESCE(ta.perc_reduc_icms, 0) / 100.0)))) * ((COALESCE(NULLIF(ta.perc_ibs_uf, 0), 9.0) + COALESCE(NULLIF(ta.perc_ibs_mun, 0), 8.7)) / 100.0)
+					END
+				) as ibs_projetado,
+				SUM(
+					CASE 
+						WHEN mv.tipo_cfop IN ('T', 'O') THEN 0
+						ELSE (mv.valor_contabil - (mv.vl_icms_origem * (1 - (COALESCE(ta.perc_reduc_icms, 0) / 100.0)))) * (COALESCE(NULLIF(ta.perc_cbs, 0), 8.80) / 100.0)
+					END
+				) as cbs_projetado
 			FROM mv_mercadorias_agregada mv
 			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($1, mv.ano)
 			WHERE %s

@@ -256,23 +256,36 @@ const Mercadorias = () => {
   });
 
   const totals = filteredData.reduce((acc, item) => {
+    // Check if item is taxable for IBS/CBS (exclude T and O)
+    const isTaxable = item.tipo_cfop !== 'T' && item.tipo_cfop !== 'O';
+
     if (item.tipo === 'SAIDA') {
       acc.saidas.valor += item.valor;
       acc.saidas.icms += item.icms;
       acc.saidas.icmsProj += item.vl_icms_projetado;
       acc.saidas.ibsProj += item.vl_ibs_projetado;
       acc.saidas.cbsProj += item.vl_cbs_projetado;
+      
+      if (isTaxable) {
+        acc.saidas.valorTaxable += item.valor;
+        acc.saidas.icmsTaxable += item.icms;
+      }
     } else {
       acc.entradas.valor += item.valor;
       acc.entradas.icms += item.icms;
       acc.entradas.icmsProj += item.vl_icms_projetado;
       acc.entradas.ibsProj += item.vl_ibs_projetado;
       acc.entradas.cbsProj += item.vl_cbs_projetado;
+
+      if (isTaxable) {
+        acc.entradas.valorTaxable += item.valor;
+        acc.entradas.icmsTaxable += item.icms;
+      }
     }
     return acc;
   }, {
-    saidas: { valor: 0, icms: 0, icmsProj: 0, ibsProj: 0, cbsProj: 0 },
-    entradas: { valor: 0, icms: 0, icmsProj: 0, ibsProj: 0, cbsProj: 0 }
+    saidas: { valor: 0, icms: 0, icmsProj: 0, ibsProj: 0, cbsProj: 0, valorTaxable: 0, icmsTaxable: 0 },
+    entradas: { valor: 0, icms: 0, icmsProj: 0, ibsProj: 0, cbsProj: 0, valorTaxable: 0, icmsTaxable: 0 }
   });
 
   // Projection Logic for 2027-2033 (based on currently filtered totals)
@@ -285,16 +298,27 @@ const Mercadorias = () => {
       const cbsRate = rate.perc_cbs / 100.0;
 
       // Saídas
+      // ICMS Proj is calculated on TOTAL ICMS (including T/O?) 
+      // User said: "operações com TIPO "T" ... e "O" ... não terão incidência de IBS e CBS"
+      // Assuming ICMS reduction applies to ALL ICMS (or just taxable?).
+      // Usually ICMS reduction is general. But IBS/CBS only applies to taxable base.
+      // So we use totals.saidas.icms for ICMS Projection (display purpose)
       const icmsProjSaida = totals.saidas.icms * reductionFactor;
-      // Base IBS/CBS = Valor Contabil - ICMS Projetado
-      const baseIbsCbsSaida = totals.saidas.valor - icmsProjSaida;
+      
+      // For IBS/CBS Base, we use Taxable Value - Taxable ICMS Projected
+      const icmsProjSaidaTaxable = totals.saidas.icmsTaxable * reductionFactor;
+      const baseIbsCbsSaida = totals.saidas.valorTaxable - icmsProjSaidaTaxable;
+      
       const ibsSaida = baseIbsCbsSaida * ibsRate;
       const cbsSaida = baseIbsCbsSaida * cbsRate;
       const totalDebitosAno = icmsProjSaida + ibsSaida + cbsSaida;
 
       // Entradas
       const icmsProjEntrada = totals.entradas.icms * reductionFactor;
-      const baseIbsCbsEntrada = totals.entradas.valor - icmsProjEntrada;
+      
+      const icmsProjEntradaTaxable = totals.entradas.icmsTaxable * reductionFactor;
+      const baseIbsCbsEntrada = totals.entradas.valorTaxable - icmsProjEntradaTaxable;
+
       const ibsEntrada = baseIbsCbsEntrada * ibsRate;
       const cbsEntrada = baseIbsCbsEntrada * cbsRate;
       const totalCreditosAno = icmsProjEntrada + ibsEntrada + cbsEntrada;
