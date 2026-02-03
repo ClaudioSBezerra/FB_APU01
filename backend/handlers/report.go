@@ -48,10 +48,12 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 
 		var typeFilter string
 		if opType == "comercial" {
-			// FIXED: Include 'O' (Outros) temporarily to ensure data appears even if CFOP is missing in the mapping table.
-			typeFilter = "mv.tipo_cfop IN ('R', 'S', 'O')"
+			// Commercial: Revenda (R), Saída (S)
+			typeFilter = "mv.tipo_cfop IN ('R', 'S')"
 		} else {
-			typeFilter = "mv.tipo_cfop IN ('A', 'C', 'T')"
+			// Others: Ativo (A), Consumo (C), Transferência (T), Outros (O)
+			// 'O' includes unmapped CFOPs
+			typeFilter = "mv.tipo_cfop IN ('A', 'C', 'T', 'O')"
 		}
 
 		// Projection Logic for Tax Reform (2027+):
