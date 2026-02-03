@@ -10,6 +10,7 @@ import (
 
 type MercadoriasReport struct {
 	FilialNome    string  `json:"filial_nome"`
+	FilialCNPJ    string  `json:"filial_cnpj"`
 	MesAno        string  `json:"mes_ano"`
 	Tipo          string  `json:"tipo"`
 	TipoCfop      string  `json:"tipo_cfop,omitempty"`
@@ -67,6 +68,7 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 		query := fmt.Sprintf(`
 			SELECT 
 				mv.filial_nome,
+				mv.filial_cnpj,
 				mv.mes_ano,
 				mv.tipo,
 				mv.tipo_cfop,
@@ -78,7 +80,7 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 			FROM mv_mercadorias_agregada mv
 			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($1, mv.ano)
 			WHERE %s
-			GROUP BY 1, 2, 3, 4
+			GROUP BY 1, 2, 3, 4, 5
 		`, typeFilter)
 
 		rows, err := db.Query(query, targetYear)
@@ -92,7 +94,7 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 		var reports []MercadoriasReport
 		for rows.Next() {
 			var r MercadoriasReport
-			if err := rows.Scan(&r.FilialNome, &r.MesAno, &r.Tipo, &r.TipoCfop, &r.Valor, &r.Icms, &r.IcmsProjetado, &r.IbsProjetado, &r.CbsProjetado); err != nil {
+			if err := rows.Scan(&r.FilialNome, &r.FilialCNPJ, &r.MesAno, &r.Tipo, &r.TipoCfop, &r.Valor, &r.Icms, &r.IcmsProjetado, &r.IbsProjetado, &r.CbsProjetado); err != nil {
 				fmt.Printf("Error scanning mercadorias report: %v\n", err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return

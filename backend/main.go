@@ -20,8 +20,8 @@ import (
 
 // Version information for backend deployment validation
 const (
-	BackendVersion = "5.0.0"
-	FeatureSet     = "Reforma Tributária Completa (Projeções + Views Expandidas)"
+	BackendVersion = "5.0.2"
+	FeatureSet     = "Mercadorias: Filtros acima, CNPJ Mascarado, Datas Corretas (031)"
 )
 
 func GetVersionInfo() string {

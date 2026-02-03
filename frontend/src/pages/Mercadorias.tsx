@@ -29,6 +29,7 @@ import { formatCurrency } from "@/lib/utils";
 
 interface AggregatedData {
   filial_nome: string;
+  filial_cnpj: string;
   mes_ano: string;
   valor: number;
   icms: number;
@@ -149,6 +150,15 @@ const Mercadorias = () => {
   }
 
   // Helper to map operation types to user-friendly labels
+  const maskCnpj = (cnpj: string) => {
+    if (!cnpj) return "";
+    const parts = cnpj.split('/');
+    if (parts.length === 2) {
+      return `**.***.***/${parts[1]}`;
+    }
+    return cnpj;
+  };
+
   const getCategoryLabel = (tipo: string, tipoCfop?: string) => {
     if (!tipoCfop) return tipo === 'ENTRADA' ? 'Entrada (Outros)' : 'Saída (Outros)';
     
@@ -332,42 +342,6 @@ const Mercadorias = () => {
               </SelectContent>
             </Select>
           </div>
-
-          <Select value={selectedFilial} onValueChange={setSelectedFilial}>
-            <SelectTrigger className="w-[180px] h-8">
-              <SelectValue placeholder="Filial: Todas" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Filial: Todas</SelectItem>
-              {uniqueFiliais.map((f) => (
-                <SelectItem key={f} value={f}>{f}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="w-[130px] h-8">
-              <SelectValue placeholder="Mês: Todos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Mês: Todos</SelectItem>
-              {uniqueMonths.map((m) => (
-                <SelectItem key={m} value={m}>{m}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={selectedCfopType} onValueChange={setSelectedCfopType}>
-            <SelectTrigger className="w-[130px] h-8">
-              <SelectValue placeholder="Tipo: Todos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tipo: Todos</SelectItem>
-              {uniqueCfopTypes.map((t) => (
-                <SelectItem key={t} value={t}>Tipo {t}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
 
           <Button variant="default" size="sm" onClick={handleExport}>
             <Download className="w-4 h-4 mr-2" />
@@ -566,6 +540,44 @@ const Mercadorias = () => {
       </Card>
 
       {/* Tabela Detalhada */}
+      <div className="flex gap-2 items-center flex-wrap mb-1">
+        <Select value={selectedFilial} onValueChange={setSelectedFilial}>
+          <SelectTrigger className="w-[180px] h-8 bg-white">
+            <SelectValue placeholder="Filial: Todas" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Filial: Todas</SelectItem>
+            {uniqueFiliais.map((f) => (
+              <SelectItem key={f} value={f}>{f}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+          <SelectTrigger className="w-[130px] h-8 bg-white">
+            <SelectValue placeholder="Mês: Todos" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Mês: Todos</SelectItem>
+            {uniqueMonths.map((m) => (
+              <SelectItem key={m} value={m}>{m}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={selectedCfopType} onValueChange={setSelectedCfopType}>
+          <SelectTrigger className="w-[130px] h-8 bg-white">
+            <SelectValue placeholder="Tipo: Todos" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tipo: Todos</SelectItem>
+            {uniqueCfopTypes.map((t) => (
+              <SelectItem key={t} value={t}>Tipo {t}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Detalhamento por Filial e Operação</CardTitle>
@@ -598,7 +610,7 @@ const Mercadorias = () => {
 
                   return (
                     <TableRow key={i} className="hover:bg-gray-50">
-                      <TableCell className="font-medium text-xs">{row.filial_nome}</TableCell>
+                      <TableCell className="font-medium text-xs" title={row.filial_nome}>{maskCnpj(row.filial_cnpj)}</TableCell>
                       <TableCell className="text-xs">{row.mes_ano}</TableCell>
                       <TableCell>
                         <span className={`px-2 py-1 rounded text-[11px] font-bold ${
