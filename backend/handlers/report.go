@@ -9,17 +9,19 @@ import (
 )
 
 type MercadoriasReport struct {
-	FilialNome    string  `json:"filial_nome"`
-	MesAno        string  `json:"mes_ano"`
-	Tipo          string  `json:"tipo"`
-	TipoCfop      string  `json:"tipo_cfop,omitempty"` // Added for clarity
-	Valor         float64 `json:"valor"`
-	Pis           float64 `json:"pis"`
-	Cofins        float64 `json:"cofins"`
-	Icms          float64 `json:"icms"`
-	IcmsProjetado float64 `json:"vl_icms_projetado"`
-	IbsProjetado  float64 `json:"vl_ibs_projetado"`
-	CbsProjetado  float64 `json:"vl_cbs_projetado"`
+	FilialNome         string  `json:"filial_nome"`
+	MesAno             string  `json:"mes_ano"`
+	Tipo               string  `json:"tipo"`
+	TipoCfop           string  `json:"tipo_cfop,omitempty"`
+	Valor              float64 `json:"valor"`
+	Pis                float64 `json:"pis"`
+	Cofins             float64 `json:"cofins"`
+	PisCofins          float64 `json:"pis_cofins"`
+	PisCofinsProjetado float64 `json:"pis_cofins_projetado"`
+	Icms               float64 `json:"icms"`
+	IcmsProjetado      float64 `json:"vl_icms_projetado"`
+	IbsProjetado       float64 `json:"vl_ibs_projetado"`
+	CbsProjetado       float64 `json:"vl_cbs_projetado"`
 }
 
 func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
@@ -62,8 +64,10 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 				CASE WHEN c.ind_oper = '0' THEN 'ENTRADA' ELSE 'SAIDA' END as tipo,
 				MAX(COALESCE(f.tipo, 'O')) as tipo_cfop,
 				COALESCE(SUM(c190.vl_opr), 0) as valor,
-				0 as pis, -- Not available in C190
-				0 as cofins, -- Not available in C190
+				COALESCE(SUM(COALESCE(c.vl_pis, 0) * CASE WHEN c.vl_doc > 0 THEN c190.vl_opr / c.vl_doc ELSE 0 END), 0) as pis,
+				COALESCE(SUM(COALESCE(c.vl_cofins, 0) * CASE WHEN c.vl_doc > 0 THEN c190.vl_opr / c.vl_doc ELSE 0 END), 0) as cofins,
+				COALESCE(SUM((COALESCE(c.vl_pis, 0) + COALESCE(c.vl_cofins, 0)) * CASE WHEN c.vl_doc > 0 THEN c190.vl_opr / c.vl_doc ELSE 0 END), 0) as pis_cofins,
+				0 as pis_cofins_projetado,
 				COALESCE(SUM(c190.vl_icms), 0) as icms,
 				COALESCE(SUM(c190.vl_icms * (1 - (COALESCE(ta.perc_reduc_icms, 0) / 100.0))), 0) as icms_projetado,
 				COALESCE(SUM(c190.vl_opr * ((COALESCE(NULLIF(ta.perc_ibs_uf, 0), 9.0) + COALESCE(NULLIF(ta.perc_ibs_mun, 0), 8.7)) / 100.0)), 0) as ibs_projetado,
@@ -102,7 +106,7 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 		var reports []MercadoriasReport
 		for rows.Next() {
 			var r MercadoriasReport
-			if err := rows.Scan(&r.FilialNome, &r.MesAno, &r.Tipo, &r.TipoCfop, &r.Valor, &r.Pis, &r.Cofins, &r.Icms, &r.IcmsProjetado, &r.IbsProjetado, &r.CbsProjetado); err != nil {
+			if err := rows.Scan(&r.FilialNome, &r.MesAno, &r.Tipo, &r.TipoCfop, &r.Valor, &r.Pis, &r.Cofins, &r.PisCofins, &r.PisCofinsProjetado, &r.Icms, &r.IcmsProjetado, &r.IbsProjetado, &r.CbsProjetado); err != nil {
 				fmt.Printf("Error scanning mercadorias report: %v\n", err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return

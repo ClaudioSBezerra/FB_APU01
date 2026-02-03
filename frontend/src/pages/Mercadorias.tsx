@@ -22,6 +22,8 @@ interface AggregatedData {
   valor: number;
   pis: number;
   cofins: number;
+  pis_cofins?: number;
+  pis_cofins_projetado?: number;
   icms: number;
   vl_icms_projetado: number;
   vl_ibs_projetado: number;
@@ -118,13 +120,41 @@ const Mercadorias = () => {
     return matchFilial && matchMonth;
   });
 
+  const totals = filteredData.reduce((acc, item) => {
+    if (item.tipo === 'SAIDA') {
+      acc.saidas.valor += item.valor;
+      acc.saidas.icms += item.icms;
+      acc.saidas.icmsProj += item.vl_icms_projetado;
+      acc.saidas.pisCofins += (item.pis_cofins || (item.pis + item.cofins));
+      acc.saidas.pisCofinsProj += (item.pis_cofins_projetado || 0);
+      acc.saidas.ibsProj += item.vl_ibs_projetado;
+      acc.saidas.cbsProj += item.vl_cbs_projetado;
+    } else {
+      acc.entradas.valor += item.valor;
+      acc.entradas.icms += item.icms;
+      acc.entradas.icmsProj += item.vl_icms_projetado;
+      acc.entradas.pisCofins += (item.pis_cofins || (item.pis + item.cofins));
+      acc.entradas.pisCofinsProj += (item.pis_cofins_projetado || 0);
+      acc.entradas.ibsProj += item.vl_ibs_projetado;
+      acc.entradas.cbsProj += item.vl_cbs_projetado;
+    }
+    return acc;
+  }, {
+    saidas: { valor: 0, icms: 0, icmsProj: 0, pisCofins: 0, pisCofinsProj: 0, ibsProj: 0, cbsProj: 0 },
+    entradas: { valor: 0, icms: 0, icmsProj: 0, pisCofins: 0, pisCofinsProj: 0, ibsProj: 0, cbsProj: 0 }
+  });
+
+  const totalDebitos = totals.saidas.icmsProj + totals.saidas.ibsProj + totals.saidas.cbsProj;
+  const totalCreditos = totals.entradas.icmsProj + totals.entradas.ibsProj + totals.entradas.cbsProj;
+
   const handleExport = () => {
     const exportData = filteredData.map(item => ({
       'Filial': item.filial_nome,
       'Mês/Ano': item.mes_ano,
       'Tipo': item.tipo,
       'Valor Total': item.valor,
-      'PIS/COFINS': item.pis + item.cofins,
+      'PIS/COFINS': item.pis_cofins || (item.pis + item.cofins),
+      'PIS/COFINS Proj.': item.pis_cofins_projetado || 0,
       'ICMS': item.icms,
       'ICMS Projetado': item.vl_icms_projetado,
       'IBS Projetado': item.vl_ibs_projetado,
@@ -218,40 +248,89 @@ const Mercadorias = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de Saídas</CardTitle>
+            <CardTitle className="text-lg font-medium">Total de Saídas</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {formatCurrency(filteredData.filter(d => d.tipo === 'SAIDA').reduce((sum, item) => sum + item.valor, 0))}
+            <div className="space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Valor:</span>
+                <span className="font-medium">{formatCurrency(totals.saidas.valor)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">ICMS:</span>
+                <span className="font-medium">{formatCurrency(totals.saidas.icms)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">ICMS Proj.:</span>
+                <span className="font-medium">{formatCurrency(totals.saidas.icmsProj)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">PIS/COF:</span>
+                <span className="font-medium">{formatCurrency(totals.saidas.pisCofins)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">PIS/COF Proj.:</span>
+                <span className="font-medium">{formatCurrency(totals.saidas.pisCofinsProj)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">IBS Proj.:</span>
+                <span className="font-medium">{formatCurrency(totals.saidas.ibsProj)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">CBS Proj.:</span>
+                <span className="font-medium">{formatCurrency(totals.saidas.cbsProj)}</span>
+              </div>
+              <div className="flex justify-between border-t pt-2 mt-2">
+                <span className="font-bold text-gray-700">Total Débitos:</span>
+                <span className="font-bold text-red-600">{formatCurrency(totalDebitos)}</span>
+              </div>
             </div>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de Entradas</CardTitle>
+            <CardTitle className="text-lg font-medium">Total de Entradas</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {formatCurrency(data.filter(d => d.tipo === 'ENTRADA').reduce((sum, item) => sum + item.valor, 0))}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Saldo de PIS/COFINS</CardTitle>
-            <Calculator className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {formatCurrency(data.reduce((sum, item) => {
-                const total = item.pis + item.cofins;
-                return item.tipo === 'SAIDA' ? sum - total : sum + total;
-              }, 0))}
+            <div className="space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Valor:</span>
+                <span className="font-medium">{formatCurrency(totals.entradas.valor)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">ICMS:</span>
+                <span className="font-medium">{formatCurrency(totals.entradas.icms)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">ICMS Proj.:</span>
+                <span className="font-medium">{formatCurrency(totals.entradas.icmsProj)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">PIS/COF:</span>
+                <span className="font-medium">{formatCurrency(totals.entradas.pisCofins)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">PIS/COF Proj.:</span>
+                <span className="font-medium">{formatCurrency(totals.entradas.pisCofinsProj)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">IBS Proj.:</span>
+                <span className="font-medium">{formatCurrency(totals.entradas.ibsProj)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">CBS Proj.:</span>
+                <span className="font-medium">{formatCurrency(totals.entradas.cbsProj)}</span>
+              </div>
+              <div className="flex justify-between border-t pt-2 mt-2">
+                <span className="font-bold text-gray-700">Total Créditos:</span>
+                <span className="font-bold text-green-600">{formatCurrency(totalCreditos)}</span>
+              </div>
             </div>
           </CardContent>
         </Card>
