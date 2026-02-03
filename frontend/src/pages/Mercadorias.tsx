@@ -359,17 +359,23 @@ const Mercadorias = () => {
               <CardTitle>Projeção de Movimentação ({selectedYear})</CardTitle>
             </CardHeader>
             <CardContent className="h-[400px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                  <Legend />
-                  <Bar dataKey="Saídas" fill="#ef4444" />
-                  <Bar dataKey="Entradas" fill="#22c55e" />
-                </BarChart>
-              </ResponsiveContainer>
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                    <Legend />
+                    <Bar dataKey="Saídas" fill="#ef4444" />
+                    <Bar dataKey="Entradas" fill="#22c55e" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                  Nenhum dado disponível para o período selecionado.
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

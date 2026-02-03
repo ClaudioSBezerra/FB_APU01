@@ -20,8 +20,8 @@ import (
 
 // Version information for backend deployment validation
 const (
-	BackendVersion = "4.9.1"
-	FeatureSet     = "Tax Reform 2027-2033 & PIS/COFINS Removal"
+	BackendVersion = "4.9.2"
+	FeatureSet     = "Auto-Refresh View & Chart Fix"
 )
 
 func GetVersionInfo() string {
