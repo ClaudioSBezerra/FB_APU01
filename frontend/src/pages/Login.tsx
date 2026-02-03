@@ -33,7 +33,7 @@ const Login = () => {
 
       login(data);
       toast.success("Login realizado com sucesso!");
-      navigate("/mercadorias", { state: { refresh: true } });
+      navigate("/mercadorias");
     } catch (error: any) {
       toast.error("Erro no login: " + error.message);
     } finally {

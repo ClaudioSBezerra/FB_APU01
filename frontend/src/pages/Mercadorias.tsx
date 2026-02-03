@@ -92,10 +92,11 @@ const Mercadorias = () => {
         fetchData();
         alert('Dados atualizados com sucesso!');
       } else {
-        alert('Erro ao atualizar dados. Verifique suas permissões.');
+        const errText = await response.text();
+        alert(`Erro ao atualizar dados: ${response.status} ${response.statusText}\n${errText}`);
       }
-    } catch (e) {
-      alert('Erro de conexão ao atualizar dados.');
+    } catch (e: any) {
+      alert(`Erro de conexão ao atualizar dados: ${e.message}`);
     } finally {
       setIsRefreshing(false);
     }
