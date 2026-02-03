@@ -347,23 +347,34 @@ const Mercadorias = () => {
             <ArrowUpCircle className="h-5 w-5 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="space-y-1 text-sm">
+            <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500">Valor Total:</span>
+                <span className="text-gray-500">Valor:</span>
                 <span className="font-medium">{formatCurrency(totals.saidas.valor)}</span>
               </div>
-              <div className="flex justify-between pt-2 border-t mt-2">
-                <span className="text-gray-700 font-semibold">ICMS Atual:</span>
-                <span className="font-bold">{formatCurrency(totals.saidas.icms)}</span>
+              <div className="flex justify-between">
+                <span className="text-gray-500">ICMS:</span>
+                <span className="font-medium">{formatCurrency(totals.saidas.icms)}</span>
               </div>
-              <div className="flex justify-between pt-2 border-t mt-2">
-                <span className="text-gray-700 font-semibold">Total Reforma (Débito):</span>
-                <span className="font-bold text-red-600">{formatCurrency(totalDebitos)}</span>
+              
+              <div className="my-2 border-t border-dashed border-gray-200"></div>
+              
+              <div className="flex justify-between">
+                <span className="text-gray-500">ICMS Proj.:</span>
+                <span className="font-medium">{formatCurrency(totals.saidas.icmsProj)}</span>
               </div>
-              <div className="text-xs text-gray-400 mt-1 flex gap-2 justify-end">
-                <span>ICMS: {formatCurrency(totals.saidas.icmsProj)}</span>
-                <span>IBS: {formatCurrency(totals.saidas.ibsProj)}</span>
-                <span>CBS: {formatCurrency(totals.saidas.cbsProj)}</span>
+              <div className="flex justify-between">
+                <span className="text-gray-500">IBS Proj.:</span>
+                <span className="font-medium">{formatCurrency(totals.saidas.ibsProj)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">CBS Proj.:</span>
+                <span className="font-medium">{formatCurrency(totals.saidas.cbsProj)}</span>
+              </div>
+
+              <div className="flex justify-between pt-2 border-t mt-2">
+                <span className="text-red-700 font-bold">Total Débitos:</span>
+                <span className="font-bold text-red-600 text-lg">{formatCurrency(totalDebitos)}</span>
               </div>
             </div>
           </CardContent>
@@ -376,23 +387,34 @@ const Mercadorias = () => {
             <ArrowDownCircle className="h-5 w-5 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="space-y-1 text-sm">
+            <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500">Valor Total:</span>
+                <span className="text-gray-500">Valor:</span>
                 <span className="font-medium">{formatCurrency(totals.entradas.valor)}</span>
               </div>
-              <div className="flex justify-between pt-2 border-t mt-2">
-                <span className="text-gray-700 font-semibold">ICMS Atual:</span>
-                <span className="font-bold">{formatCurrency(totals.entradas.icms)}</span>
+              <div className="flex justify-between">
+                <span className="text-gray-500">ICMS:</span>
+                <span className="font-medium">{formatCurrency(totals.entradas.icms)}</span>
               </div>
-              <div className="flex justify-between pt-2 border-t mt-2">
-                <span className="text-gray-700 font-semibold">Total Reforma (Crédito):</span>
-                <span className="font-bold text-green-600">{formatCurrency(totalCreditos)}</span>
+
+              <div className="my-2 border-t border-dashed border-gray-200"></div>
+
+              <div className="flex justify-between">
+                <span className="text-gray-500">ICMS Proj.:</span>
+                <span className="font-medium">{formatCurrency(totals.entradas.icmsProj)}</span>
               </div>
-              <div className="text-xs text-gray-400 mt-1 flex gap-2 justify-end">
-                <span>ICMS: {formatCurrency(totals.entradas.icmsProj)}</span>
-                <span>IBS: {formatCurrency(totals.entradas.ibsProj)}</span>
-                <span>CBS: {formatCurrency(totals.entradas.cbsProj)}</span>
+              <div className="flex justify-between">
+                <span className="text-gray-500">IBS Proj.:</span>
+                <span className="font-medium">{formatCurrency(totals.entradas.ibsProj)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">CBS Proj.:</span>
+                <span className="font-medium">{formatCurrency(totals.entradas.cbsProj)}</span>
+              </div>
+
+              <div className="flex justify-between pt-2 border-t mt-2">
+                <span className="text-green-700 font-bold">Total Créditos:</span>
+                <span className="font-bold text-green-600 text-lg">{formatCurrency(totalCreditos)}</span>
               </div>
             </div>
           </CardContent>
@@ -401,28 +423,33 @@ const Mercadorias = () => {
         {/* Apuração Projetada */}
         <Card className="border-l-4 border-l-blue-500 bg-blue-50/30">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-lg font-medium text-blue-800">Apuração (Diferença Débito - Crédito)</CardTitle>
+            <CardTitle className="text-lg font-medium text-blue-800">Apuração</CardTitle>
             <Scale className="h-5 w-5 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Saldo Atual (Débito - Crédito):</span>
-                <span className={`font-bold text-lg ${saldoAtual > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                  {formatCurrency(saldoAtual)}
+            <div className="space-y-3 text-sm">
+               <div className="flex justify-between items-center">
+                <span className="text-gray-600">Total Débitos:</span>
+                <span className="font-medium text-red-600">
+                  {formatCurrency(totalDebitos)}
                 </span>
               </div>
-              <div className="text-xs text-gray-400 text-right mb-2">
-                {saldoAtual > 0 ? "Imposto a Pagar" : "Crédito Acumulado"}
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Total Créditos:</span>
+                <span className="font-medium text-green-600">
+                  - {formatCurrency(totalCreditos)}
+                </span>
               </div>
+              
+              <div className="border-t border-blue-300 my-2"></div>
 
-              <div className="flex justify-between items-center pt-3 border-t border-blue-200">
-                <span className="text-blue-900 font-bold">Saldo Reforma (Débito - Crédito):</span>
-                <span className={`font-bold text-xl ${saldoReforma > 0 ? 'text-red-600' : 'text-green-600'}`}>
+              <div className="flex justify-between items-center">
+                <span className="text-blue-900 font-bold text-base">Resultado:</span>
+                <span className={`font-bold text-2xl ${saldoReforma > 0 ? 'text-red-600' : 'text-green-600'}`}>
                   {formatCurrency(saldoReforma)}
                 </span>
               </div>
-              <div className="text-xs text-blue-400 text-right">
+              <div className="text-xs text-blue-500 text-right font-medium">
                 {saldoReforma > 0 ? "Imposto a Pagar" : "Crédito Acumulado"}
               </div>
             </div>
