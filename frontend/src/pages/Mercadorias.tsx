@@ -182,11 +182,11 @@ const Mercadorias = () => {
 
   const totalDebitos = totals.saidas.icmsProj + totals.saidas.ibsProj + totals.saidas.cbsProj;
   const totalCreditos = totals.entradas.icmsProj + totals.entradas.ibsProj + totals.entradas.cbsProj;
-  const saldoImposto = totalDebitos - totalCreditos;
+  const saldoReforma = totalDebitos - totalCreditos;
 
   const totalDebitosAtual = totals.saidas.icms;
   const totalCreditosAtual = totals.entradas.icms;
-  const saldoImpostoAtual = totalDebitosAtual - totalCreditosAtual;
+  const saldoAtual = totalDebitosAtual - totalCreditosAtual;
 
   const handleExport = () => {
     const exportData = filteredData.map(item => {
@@ -261,8 +261,7 @@ const Mercadorias = () => {
     <div className="container mx-auto p-6 space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Mercadorias</h1>
-          <p className="text-gray-500 mt-1">Apuração de Impostos e Simulação da Reforma Tributária</p>
+          <h1 className="text-3xl font-bold text-gray-900">Comparativo de impostos atuais com IBS e CBS</h1>
         </div>
 
         <div className="flex gap-2 items-center flex-wrap">
@@ -402,29 +401,29 @@ const Mercadorias = () => {
         {/* Apuração Projetada */}
         <Card className="border-l-4 border-l-blue-500 bg-blue-50/30">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-lg font-medium text-blue-800">Apuração de Impostos</CardTitle>
+            <CardTitle className="text-lg font-medium text-blue-800">Apuração (Diferença Débito - Crédito)</CardTitle>
             <Scale className="h-5 w-5 text-blue-600" />
           </CardHeader>
           <CardContent>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">Saldo Atual (ICMS):</span>
-                <span className={`font-bold text-lg ${saldoImpostoAtual > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                  {formatCurrency(saldoImpostoAtual)}
+                <span className="text-gray-600">Saldo Atual (Débito - Crédito):</span>
+                <span className={`font-bold text-lg ${saldoAtual > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {formatCurrency(saldoAtual)}
                 </span>
               </div>
               <div className="text-xs text-gray-400 text-right mb-2">
-                {saldoImpostoAtual > 0 ? "Imposto a Pagar" : "Crédito Acumulado"}
+                {saldoAtual > 0 ? "Imposto a Pagar" : "Crédito Acumulado"}
               </div>
 
               <div className="flex justify-between items-center pt-3 border-t border-blue-200">
-                <span className="text-blue-900 font-bold">Saldo Reforma (Estimado):</span>
-                <span className={`font-bold text-xl ${saldoImposto > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                  {formatCurrency(saldoImposto)}
+                <span className="text-blue-900 font-bold">Saldo Reforma (Débito - Crédito):</span>
+                <span className={`font-bold text-xl ${saldoReforma > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {formatCurrency(saldoReforma)}
                 </span>
               </div>
               <div className="text-xs text-blue-400 text-right">
-                {saldoImposto > 0 ? "Imposto a Pagar (Débito - Crédito)" : "Crédito Acumulado (Débito - Crédito)"}
+                {saldoReforma > 0 ? "Imposto a Pagar" : "Crédito Acumulado"}
               </div>
             </div>
           </CardContent>
@@ -446,8 +445,8 @@ const Mercadorias = () => {
                 <Tooltip formatter={(value) => formatCurrency(Number(value))} />
                 <Legend />
                 <ReferenceLine y={0} stroke="#000" />
-                <Line type="monotone" dataKey="SaldoAtual" name="Saldo Atual (ICMS)" stroke="#9ca3af" strokeDasharray="5 5" />
-                <Line type="monotone" dataKey="Saldo" name="Saldo Reforma (Proj.)" stroke="#2563eb" strokeWidth={2} />
+                <Line type="monotone" dataKey="SaldoAtual" name="Saldo Atual (Débito - Crédito)" stroke="#9ca3af" strokeDasharray="5 5" />
+                <Line type="monotone" dataKey="Saldo" name="Saldo Reforma (IBS + CBS + ICMS)" stroke="#2563eb" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           ) : (
