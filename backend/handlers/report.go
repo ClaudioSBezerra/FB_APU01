@@ -14,6 +14,7 @@ type MercadoriasReport struct {
 	MesAno        string  `json:"mes_ano"`
 	Tipo          string  `json:"tipo"`
 	TipoCfop      string  `json:"tipo_cfop,omitempty"`
+	Origem        string  `json:"origem,omitempty"`
 	Valor         float64 `json:"valor"`
 	Icms          float64 `json:"icms"`
 	IcmsProjetado float64 `json:"vl_icms_projetado"`
@@ -72,6 +73,7 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 				mv.mes_ano,
 				mv.tipo,
 				mv.tipo_cfop,
+				mv.origem,
 				SUM(mv.valor_contabil) as valor,
 				SUM(mv.vl_icms_origem) as icms,
 				SUM(mv.vl_icms_origem * (1 - (COALESCE(ta.perc_reduc_icms, 0) / 100.0))) as icms_projetado,
@@ -80,7 +82,7 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 			FROM mv_mercadorias_agregada mv
 			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($1, mv.ano)
 			WHERE %s
-			GROUP BY 1, 2, 3, 4, 5
+			GROUP BY 1, 2, 3, 4, 5, 6
 		`, typeFilter)
 
 		rows, err := db.Query(query, targetYear)
@@ -94,7 +96,7 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 		var reports []MercadoriasReport
 		for rows.Next() {
 			var r MercadoriasReport
-			if err := rows.Scan(&r.FilialNome, &r.FilialCNPJ, &r.MesAno, &r.Tipo, &r.TipoCfop, &r.Valor, &r.Icms, &r.IcmsProjetado, &r.IbsProjetado, &r.CbsProjetado); err != nil {
+			if err := rows.Scan(&r.FilialNome, &r.FilialCNPJ, &r.MesAno, &r.Tipo, &r.TipoCfop, &r.Origem, &r.Valor, &r.Icms, &r.IcmsProjetado, &r.IbsProjetado, &r.CbsProjetado); err != nil {
 				fmt.Printf("Error scanning mercadorias report: %v\n", err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return

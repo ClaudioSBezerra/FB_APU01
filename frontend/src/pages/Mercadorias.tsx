@@ -38,6 +38,7 @@ interface AggregatedData {
   vl_cbs_projetado: number;
   tipo: 'ENTRADA' | 'SAIDA';
   tipo_cfop?: string;
+  origem?: string;
 }
 
 interface TaxRate {
@@ -57,7 +58,7 @@ const Mercadorias = () => {
   const [selectedYear, setSelectedYear] = useState<string>("2027");
   const [selectedFilial, setSelectedFilial] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
-  const [selectedCfopType, setSelectedCfopType] = useState<string>("all");
+  const [selectedOperationType, setSelectedOperationType] = useState<string>("all");
   const [data, setData] = useState<AggregatedData[]>([]);
   const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -159,33 +160,61 @@ const Mercadorias = () => {
     return cnpj;
   };
 
-  const getCategoryLabel = (tipo: string, tipoCfop?: string) => {
+  const getCategoryLabel = (tipo: string, tipoCfop?: string, origem?: string) => {
     if (!tipoCfop) return tipo === 'ENTRADA' ? 'Entrada (Outros)' : 'Saída (Outros)';
     
-    // Detalha Entradas Revenda, Saida Revenda, Entrada Uso Consumo e Entrada Imobilizado
+    // R de Entrada do bloco C100/C190
+    if (tipo === 'ENTRADA' && tipoCfop === 'R' && origem === 'C100') return 'R de Entrada do bloco C100/C190';
+    
+    // R de Entradas Frete
+    if (tipo === 'ENTRADA' && tipoCfop === 'R' && origem === 'D100') return 'R de Entradas Frete';
+
+    // C Entradas Consumo
+    if (tipo === 'ENTRADA' && tipoCfop === 'C') return 'C Entradas Consumo';
+
+    // A Entradas Ativo
+    if (tipo === 'ENTRADA' && tipoCfop === 'A') return 'A Entradas Ativo';
+
+    // R de Saidas Bloco C100/C190
+    if (tipo === 'SAIDA' && tipoCfop === 'R' && origem === 'C100') return 'R de Saidas Bloco C100/C190';
+    
+    // Fallback for others (keep existing logic for safety)
     if (tipo === 'ENTRADA' && tipoCfop === 'R') return 'Entrada Revenda';
     if (tipo === 'SAIDA' && (tipoCfop === 'R' || tipoCfop === 'S')) return 'Saída Revenda';
     if (tipo === 'ENTRADA' && tipoCfop === 'C') return 'Entrada Uso Consumo';
     if (tipo === 'ENTRADA' && tipoCfop === 'A') return 'Entrada Imobilizado';
     
-    // Fallback for others
     return `${tipo === 'ENTRADA' ? 'Entrada' : 'Saída'} (${tipoCfop})`;
   };
 
-  const uniqueFiliais = Array.from(new Set(data.map(item => item.filial_nome))).sort();
+  const formatNumber = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
+  };
+
+  const uniqueFiliais = Array.from(new Set(data.map(item => JSON.stringify({ nome: item.filial_nome, cnpj: item.filial_cnpj }))))
+    .map(str => JSON.parse(str))
+    .sort((a, b) => a.nome.localeCompare(b.nome));
+
   const uniqueMonths = Array.from(new Set(data.map(item => item.mes_ano))).sort((a, b) => {
     const [ma, ya] = a.split('/').map(Number);
     const [mb, yb] = b.split('/').map(Number);
     return ya - yb || ma - mb;
   });
-  const uniqueCfopTypes = Array.from(new Set(data.map(item => item.tipo_cfop))).filter(Boolean).sort();
+  
+  const uniqueOperationTypes = Array.from(new Set(data.map(item => 
+    getCategoryLabel(item.tipo, item.tipo_cfop, item.origem)
+  ))).sort();
 
   // Filter data
   const filteredData = data.filter(item => {
     const matchFilial = selectedFilial === "all" || item.filial_nome === selectedFilial;
     const matchMonth = selectedMonth === "all" || item.mes_ano === selectedMonth;
-    const matchCfop = selectedCfopType === "all" || item.tipo_cfop === selectedCfopType;
-    return matchFilial && matchMonth && matchCfop;
+    const matchOperation = selectedOperationType === "all" || 
+      getCategoryLabel(item.tipo, item.tipo_cfop, item.origem) === selectedOperationType;
+    return matchFilial && matchMonth && matchOperation;
   });
 
   const totals = filteredData.reduce((acc, item) => {
@@ -258,7 +287,7 @@ const Mercadorias = () => {
       return {
         'Filial': item.filial_nome,
         'Mês/Ano': item.mes_ano,
-        'Detalhe': getCategoryLabel(item.tipo, item.tipo_cfop),
+        'Detalhe': getCategoryLabel(item.tipo, item.tipo_cfop, item.origem),
         'Valor': item.valor,
         'ICMS': item.icms,
         'ICMS Proj.': item.vl_icms_projetado,
@@ -321,7 +350,7 @@ const Mercadorias = () => {
     <div className="container mx-auto p-6 space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Comparativo de impostos atuais com IBS e CBS</h1>
+          <h1 className="text-xl font-bold text-gray-900">Comparativo de impostos atuais<br/>com IBS e CBS</h1>
         </div>
 
         <div className="flex gap-2 items-center flex-wrap">
@@ -367,11 +396,11 @@ const Mercadorias = () => {
         {/* Total Saídas */}
         <Card className="border-l-4 border-l-red-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-lg font-medium text-red-700">Total de Saídas</CardTitle>
+            <CardTitle className="text-base font-medium text-red-700">Total de Saídas</CardTitle>
             <ArrowUpCircle className="h-5 w-5 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="space-y-2 text-sm">
+            <div className="space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-gray-500">Valor de Saídas:</span>
                 <span className="font-medium">{formatCurrency(totals.saidas.valor)}</span>
@@ -398,7 +427,7 @@ const Mercadorias = () => {
 
               <div className="flex justify-between pt-2 border-t mt-2">
                 <span className="text-red-700 font-bold">Total Débitos:</span>
-                <span className="font-bold text-red-600 text-lg">{formatCurrency(totalDebitos)}</span>
+                <span className="font-bold text-red-600 text-base">{formatCurrency(totalDebitos)}</span>
               </div>
             </div>
           </CardContent>
@@ -407,11 +436,11 @@ const Mercadorias = () => {
         {/* Total Entradas */}
         <Card className="border-l-4 border-l-green-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-lg font-medium text-green-700">Total de Entradas</CardTitle>
+            <CardTitle className="text-base font-medium text-green-700">Total de Entradas</CardTitle>
             <ArrowDownCircle className="h-5 w-5 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="space-y-2 text-sm">
+            <div className="space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-gray-500">Valor de Entradas:</span>
                 <span className="font-medium">{formatCurrency(totals.entradas.valor)}</span>
@@ -438,7 +467,7 @@ const Mercadorias = () => {
 
               <div className="flex justify-between pt-2 border-t mt-2">
                 <span className="text-green-700 font-bold">Total Créditos:</span>
-                <span className="font-bold text-green-600 text-lg">{formatCurrency(totalCreditos)}</span>
+                <span className="font-bold text-green-600 text-base">{formatCurrency(totalCreditos)}</span>
               </div>
             </div>
           </CardContent>
@@ -447,11 +476,11 @@ const Mercadorias = () => {
         {/* Apuração Projetada */}
         <Card className="border-l-4 border-l-blue-500 bg-blue-50/30">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-lg font-medium text-blue-800">Apuração</CardTitle>
+            <CardTitle className="text-base font-medium text-blue-800">Apuração</CardTitle>
             <Scale className="h-5 w-5 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="space-y-3 text-sm">
+            <div className="space-y-3 text-xs">
                <div className="flex justify-between items-center">
                 <span className="text-gray-600">Total Débitos:</span>
                 <span className="font-medium text-red-600">
@@ -468,8 +497,8 @@ const Mercadorias = () => {
               <div className="border-t border-blue-300 my-2"></div>
 
               <div className="flex justify-between items-center">
-                <span className="text-blue-900 font-bold text-base">Resultado:</span>
-                <span className={`font-bold text-2xl ${saldoReforma > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                <span className="text-blue-900 font-bold text-sm">Resultado:</span>
+                <span className={`font-bold text-xl ${saldoReforma > 0 ? 'text-red-600' : 'text-green-600'}`}>
                   {formatCurrency(saldoReforma)}
                 </span>
               </div>
@@ -480,33 +509,6 @@ const Mercadorias = () => {
           </CardContent>
         </Card>
       </div>
-
-      {/* Gráfico de Saldo */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Saldo do Imposto a Pagar (Mensal)</CardTitle>
-        </CardHeader>
-        <CardContent className="h-[350px]">
-          {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                <Legend />
-                <ReferenceLine y={0} stroke="#000" />
-                <Line type="monotone" dataKey="SaldoAtual" name="Saldo Atual (Débito - Crédito)" stroke="#9ca3af" strokeDasharray="5 5" />
-                <Line type="monotone" dataKey="Saldo" name="Saldo Reforma (IBS + CBS + ICMS)" stroke="#2563eb" strokeWidth={2} />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              Nenhum dado disponível para o período selecionado.
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Gráfico de Projeção 2027-2033 */}
       <Card>
@@ -542,13 +544,15 @@ const Mercadorias = () => {
       {/* Tabela Detalhada */}
       <div className="flex gap-2 items-center flex-wrap mb-1">
         <Select value={selectedFilial} onValueChange={setSelectedFilial}>
-          <SelectTrigger className="w-[180px] h-8 bg-white">
+          <SelectTrigger className="w-[300px] h-8 bg-white">
             <SelectValue placeholder="Filial: Todas" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Filial: Todas</SelectItem>
             {uniqueFiliais.map((f) => (
-              <SelectItem key={f} value={f}>{f}</SelectItem>
+              <SelectItem key={f.nome} value={f.nome}>
+                {maskCnpj(f.cnpj)}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -565,14 +569,14 @@ const Mercadorias = () => {
           </SelectContent>
         </Select>
 
-        <Select value={selectedCfopType} onValueChange={setSelectedCfopType}>
-          <SelectTrigger className="w-[130px] h-8 bg-white">
+        <Select value={selectedOperationType} onValueChange={setSelectedOperationType}>
+          <SelectTrigger className="w-[280px] h-8 bg-white">
             <SelectValue placeholder="Tipo: Todos" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tipo: Todos</SelectItem>
-            {uniqueCfopTypes.map((t) => (
-              <SelectItem key={t} value={t}>Tipo {t}</SelectItem>
+            {uniqueOperationTypes.map((t) => (
+              <SelectItem key={t} value={t}>{t}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -610,27 +614,27 @@ const Mercadorias = () => {
 
                   return (
                     <TableRow key={i} className="hover:bg-gray-50">
-                      <TableCell className="font-medium text-xs" title={row.filial_nome}>{maskCnpj(row.filial_cnpj)}</TableCell>
-                      <TableCell className="text-xs">{row.mes_ano}</TableCell>
+                      <TableCell className="font-medium text-[10px]" title={row.filial_nome}>{maskCnpj(row.filial_cnpj)}</TableCell>
+                      <TableCell className="text-[10px]">{row.mes_ano}</TableCell>
                       <TableCell>
-                        <span className={`px-2 py-1 rounded text-[11px] font-bold ${
+                        <span className={`px-2 py-1 rounded text-[10px] font-bold ${
                           row.tipo === 'SAIDA' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
                         }`}>
-                          {getCategoryLabel(row.tipo, row.tipo_cfop)}
+                          {getCategoryLabel(row.tipo, row.tipo_cfop, row.origem)}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right text-xs">{formatCurrency(row.valor)}</TableCell>
-                      <TableCell className="text-right text-xs text-gray-500">{formatCurrency(row.icms)}</TableCell>
-                      <TableCell className="text-right text-xs text-blue-600 bg-blue-50">{formatCurrency(row.vl_icms_projetado)}</TableCell>
-                      <TableCell className="text-right text-xs text-gray-400 bg-blue-50">{formatCurrency(baseIbsCbs)}</TableCell>
-                      <TableCell className="text-right text-xs text-blue-600 bg-blue-50">{formatCurrency(row.vl_ibs_projetado)}</TableCell>
-                      <TableCell className="text-right text-xs text-blue-600 bg-blue-50">{formatCurrency(row.vl_cbs_projetado)}</TableCell>
+                      <TableCell className="text-right text-[10px]">{formatNumber(row.valor)}</TableCell>
+                      <TableCell className="text-right text-[10px] text-gray-500">{formatNumber(row.icms)}</TableCell>
+                      <TableCell className="text-right text-[10px] text-blue-600 bg-blue-50">{formatNumber(row.vl_icms_projetado)}</TableCell>
+                      <TableCell className="text-right text-[10px] text-gray-400 bg-blue-50">{formatNumber(baseIbsCbs)}</TableCell>
+                      <TableCell className="text-right text-[10px] text-blue-600 bg-blue-50">{formatNumber(row.vl_ibs_projetado)}</TableCell>
+                      <TableCell className="text-right text-[10px] text-blue-600 bg-blue-50">{formatNumber(row.vl_cbs_projetado)}</TableCell>
                       
-                      <TableCell className="text-right text-xs font-bold border-l border-r bg-gray-50">{formatCurrency(totalAtual)}</TableCell>
-                      <TableCell className="text-right text-xs font-bold bg-blue-100 text-blue-800 border-r border-blue-200">{formatCurrency(totalReforma)}</TableCell>
+                      <TableCell className="text-right text-[10px] font-bold border-l border-r bg-gray-50">{formatNumber(totalAtual)}</TableCell>
+                      <TableCell className="text-right text-[10px] font-bold bg-blue-100 text-blue-800 border-r border-blue-200">{formatNumber(totalReforma)}</TableCell>
                       
-                      <TableCell className={`text-right text-xs font-bold ${diferenca > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {formatCurrency(diferenca)}
+                      <TableCell className={`text-right text-[10px] font-bold ${diferenca > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatNumber(diferenca)}
                       </TableCell>
                     </TableRow>
                   );
