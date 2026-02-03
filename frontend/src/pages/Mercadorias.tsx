@@ -36,9 +36,10 @@ const Mercadorias = () => {
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get('tab') || "comercial";
   
+  const currentYear = new Date().getFullYear();
   const [operationType, setOperationType] = useState(initialTab);
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [selectedYear, setSelectedYear] = useState<string>("2027");
+  const [selectedYear, setSelectedYear] = useState<string>(currentYear.toString());
   const [selectedFilial, setSelectedFilial] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [data, setData] = useState<AggregatedData[]>([]);
@@ -208,7 +209,7 @@ const Mercadorias = () => {
                 <SelectValue placeholder="Ano" />
               </SelectTrigger>
               <SelectContent>
-                {[2027, 2028, 2029, 2030, 2031, 2032, 2033].map((year) => (
+                {[currentYear - 2, currentYear - 1, currentYear, currentYear + 1, currentYear + 2, 2027, 2028, 2029, 2030].map((year) => (
                   <SelectItem key={year} value={year.toString()}>
                     {year}
                   </SelectItem>
@@ -246,8 +247,9 @@ const Mercadorias = () => {
             Exportar
           </Button>
 
-          <Button variant="outline" size="icon" onClick={fetchData} title="Atualizar dados">
-            <RefreshCcw className="w-4 h-4" />
+          <Button variant="outline" size="sm" onClick={fetchData} title="Atualizar dados">
+            <RefreshCcw className="w-4 h-4 mr-2" />
+            Atualizar
           </Button>
         </div>
       </div>
