@@ -92,6 +92,51 @@ func ResetCompanyDataHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+// RefreshViewsHandler triggers a refresh of all materialized views
+func RefreshViewsHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Get User Context
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+
+		log.Printf("RefreshViews: User %s requested view refresh", userID)
+
+		// Refresh Mercadorias View
+		start := time.Now()
+		
+		// Use standard REFRESH for now as CONCURRENTLY needs unique index and data populated
+		// And we want to be safe.
+		_, err := db.Exec("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_mercadorias_agregada")
+		if err != nil {
+			log.Printf("Concurrent refresh failed (might be first run or no index), trying standard: %v", err)
+			_, err = db.Exec("REFRESH MATERIALIZED VIEW mv_mercadorias_agregada")
+			if err != nil {
+				log.Printf("Error refreshing views: %v", err)
+				http.Error(w, "Failed to refresh views: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		duration := time.Since(start)
+		log.Printf("RefreshViews: Completed in %v", duration)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"message":     "Views refreshed successfully",
+			"duration_ms": duration.Milliseconds(),
+		})
+	}
+}
+
 // ResetDatabaseHandler deletes all records from import_jobs,
 // which cascades to all related SPED data tables (participants, regs, aggregations).
 // It preserves system configuration tables like cfop and tabela_aliquotas.

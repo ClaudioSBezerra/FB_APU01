@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -20,10 +20,6 @@ interface AggregatedData {
   filial_nome: string;
   mes_ano: string;
   valor: number;
-  pis: number;
-  cofins: number;
-  pis_cofins?: number;
-  pis_cofins_projetado?: number;
   icms: number;
   vl_icms_projetado: number;
   vl_ibs_projetado: number;
@@ -33,17 +29,20 @@ interface AggregatedData {
 }
 
 const Mercadorias = () => {
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get('tab') || "comercial";
   
+  // Tax Reform Simulation Range: 2027-2033
   const currentYear = new Date().getFullYear();
   const [operationType, setOperationType] = useState(initialTab);
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [selectedYear, setSelectedYear] = useState<string>(currentYear.toString());
+  const [selectedYear, setSelectedYear] = useState<string>("2027");
   const [selectedFilial, setSelectedFilial] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [data, setData] = useState<AggregatedData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -70,6 +69,37 @@ const Mercadorias = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (location.state?.refresh) {
+      handleRefreshViews();
+      // Clean state to avoid loops if user navigates back (though replaceState below handles it for current history entry)
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
+  const handleRefreshViews = async () => {
+    setIsRefreshing(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${import.meta.env.VITE_API_TARGET}/api/admin/refresh-views`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        fetchData();
+        alert('Dados atualizados com sucesso!');
+      } else {
+        alert('Erro ao atualizar dados. Verifique suas permissões.');
+      }
+    } catch (e) {
+      alert('Erro de conexão ao atualizar dados.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -111,23 +141,19 @@ const Mercadorias = () => {
       acc.saidas.valor += item.valor;
       acc.saidas.icms += item.icms;
       acc.saidas.icmsProj += item.vl_icms_projetado;
-      acc.saidas.pisCofins += (item.pis_cofins || (item.pis + item.cofins));
-      acc.saidas.pisCofinsProj += (item.pis_cofins_projetado || 0);
       acc.saidas.ibsProj += item.vl_ibs_projetado;
       acc.saidas.cbsProj += item.vl_cbs_projetado;
     } else {
       acc.entradas.valor += item.valor;
       acc.entradas.icms += item.icms;
       acc.entradas.icmsProj += item.vl_icms_projetado;
-      acc.entradas.pisCofins += (item.pis_cofins || (item.pis + item.cofins));
-      acc.entradas.pisCofinsProj += (item.pis_cofins_projetado || 0);
       acc.entradas.ibsProj += item.vl_ibs_projetado;
       acc.entradas.cbsProj += item.vl_cbs_projetado;
     }
     return acc;
   }, {
-    saidas: { valor: 0, icms: 0, icmsProj: 0, pisCofins: 0, pisCofinsProj: 0, ibsProj: 0, cbsProj: 0 },
-    entradas: { valor: 0, icms: 0, icmsProj: 0, pisCofins: 0, pisCofinsProj: 0, ibsProj: 0, cbsProj: 0 }
+    saidas: { valor: 0, icms: 0, icmsProj: 0, ibsProj: 0, cbsProj: 0 },
+    entradas: { valor: 0, icms: 0, icmsProj: 0, ibsProj: 0, cbsProj: 0 }
   });
 
   const totalDebitos = totals.saidas.icmsProj + totals.saidas.ibsProj + totals.saidas.cbsProj;
@@ -139,8 +165,6 @@ const Mercadorias = () => {
       'Mês/Ano': item.mes_ano,
       'Tipo': item.tipo,
       'Valor Total': item.valor,
-      'PIS/COFINS': item.pis_cofins || (item.pis + item.cofins),
-      'PIS/COFINS Proj.': item.pis_cofins_projetado || 0,
       'ICMS': item.icms,
       'ICMS Projetado': item.vl_icms_projetado,
       'IBS Projetado': item.vl_ibs_projetado,
@@ -154,18 +178,18 @@ const Mercadorias = () => {
     if (existing) {
       if (curr.tipo === 'SAIDA') {
         existing.Saídas += curr.valor;
-        existing.Impostos += (curr.pis + curr.cofins);
+        existing.Impostos += (curr.vl_icms_projetado + curr.vl_ibs_projetado + curr.vl_cbs_projetado);
       } else {
         existing.Entradas += curr.valor;
-        existing.Créditos += (curr.pis + curr.cofins);
+        existing.Créditos += (curr.vl_icms_projetado + curr.vl_ibs_projetado + curr.vl_cbs_projetado);
       }
     } else {
       acc.push({
         name: curr.mes_ano,
         Saídas: curr.tipo === 'SAIDA' ? curr.valor : 0,
         Entradas: curr.tipo === 'ENTRADA' ? curr.valor : 0,
-        Impostos: curr.tipo === 'SAIDA' ? (curr.pis + curr.cofins) : 0,
-        Créditos: curr.tipo === 'ENTRADA' ? (curr.pis + curr.cofins) : 0,
+        Impostos: curr.tipo === 'SAIDA' ? (curr.vl_icms_projetado + curr.vl_ibs_projetado + curr.vl_cbs_projetado) : 0,
+        Créditos: curr.tipo === 'ENTRADA' ? (curr.vl_icms_projetado + curr.vl_ibs_projetado + curr.vl_cbs_projetado) : 0,
       });
     }
     return acc;
@@ -190,15 +214,17 @@ const Mercadorias = () => {
           <div className="flex items-center gap-2 bg-white p-1 rounded-md border">
             <span className="text-sm font-medium text-gray-700 ml-2">Simulação:</span>
             <Select value={selectedYear} onValueChange={setSelectedYear}>
-              <SelectTrigger className="w-[80px] h-8 border-none focus:ring-0">
+              <SelectTrigger className="w-[100px] h-8 border-none focus:ring-0">
                 <SelectValue placeholder="Ano" />
               </SelectTrigger>
               <SelectContent>
-                {[currentYear - 2, currentYear - 1, currentYear, currentYear + 1, currentYear + 2, 2027, 2028, 2029, 2030].map((year) => (
-                  <SelectItem key={year} value={year.toString()}>
-                    {year}
-                  </SelectItem>
-                ))}
+                <SelectItem value="2027">2027</SelectItem>
+                <SelectItem value="2028">2028</SelectItem>
+                <SelectItem value="2029">2029</SelectItem>
+                <SelectItem value="2030">2030</SelectItem>
+                <SelectItem value="2031">2031</SelectItem>
+                <SelectItem value="2032">2032</SelectItem>
+                <SelectItem value="2033">2033</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -232,9 +258,16 @@ const Mercadorias = () => {
             Exportar
           </Button>
 
-          <Button variant="outline" size="sm" onClick={fetchData} title="Atualizar dados">
-            <RefreshCcw className="w-4 h-4 mr-2" />
-            Atualizar
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRefreshViews} 
+            disabled={isRefreshing}
+            title="Recalcular Dados (Atualizar Views)"
+            className={isRefreshing ? "opacity-50 cursor-not-allowed" : ""}
+          >
+            <RefreshCcw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Atualizando...' : 'Atualizar Dados'}
           </Button>
         </div>
       </div>
@@ -258,14 +291,6 @@ const Mercadorias = () => {
               <div className="flex justify-between">
                 <span className="text-gray-500">ICMS Proj.:</span>
                 <span className="font-medium">{formatCurrency(totals.saidas.icmsProj)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">PIS/COF:</span>
-                <span className="font-medium">{formatCurrency(totals.saidas.pisCofins)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">PIS/COF Proj.:</span>
-                <span className="font-medium">{formatCurrency(totals.saidas.pisCofinsProj)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">IBS Proj.:</span>
@@ -301,14 +326,6 @@ const Mercadorias = () => {
               <div className="flex justify-between">
                 <span className="text-gray-500">ICMS Proj.:</span>
                 <span className="font-medium">{formatCurrency(totals.entradas.icmsProj)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">PIS/COF:</span>
-                <span className="font-medium">{formatCurrency(totals.entradas.pisCofins)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">PIS/COF Proj.:</span>
-                <span className="font-medium">{formatCurrency(totals.entradas.pisCofinsProj)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">IBS Proj.:</span>
@@ -369,7 +386,6 @@ const Mercadorias = () => {
                       <TableHead className="w-[80px]">Mês</TableHead>
                       <TableHead className="w-[80px]">Tipo</TableHead>
                       <TableHead className="text-right">Valor</TableHead>
-                      <TableHead className="text-right text-xs">PIS/COF</TableHead>
                       <TableHead className="text-right text-xs">ICMS</TableHead>
                       <TableHead className="text-right font-bold border-r">Tot. Atual</TableHead>
                       
@@ -383,10 +399,9 @@ const Mercadorias = () => {
                   </TableHeader>
                   <TableBody>
                     {filteredData.map((row, i) => {
-                      const pisCofins = (row.pis || 0) + (row.cofins || 0);
-                      const pisCofinsProj = row.pis_cofins_projetado || 0;
-                      const totalAtual = (row.icms || 0) + pisCofins;
-                      const baseIbsCbs = (row.valor || 0) - (row.vl_icms_projetado || 0) - pisCofinsProj;
+                      // Removed PIS/COFINS references as they are not used in projection anymore
+                      const totalAtual = (row.icms || 0);
+                      const baseIbsCbs = (row.valor || 0) - (row.vl_icms_projetado || 0);
                       const totalReforma = (row.vl_icms_projetado || 0) + (row.vl_ibs_projetado || 0) + (row.vl_cbs_projetado || 0);
                       const diferenca = totalAtual - totalReforma;
 
@@ -402,7 +417,6 @@ const Mercadorias = () => {
                             </span>
                           </TableCell>
                           <TableCell className="text-right text-xs">{formatCurrency(row.valor)}</TableCell>
-                          <TableCell className="text-right text-xs text-gray-500">{formatCurrency(pisCofins)}</TableCell>
                           <TableCell className="text-right text-xs text-gray-500">{formatCurrency(row.icms)}</TableCell>
                           <TableCell className="text-right text-xs font-bold border-r bg-gray-50">{formatCurrency(totalAtual)}</TableCell>
                           

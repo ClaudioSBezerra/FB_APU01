@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Download, Filter, FileText, Calculator } from "lucide-react";
+import { Download, Filter, FileText, Calculator, RefreshCcw } from "lucide-react";
 import { exportToExcel } from "@/lib/exportToExcel";
 import { formatCurrency } from "@/lib/utils";
 
@@ -21,8 +21,6 @@ interface AggregatedData {
   filial_nome: string;
   mes_ano: string;
   valor: number;
-  pis: number;
-  cofins: number;
   icms: number;
   vl_icms_projetado: number;
   vl_ibs_projetado: number;
@@ -31,6 +29,7 @@ interface AggregatedData {
 }
 
 const Energia = () => {
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const currentYear = new Date().getFullYear();
 
@@ -40,11 +39,12 @@ const Energia = () => {
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [data, setData] = useState<AggregatedData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
 
   // Fetch data from backend
-  useEffect(() => {
+  const fetchData = () => {
     setLoading(true);
     fetch(`/api/reports/energia?target_year=${selectedYear}`)
       .then(res => {
@@ -61,7 +61,41 @@ const Energia = () => {
         setError(err.message);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchData();
   }, [selectedYear]);
+
+  useEffect(() => {
+    if (location.state?.refresh) {
+      handleRefreshViews();
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
+  const handleRefreshViews = async () => {
+    setIsRefreshing(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${import.meta.env.VITE_API_TARGET}/api/admin/refresh-views`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        fetchData();
+        alert('Dados atualizados com sucesso!');
+      } else {
+        alert('Erro ao atualizar dados. Verifique suas permissões.');
+      }
+    } catch (e) {
+      alert('Erro de conexão ao atualizar dados.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -104,7 +138,6 @@ const Energia = () => {
       'Mês/Ano': item.mes_ano,
       'Tipo': item.tipo,
       'Valor Total': item.valor,
-      'PIS/COFINS': item.pis + item.cofins,
       'ICMS': item.icms,
       'ICMS Projetado': item.vl_icms_projetado,
       'IBS Projetado': item.vl_ibs_projetado,
@@ -118,18 +151,14 @@ const Energia = () => {
     if (existing) {
       if (curr.tipo === 'SAIDA') {
         existing.Saídas += curr.valor;
-        existing.Impostos += (curr.pis + curr.cofins);
       } else {
         existing.Entradas += curr.valor;
-        existing.Créditos += (curr.pis + curr.cofins);
       }
     } else {
       acc.push({
         name: curr.mes_ano,
         Saídas: curr.tipo === 'SAIDA' ? curr.valor : 0,
         Entradas: curr.tipo === 'ENTRADA' ? curr.valor : 0,
-        Impostos: curr.tipo === 'SAIDA' ? (curr.pis + curr.cofins) : 0,
-        Créditos: curr.tipo === 'ENTRADA' ? (curr.pis + curr.cofins) : 0,
       });
     }
     return acc;
@@ -204,6 +233,17 @@ const Energia = () => {
             <Download className="w-4 h-4 mr-2" />
             Exportar
           </Button>
+
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRefreshViews}
+            disabled={isRefreshing}
+            className="ml-2"
+          >
+            <RefreshCcw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Atualizando...' : 'Atualizar Dados'}
+          </Button>
         </div>
       </div>
 
@@ -227,20 +267,6 @@ const Energia = () => {
           <CardContent>
             <div className="text-2xl font-bold">
               {formatCurrency(data.filter(d => d.tipo === 'ENTRADA').reduce((sum, item) => sum + item.valor, 0))}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Crédito PIS/COFINS</CardTitle>
-            <Calculator className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {formatCurrency(data.reduce((sum, item) => {
-                const total = item.pis + item.cofins;
-                return item.tipo === 'SAIDA' ? sum - total : sum + total;
-              }, 0))}
             </div>
           </CardContent>
         </Card>
@@ -287,7 +313,6 @@ const Energia = () => {
                     <TableHead>Mês/Ano</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead className="text-right">Valor Contábil</TableHead>
-                    <TableHead className="text-right">PIS/COFINS</TableHead>
                     <TableHead className="text-right">ICMS Atual</TableHead>
                     <TableHead className="text-right bg-blue-50">ICMS Projetado</TableHead>
                     <TableHead className="text-right bg-blue-50">IBS</TableHead>
@@ -307,7 +332,6 @@ const Energia = () => {
                         </span>
                       </TableCell>
                       <TableCell className="text-right">{formatCurrency(row.valor)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.pis + row.cofins)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(row.icms)}</TableCell>
                       <TableCell className="text-right bg-blue-50 font-medium text-blue-700">{formatCurrency(row.vl_icms_projetado)}</TableCell>
                       <TableCell className="text-right bg-blue-50 font-medium text-blue-700">{formatCurrency(row.vl_ibs_projetado)}</TableCell>

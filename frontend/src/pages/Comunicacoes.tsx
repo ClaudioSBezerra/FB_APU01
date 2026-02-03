@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Download, Filter, FileText, Calculator } from "lucide-react";
+import { Download, Filter, FileText, Calculator, RefreshCcw } from "lucide-react";
 import { exportToExcel } from "@/lib/exportToExcel";
 import { formatCurrency } from "@/lib/utils";
 
@@ -21,8 +21,6 @@ interface AggregatedData {
   filial_nome: string;
   mes_ano: string;
   valor: number;
-  pis: number;
-  cofins: number;
   icms: number;
   vl_icms_projetado: number;
   vl_ibs_projetado: number;
@@ -31,6 +29,7 @@ interface AggregatedData {
 }
 
 const Comunicacoes = () => {
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const currentYear = new Date().getFullYear();
   
@@ -40,11 +39,12 @@ const Comunicacoes = () => {
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [data, setData] = useState<AggregatedData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
 
   // Fetch data from backend
-  useEffect(() => {
+  const fetchData = () => {
     setLoading(true);
     fetch(`/api/reports/comunicacoes?target_year=${selectedYear}`)
       .then(res => {
@@ -61,7 +61,41 @@ const Comunicacoes = () => {
         setError(err.message);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchData();
   }, [selectedYear]);
+
+  useEffect(() => {
+    if (location.state?.refresh) {
+      handleRefreshViews();
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
+  const handleRefreshViews = async () => {
+    setIsRefreshing(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${import.meta.env.VITE_API_TARGET}/api/admin/refresh-views`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        fetchData();
+        alert('Dados atualizados com sucesso!');
+      } else {
+        alert('Erro ao atualizar dados. Verifique suas permissões.');
+      }
+    } catch (e) {
+      alert('Erro de conexão ao atualizar dados.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -104,7 +138,6 @@ const Comunicacoes = () => {
       'Mês/Ano': item.mes_ano,
       'Tipo': item.tipo,
       'Valor Total': item.valor,
-      'PIS/COFINS': item.pis + item.cofins,
       'ICMS': item.icms,
       'ICMS Projetado': item.vl_icms_projetado,
       'IBS Projetado': item.vl_ibs_projetado,
@@ -117,15 +150,11 @@ const Comunicacoes = () => {
     const existing = acc.find(item => item.name === curr.mes_ano);
     if (existing) {
       existing.Valor += curr.valor;
-      existing.PIS += curr.pis;
-      existing.COFINS += curr.cofins;
       existing.ICMS += curr.icms;
     } else {
       acc.push({
         name: curr.mes_ano,
         Valor: curr.valor,
-        PIS: curr.pis,
-        COFINS: curr.cofins,
         ICMS: curr.icms
       });
     }
@@ -198,9 +227,20 @@ const Comunicacoes = () => {
           </Select>
 
            <Button variant="default" size="sm" onClick={handleExport}>
-             <Download className="mr-2 h-4 w-4" />
-             Exportar
-           </Button>
+            <Download className="mr-2 h-4 w-4" />
+            Exportar
+          </Button>
+
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRefreshViews}
+            disabled={isRefreshing}
+            className="ml-2"
+          >
+            <RefreshCcw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Atualizando...' : 'Atualizar Dados'}
+          </Button>
         </div>
       </div>
 
@@ -223,28 +263,6 @@ const Comunicacoes = () => {
               {formatCurrency(filteredData.reduce((acc, curr) => acc + curr.valor, 0))}
             </div>
           </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total PIS</CardTitle>
-                <Calculator className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {formatCurrency(data.reduce((acc, curr) => acc + curr.pis, 0))}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total COFINS</CardTitle>
-                <Calculator className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {formatCurrency(data.reduce((acc, curr) => acc + curr.cofins, 0))}
-                </div>
-              </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -273,8 +291,6 @@ const Comunicacoes = () => {
                   <Legend />
                   <Bar dataKey="Valor" fill="#8884d8" name="Valor Total" />
                   <Bar dataKey="ICMS" fill="#82ca9d" name="ICMS" />
-                  <Bar dataKey="PIS" fill="#ffc658" name="PIS" />
-                  <Bar dataKey="COFINS" fill="#ff7300" name="COFINS" />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -294,7 +310,6 @@ const Comunicacoes = () => {
                     <TableHead>Mês/Ano</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead className="text-right">Valor Total</TableHead>
-                    <TableHead className="text-right">PIS/COFINS</TableHead>
                     <TableHead className="text-right">ICMS Atual</TableHead>
                     <TableHead className="text-right bg-blue-50">ICMS Projetado</TableHead>
                     <TableHead className="text-right bg-blue-50">IBS</TableHead>
@@ -308,7 +323,6 @@ const Comunicacoes = () => {
                       <TableCell>{row.mes_ano}</TableCell>
                       <TableCell>{row.tipo}</TableCell>
                       <TableCell className="text-right">{formatCurrency(row.valor)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.pis + row.cofins)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(row.icms)}</TableCell>
                       <TableCell className="text-right bg-blue-50 font-medium text-blue-700">{formatCurrency(row.vl_icms_projetado)}</TableCell>
                       <TableCell className="text-right bg-blue-50 font-medium text-blue-700">{formatCurrency(row.vl_ibs_projetado)}</TableCell>
