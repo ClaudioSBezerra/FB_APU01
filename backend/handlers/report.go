@@ -50,6 +50,9 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 		if opType == "comercial" {
 			// Commercial: Revenda (R), Saída (S)
 			typeFilter = "mv.tipo_cfop IN ('R', 'S')"
+		} else if opType == "todos" {
+			// Returns all records
+			typeFilter = "1=1"
 		} else {
 			// Others: Ativo (A), Consumo (C), Transferência (T), Outros (O)
 			// 'O' includes unmapped CFOPs

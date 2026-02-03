@@ -20,8 +20,8 @@ import (
 
 // Version information for backend deployment validation
 const (
-	BackendVersion = "4.9.3"
-	FeatureSet     = "Fix Report Filters (Outros)"
+	BackendVersion = "4.9.4"
+	FeatureSet     = "Consolidated Mercadorias View"
 )
 
 func GetVersionInfo() string {
