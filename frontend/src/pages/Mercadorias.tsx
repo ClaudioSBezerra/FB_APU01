@@ -349,26 +349,26 @@ const Mercadorias = () => {
           <CardContent>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500">Valor:</span>
+                <span className="text-gray-500">Valor de Saídas:</span>
                 <span className="font-medium">{formatCurrency(totals.saidas.valor)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">ICMS:</span>
+                <span className="text-gray-500">Valor de ICMS:</span>
                 <span className="font-medium">{formatCurrency(totals.saidas.icms)}</span>
               </div>
               
               <div className="my-2 border-t border-dashed border-gray-200"></div>
               
               <div className="flex justify-between">
-                <span className="text-gray-500">ICMS Proj.:</span>
+                <span className="text-gray-500">Valor ICMS Proj.:</span>
                 <span className="font-medium">{formatCurrency(totals.saidas.icmsProj)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">IBS Proj.:</span>
+                <span className="text-gray-500">Valor IBS Proj.:</span>
                 <span className="font-medium">{formatCurrency(totals.saidas.ibsProj)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">CBS Proj.:</span>
+                <span className="text-gray-500">Valor CBS Proj.:</span>
                 <span className="font-medium">{formatCurrency(totals.saidas.cbsProj)}</span>
               </div>
 
@@ -389,26 +389,26 @@ const Mercadorias = () => {
           <CardContent>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500">Valor:</span>
+                <span className="text-gray-500">Valor de Entradas:</span>
                 <span className="font-medium">{formatCurrency(totals.entradas.valor)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">ICMS:</span>
+                <span className="text-gray-500">Valor de ICMS:</span>
                 <span className="font-medium">{formatCurrency(totals.entradas.icms)}</span>
               </div>
 
               <div className="my-2 border-t border-dashed border-gray-200"></div>
 
               <div className="flex justify-between">
-                <span className="text-gray-500">ICMS Proj.:</span>
+                <span className="text-gray-500">Valor ICMS Proj.:</span>
                 <span className="font-medium">{formatCurrency(totals.entradas.icmsProj)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">IBS Proj.:</span>
+                <span className="text-gray-500">Valor IBS Proj.:</span>
                 <span className="font-medium">{formatCurrency(totals.entradas.ibsProj)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">CBS Proj.:</span>
+                <span className="text-gray-500">Valor CBS Proj.:</span>
                 <span className="font-medium">{formatCurrency(totals.entradas.cbsProj)}</span>
               </div>
 
