@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -30,8 +31,11 @@ interface AggregatedData {
 }
 
 const Transporte = () => {
+  const [searchParams] = useSearchParams();
+  const currentYear = new Date().getFullYear();
+
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [selectedYear, setSelectedYear] = useState<string>("2027");
+  const [selectedYear, setSelectedYear] = useState<string>(currentYear.toString());
   const [selectedFilial, setSelectedFilial] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [data, setData] = useState<AggregatedData[]>([]);

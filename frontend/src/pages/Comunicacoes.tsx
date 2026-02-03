@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -30,8 +31,11 @@ interface AggregatedData {
 }
 
 const Comunicacoes = () => {
+  const [searchParams] = useSearchParams();
+  const currentYear = new Date().getFullYear();
+  
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [selectedYear, setSelectedYear] = useState<string>("2027");
+  const [selectedYear, setSelectedYear] = useState<string>(currentYear.toString());
   const [selectedFilial, setSelectedFilial] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [data, setData] = useState<AggregatedData[]>([]);
@@ -75,24 +79,6 @@ const Comunicacoes = () => {
           <p>{error}</p>
           <p className="text-sm mt-2">Verifique se o backend está rodando em http://localhost:8081</p>
         </div>
-      </div>
-    );
-  }
-
-  if (data.length === 0) {
-    return (
-      <div className="container mx-auto p-6 space-y-8">
-         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-               <h1 className="text-3xl font-bold text-gray-900">Serviços de Comunicação</h1>
-               <p className="text-gray-500 mt-1">Análise de aquisições de serviços de comunicação e telecomunicação</p>
-            </div>
-         </div>
-         <div className="text-center py-20 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-            <h2 className="text-xl font-semibold text-gray-700">Nenhum registro de Comunicação (D500) encontrado</h2>
-            <p className="text-gray-500 mt-2">O banco de dados não possui registros D500.</p>
-            <Button className="mt-4" onClick={() => window.location.reload()}>Tentar Novamente</Button>
-         </div>
       </div>
     );
   }
