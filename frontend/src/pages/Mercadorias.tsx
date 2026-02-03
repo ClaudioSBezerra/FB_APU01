@@ -376,44 +376,66 @@ const Mercadorias = () => {
               <CardTitle>Detalhamento por Filial</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Filial</TableHead>
-                    <TableHead>Mês/Ano</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Tipo CFOP</TableHead>
-                    <TableHead className="text-right">Valor Contábil</TableHead>
-                    <TableHead className="text-right">PIS/COFINS</TableHead>
-                    <TableHead className="text-right">ICMS Atual</TableHead>
-                    <TableHead className="text-right bg-blue-50">ICMS Projetado</TableHead>
-                    <TableHead className="text-right bg-blue-50">IBS</TableHead>
-                    <TableHead className="text-right bg-blue-50">CBS</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.map((row, i) => (
-                    <TableRow key={i}>
-                      <TableCell>{row.filial_nome}</TableCell>
-                      <TableCell>{row.mes_ano}</TableCell>
-                      <TableCell>
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          row.tipo === 'SAIDA' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-                        }`}>
-                          {row.tipo}
-                        </span>
-                      </TableCell>
-                      <TableCell>{row.tipo_cfop || '-'}</TableCell>
-                      <TableCell className="text-right font-medium">{formatCurrency(row.valor)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.pis + row.cofins)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.icms)}</TableCell>
-                      <TableCell className="text-right bg-blue-50 font-medium text-blue-700">{formatCurrency(row.vl_icms_projetado)}</TableCell>
-                      <TableCell className="text-right bg-blue-50 font-medium text-blue-700">{formatCurrency(row.vl_ibs_projetado)}</TableCell>
-                      <TableCell className="text-right bg-blue-50 font-medium text-blue-700">{formatCurrency(row.vl_cbs_projetado)}</TableCell>
+              <div className="rounded-md border overflow-x-auto">
+                <Table className="min-w-[1200px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[100px]">Filial</TableHead>
+                      <TableHead className="w-[80px]">Mês</TableHead>
+                      <TableHead className="w-[80px]">Tipo</TableHead>
+                      <TableHead className="text-right">Valor</TableHead>
+                      <TableHead className="text-right text-xs">PIS/COF</TableHead>
+                      <TableHead className="text-right text-xs">ICMS</TableHead>
+                      <TableHead className="text-right font-bold border-r">Tot. Atual</TableHead>
+                      
+                      <TableHead className="text-right text-xs bg-blue-50">Base Calc.</TableHead>
+                      <TableHead className="text-right text-xs bg-blue-50">ICMS Proj.</TableHead>
+                      <TableHead className="text-right text-xs bg-blue-50">IBS</TableHead>
+                      <TableHead className="text-right text-xs bg-blue-50">CBS</TableHead>
+                      <TableHead className="text-right font-bold bg-blue-100 border-l border-blue-200">Tot. Reforma</TableHead>
+                      <TableHead className="text-right font-bold">Dif.</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredData.map((row, i) => {
+                      const pisCofins = (row.pis || 0) + (row.cofins || 0);
+                      const pisCofinsProj = row.pis_cofins_projetado || 0;
+                      const totalAtual = (row.icms || 0) + pisCofins;
+                      const baseIbsCbs = (row.valor || 0) - (row.vl_icms_projetado || 0) - pisCofinsProj;
+                      const totalReforma = (row.vl_icms_projetado || 0) + (row.vl_ibs_projetado || 0) + (row.vl_cbs_projetado || 0);
+                      const diferenca = totalAtual - totalReforma;
+
+                      return (
+                        <TableRow key={i} className="hover:bg-gray-50">
+                          <TableCell className="font-medium text-xs">{row.filial_nome}</TableCell>
+                          <TableCell className="text-xs">{row.mes_ano}</TableCell>
+                          <TableCell>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              row.tipo === 'SAIDA' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                            }`}>
+                              {row.tipo.substring(0, 1)}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right text-xs">{formatCurrency(row.valor)}</TableCell>
+                          <TableCell className="text-right text-xs text-gray-500">{formatCurrency(pisCofins)}</TableCell>
+                          <TableCell className="text-right text-xs text-gray-500">{formatCurrency(row.icms)}</TableCell>
+                          <TableCell className="text-right text-xs font-bold border-r bg-gray-50">{formatCurrency(totalAtual)}</TableCell>
+                          
+                          <TableCell className="text-right text-xs text-gray-400 bg-blue-50">{formatCurrency(baseIbsCbs)}</TableCell>
+                          <TableCell className="text-right text-xs text-blue-600 bg-blue-50">{formatCurrency(row.vl_icms_projetado)}</TableCell>
+                          <TableCell className="text-right text-xs text-blue-600 bg-blue-50">{formatCurrency(row.vl_ibs_projetado)}</TableCell>
+                          <TableCell className="text-right text-xs text-blue-600 bg-blue-50">{formatCurrency(row.vl_cbs_projetado)}</TableCell>
+                          <TableCell className="text-right text-xs font-bold bg-blue-100 text-blue-800 border-l border-blue-200">{formatCurrency(totalReforma)}</TableCell>
+                          
+                          <TableCell className={`text-right text-xs font-bold ${diferenca > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {formatCurrency(diferenca)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
