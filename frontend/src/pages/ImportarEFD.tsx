@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +18,7 @@ interface ImportJob {
 }
 
 export default function ImportarEFD() {
+  const navigate = useNavigate();
   const { token, user, cnpj, company, companyId } = useAuth();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -317,7 +319,10 @@ export default function ImportarEFD() {
         setJobs(data);
     }
     
-    toast.success("Processamento em lote finalizado!");
+    toast.success("Importação Total Concluida");
+    setTimeout(() => {
+        navigate('/mercadorias?tab=comercial');
+    }, 1500);
   };
 
   const handleCancelJob = async (id: string) => {
@@ -514,10 +519,10 @@ export default function ImportarEFD() {
                     
                     {selectedFiles.map((file, idx) => (
                         <div key={idx} className={`flex items-center justify-between p-2 rounded-md text-sm ${idx === currentFileIndex ? 'bg-primary/10 border border-primary/20' : 'bg-muted/50'}`}>
-                             <div className="flex items-center gap-2 overflow-hidden">
+                             <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
                                 <FileText className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                                <span className="truncate max-w-[200px]">{file.name}</span>
-                                <span className="text-xs text-muted-foreground">({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
+                                <span className="truncate flex-1 min-w-0" title={file.name}>{file.name}</span>
+                                <span className="text-xs text-muted-foreground flex-shrink-0">({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
                              </div>
                              
                              {idx === currentFileIndex && isUploading && (
