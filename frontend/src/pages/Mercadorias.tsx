@@ -39,6 +39,15 @@ interface AggregatedData {
   tipo_cfop?: string;
 }
 
+interface TaxRate {
+  ano: number;
+  perc_ibs_uf: number;
+  perc_ibs_mun: number;
+  perc_cbs: number;
+  perc_reduc_icms: number;
+  perc_reduc_piscofins: number;
+}
+
 const Mercadorias = () => {
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -49,10 +58,19 @@ const Mercadorias = () => {
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [selectedCfopType, setSelectedCfopType] = useState<string>("all");
   const [data, setData] = useState<AggregatedData[]>([]);
+  const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
+
+  // Fetch tax rates
+  useEffect(() => {
+    fetch("/api/config/aliquotas")
+      .then((res) => res.json())
+      .then((data) => setTaxRates(data || []))
+      .catch((err) => console.error("Failed to fetch tax rates", err));
+  }, []);
 
   // Fetch data from backend
   const fetchData = useCallback(() => {
@@ -179,6 +197,38 @@ const Mercadorias = () => {
     saidas: { valor: 0, icms: 0, icmsProj: 0, ibsProj: 0, cbsProj: 0 },
     entradas: { valor: 0, icms: 0, icmsProj: 0, ibsProj: 0, cbsProj: 0 }
   });
+
+  // Projection Logic for 2027-2033 (based on currently filtered totals)
+  const projectionData = taxRates
+    .filter(r => r.ano >= 2027 && r.ano <= 2033)
+    .sort((a, b) => a.ano - b.ano)
+    .map(rate => {
+      const reductionFactor = (1 - (rate.perc_reduc_icms / 100.0));
+      const ibsRate = (rate.perc_ibs_uf + rate.perc_ibs_mun) / 100.0;
+      const cbsRate = rate.perc_cbs / 100.0;
+
+      // Saídas
+      const icmsProjSaida = totals.saidas.icms * reductionFactor;
+      // Base IBS/CBS = Valor Contabil - ICMS Projetado
+      const baseIbsCbsSaida = totals.saidas.valor - icmsProjSaida;
+      const ibsSaida = baseIbsCbsSaida * ibsRate;
+      const cbsSaida = baseIbsCbsSaida * cbsRate;
+      const totalDebitosAno = icmsProjSaida + ibsSaida + cbsSaida;
+
+      // Entradas
+      const icmsProjEntrada = totals.entradas.icms * reductionFactor;
+      const baseIbsCbsEntrada = totals.entradas.valor - icmsProjEntrada;
+      const ibsEntrada = baseIbsCbsEntrada * ibsRate;
+      const cbsEntrada = baseIbsCbsEntrada * cbsRate;
+      const totalCreditosAno = icmsProjEntrada + ibsEntrada + cbsEntrada;
+
+      return {
+        name: rate.ano.toString(),
+        SaldoReforma: totalDebitosAno - totalCreditosAno,
+        Debitos: totalDebitosAno,
+        Creditos: totalCreditosAno
+      };
+    });
 
   const totalDebitos = totals.saidas.icmsProj + totals.saidas.ibsProj + totals.saidas.cbsProj;
   const totalCreditos = totals.entradas.icmsProj + totals.entradas.ibsProj + totals.entradas.cbsProj;
@@ -479,6 +529,37 @@ const Mercadorias = () => {
           ) : (
             <div className="flex items-center justify-center h-full text-gray-500">
               Nenhum dado disponível para o período selecionado.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Gráfico de Projeção 2027-2033 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Projeção do Saldo de Imposto (2027-2033)</CardTitle>
+          <div className="text-sm text-gray-500 font-normal">
+            Projeção baseada nos totais filtrados e na tabela de alíquotas de transição.
+          </div>
+        </CardHeader>
+        <CardContent className="h-[350px]">
+          {projectionData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={projectionData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                <Legend />
+                <ReferenceLine y={0} stroke="#000" />
+                <Line type="monotone" dataKey="Debitos" name="Total Débitos (Projetado)" stroke="#dc2626" strokeDasharray="3 3" />
+                <Line type="monotone" dataKey="Creditos" name="Total Créditos (Projetado)" stroke="#16a34a" strokeDasharray="3 3" />
+                <Line type="monotone" dataKey="SaldoReforma" name="Saldo a Pagar (Projetado)" stroke="#2563eb" strokeWidth={3} dot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              Não foi possível gerar a projeção. Verifique se a tabela de alíquotas está configurada.
             </div>
           )}
         </CardContent>
