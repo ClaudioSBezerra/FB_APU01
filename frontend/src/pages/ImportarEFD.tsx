@@ -307,11 +307,6 @@ export default function ImportarEFD() {
         }
     }
 
-    setIsUploading(false);
-    setCurrentFileIndex(-1);
-    setSelectedFiles([]); // Clear selection after all done
-    setScanStats({ scanned: 0, relevant: 0, phase: 'idle' });
-    
     // Trigger job refresh
     const res = await fetch('/api/jobs');
     if (res.ok) {
@@ -319,7 +314,8 @@ export default function ImportarEFD() {
         setJobs(data);
     }
     
-    toast.info("Processando dados e gerando relatórios... Aguarde.");
+    // Notify user about View Refresh phase
+    const toastId = toast.loading("Consolidando dados e gerando relatórios... Aguarde.");
 
     try {
         const refreshRes = await fetch('/api/admin/refresh-views', {
@@ -329,18 +325,28 @@ export default function ImportarEFD() {
             }
         });
         
+        toast.dismiss(toastId);
+
         if (!refreshRes.ok) {
             console.error("Erro ao atualizar views");
             toast.warning("Importação concluída, mas houve um atraso na atualização dos relatórios.");
+        } else {
+            toast.success("Importação Total Concluida");
+            // Delay redirect slightly to let user see the success message
+            setTimeout(() => {
+                navigate('/mercadorias?tab=comercial');
+            }, 1000);
         }
     } catch (e) {
+        toast.dismiss(toastId);
         console.error("Erro de conexão ao atualizar views", e);
+        toast.error("Erro ao conectar para atualização de relatórios.");
+    } finally {
+        setIsUploading(false);
+        setCurrentFileIndex(-1);
+        setSelectedFiles([]); // Clear selection after all done
+        setScanStats({ scanned: 0, relevant: 0, phase: 'idle' });
     }
-
-    toast.success("Importação Total Concluida");
-    setTimeout(() => {
-        navigate('/mercadorias?tab=comercial');
-    }, 1500);
   };
 
   const handleCancelJob = async (id: string) => {
