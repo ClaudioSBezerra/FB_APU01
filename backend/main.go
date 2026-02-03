@@ -20,7 +20,7 @@ import (
 
 // Version information for backend deployment validation
 const (
-	BackendVersion = "4.9.0"
+	BackendVersion = "4.9.1"
 	FeatureSet     = "Tax Reform 2027-2033 & PIS/COFINS Removal"
 )
 

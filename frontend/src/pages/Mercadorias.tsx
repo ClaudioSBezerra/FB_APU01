@@ -82,7 +82,8 @@ const Mercadorias = () => {
     setIsRefreshing(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${import.meta.env.VITE_API_TARGET}/api/admin/refresh-views`, {
+      // Use relative path to leverage proxy (Dev) or Nginx (Prod)
+      const response = await fetch(`/api/admin/refresh-views`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
