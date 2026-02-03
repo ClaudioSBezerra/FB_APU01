@@ -173,6 +173,19 @@ func main() {
 	// Start Background Worker
 	worker.StartWorker(db)
 
+	// Trigger async refresh of views (Startup)
+	go func() {
+		// Wait for server to start serving requests
+		time.Sleep(5 * time.Second)
+		log.Println("Background: Triggering initial view refresh (mv_mercadorias_agregada)...")
+		_, err := db.Exec("REFRESH MATERIALIZED VIEW mv_mercadorias_agregada")
+		if err != nil {
+			log.Printf("Background: Initial view refresh failed: %v", err)
+		} else {
+			log.Println("Background: Initial view refresh completed successfully.")
+		}
+	}()
+
 	// Register Upload Handler
 	http.HandleFunc("/api/upload", handlers.AuthMiddleware(handlers.UploadHandler(db), ""))
 
@@ -252,9 +265,9 @@ func main() {
 
 	fmt.Printf("FB_APU01 Fiscal Engine (Go) starting on port %s...\n", port)
 
-	// Print Version (Force Rebuild V4.2)
+	// Print Version
 	fmt.Println("==================================================")
-	fmt.Println("   FB_APU01 BACKEND - V4.2 (AUTH RECOVERY)       ")
+	fmt.Printf("   FB_APU01 BACKEND - %s\n", BackendVersion)
 	fmt.Println("==================================================")
 
 	// Use custom server with timeouts (Inspired by production best practices)

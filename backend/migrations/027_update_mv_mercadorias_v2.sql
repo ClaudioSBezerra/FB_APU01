@@ -16,7 +16,8 @@ FROM reg_c190 c190
 JOIN reg_c100 c ON c.id = c190.id_pai_c100
 JOIN import_jobs j ON j.id = c.job_id
 LEFT JOIN cfop f ON c190.cfop = f.cfop
-GROUP BY 1, 2, 3, 4, 5;
+GROUP BY 1, 2, 3, 4, 5
+WITH NO DATA;
 
 -- Create Unique Index to allow CONCURRENT REFRESH
 CREATE UNIQUE INDEX idx_mv_mercadorias_agregada 
