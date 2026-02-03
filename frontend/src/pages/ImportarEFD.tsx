@@ -319,6 +319,24 @@ export default function ImportarEFD() {
         setJobs(data);
     }
     
+    toast.info("Processando dados e gerando relatórios... Aguarde.");
+
+    try {
+        const refreshRes = await fetch('/api/admin/refresh-views', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!refreshRes.ok) {
+            console.error("Erro ao atualizar views");
+            toast.warning("Importação concluída, mas houve um atraso na atualização dos relatórios.");
+        }
+    } catch (e) {
+        console.error("Erro de conexão ao atualizar views", e);
+    }
+
     toast.success("Importação Total Concluida");
     setTimeout(() => {
         navigate('/mercadorias?tab=comercial');
