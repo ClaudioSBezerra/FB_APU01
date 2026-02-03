@@ -174,6 +174,7 @@ func main() {
 	worker.StartWorker(db)
 
 	// Trigger async refresh of views (Startup)
+	// Added manual trigger comment to force git sync
 	go func() {
 		// Wait for server to start serving requests
 		time.Sleep(5 * time.Second)
