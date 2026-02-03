@@ -652,19 +652,19 @@ const Mercadorias = () => {
           <div className="rounded-md border overflow-x-auto">
             <Table className="min-w-[1200px]">
               <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[100px]">Filial</TableHead>
-                  <TableHead className="w-[80px]">Mês/Ano</TableHead>
-                  <TableHead className="w-[150px]">Detalhe</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                  <TableHead className="text-right text-xs">ICMS</TableHead>
-                  <TableHead className="text-right text-xs bg-blue-50">ICMS Proj.</TableHead>
-                  <TableHead className="text-right text-xs bg-blue-50">Base IBS/CBS</TableHead>
-                  <TableHead className="text-right text-xs bg-blue-50">IBS Proj.</TableHead>
-                  <TableHead className="text-right text-xs bg-blue-50">CBS Proj.</TableHead>
-                  <TableHead className="text-right font-bold border-l border-r bg-gray-50">Total Atual (ICMS)</TableHead>
-                  <TableHead className="text-right font-bold bg-blue-100 border-r border-blue-200">Total Reforma</TableHead>
-                  <TableHead className="text-right font-bold">Diferença</TableHead>
+                <TableRow className="h-8">
+                  <TableHead className="w-[100px] whitespace-nowrap py-1">Filial</TableHead>
+                  <TableHead className="w-[80px] whitespace-nowrap py-1">Mês/Ano</TableHead>
+                  <TableHead className="w-[150px] whitespace-nowrap py-1">Detalhe</TableHead>
+                  <TableHead className="text-right whitespace-nowrap py-1">Valor</TableHead>
+                  <TableHead className="text-right text-xs whitespace-nowrap py-1">ICMS</TableHead>
+                  <TableHead className="text-right text-xs bg-blue-50 whitespace-nowrap py-1">ICMS Proj.</TableHead>
+                  <TableHead className="text-right text-xs bg-blue-50 whitespace-nowrap py-1">Base IBS/CBS</TableHead>
+                  <TableHead className="text-right text-xs bg-blue-50 whitespace-nowrap py-1">IBS Proj.</TableHead>
+                  <TableHead className="text-right text-xs bg-blue-50 whitespace-nowrap py-1">CBS Proj.</TableHead>
+                  <TableHead className="text-right font-bold border-l border-r bg-gray-50 whitespace-nowrap py-1">Total Atual (ICMS)</TableHead>
+                  <TableHead className="text-right font-bold bg-blue-100 border-r border-blue-200 whitespace-nowrap py-1">Total Reforma</TableHead>
+                  <TableHead className="text-right font-bold whitespace-nowrap py-1">Diferença</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -675,27 +675,27 @@ const Mercadorias = () => {
                   const diferenca = totalAtual - totalReforma;
 
                   return (
-                    <TableRow key={i} className="hover:bg-gray-50">
-                      <TableCell className="font-medium text-[10px]" title={row.filial_nome}>{maskCnpj(row.filial_cnpj)}</TableCell>
-                      <TableCell className="text-[10px]">{row.mes_ano}</TableCell>
-                      <TableCell>
-                        <span className={`px-2 py-1 rounded text-[10px] font-bold ${
+                    <TableRow key={i} className="hover:bg-gray-50 h-6">
+                      <TableCell className="font-medium text-[10px] whitespace-nowrap py-0.5" title={row.filial_nome}>{maskCnpj(row.filial_cnpj)}</TableCell>
+                      <TableCell className="text-[10px] whitespace-nowrap py-0.5">{row.mes_ano}</TableCell>
+                      <TableCell className="whitespace-nowrap py-0.5">
+                        <span className={`px-2 py-0 rounded text-[10px] font-bold ${
                           row.tipo === 'SAIDA' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
                         }`}>
                           {getCategoryLabel(row.tipo, row.tipo_cfop, row.origem, row.tipo_operacao)}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right text-[10px]">{formatNumber(row.valor)}</TableCell>
-                      <TableCell className="text-right text-[10px] text-gray-500">{formatNumber(row.icms)}</TableCell>
-                      <TableCell className="text-right text-[10px] text-blue-600 bg-blue-50">{formatNumber(row.vl_icms_projetado)}</TableCell>
-                      <TableCell className="text-right text-[10px] text-gray-400 bg-blue-50">{formatNumber(baseIbsCbs)}</TableCell>
-                      <TableCell className="text-right text-[10px] text-blue-600 bg-blue-50">{formatNumber(row.vl_ibs_projetado)}</TableCell>
-                      <TableCell className="text-right text-[10px] text-blue-600 bg-blue-50">{formatNumber(row.vl_cbs_projetado)}</TableCell>
+                      <TableCell className="text-right text-[10px] whitespace-nowrap py-0.5">{formatNumber(row.valor)}</TableCell>
+                      <TableCell className="text-right text-[10px] text-gray-500 whitespace-nowrap py-0.5">{formatNumber(row.icms)}</TableCell>
+                      <TableCell className="text-right text-[10px] text-blue-600 bg-blue-50 whitespace-nowrap py-0.5">{formatNumber(row.vl_icms_projetado)}</TableCell>
+                      <TableCell className="text-right text-[10px] text-gray-400 bg-blue-50 whitespace-nowrap py-0.5">{formatNumber(baseIbsCbs)}</TableCell>
+                      <TableCell className="text-right text-[10px] text-blue-600 bg-blue-50 whitespace-nowrap py-0.5">{formatNumber(row.vl_ibs_projetado)}</TableCell>
+                      <TableCell className="text-right text-[10px] text-blue-600 bg-blue-50 whitespace-nowrap py-0.5">{formatNumber(row.vl_cbs_projetado)}</TableCell>
                       
-                      <TableCell className="text-right text-[10px] font-bold border-l border-r bg-gray-50">{formatNumber(totalAtual)}</TableCell>
-                      <TableCell className="text-right text-[10px] font-bold bg-blue-100 text-blue-800 border-r border-blue-200">{formatNumber(totalReforma)}</TableCell>
+                      <TableCell className="text-right text-[10px] font-bold border-l border-r bg-gray-50 whitespace-nowrap py-0.5">{formatNumber(totalAtual)}</TableCell>
+                      <TableCell className="text-right text-[10px] font-bold bg-blue-100 text-blue-800 border-r border-blue-200 whitespace-nowrap py-0.5">{formatNumber(totalReforma)}</TableCell>
                       
-                      <TableCell className={`text-right text-[10px] font-bold ${diferenca > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <TableCell className={`text-right text-[10px] font-bold whitespace-nowrap py-0.5 ${diferenca > 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {formatNumber(diferenca)}
                       </TableCell>
                     </TableRow>
