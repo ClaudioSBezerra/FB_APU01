@@ -347,10 +347,14 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 
 		// 4. Get Environment, Group, and Company Context
 		// OPTIMIZATION: Split query to avoid complex joins and potential locks/slowdowns
+		// Added Timeout context to prevent 504 Gateway Timeouts on slow DB
 		var envName, groupName, companyName, companyID string
 
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+
 		// Strategy A: Check if user OWNS a company (Fastest/Most Common)
-		err = db.QueryRow(`
+		err = db.QueryRowContext(ctx, `
 			SELECT e.name, eg.name, c.name, c.id
 			FROM companies c
 			JOIN enterprise_groups eg ON c.group_id = eg.id
@@ -363,7 +367,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 		if err == sql.ErrNoRows {
 			// Strategy B: If not owner, check via User Environment (Slower but necessary for team members)
 			log.Printf("[Login] User %s owns no company, checking memberships...", req.Email)
-			err = db.QueryRow(`
+			err = db.QueryRowContext(ctx, `
 				SELECT e.name, eg.name, c.name, c.id
 				FROM user_environments ue
 				JOIN environments e ON ue.environment_id = e.id
@@ -383,11 +387,12 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			companyName = "Sem Empresa"
 			companyID = ""
 		} else if err != nil {
-			log.Printf("[Login] Error fetching context: %v", err)
-			// Don't fail login, just return empty context
-			envName = "Erro"
-			groupName = "Erro"
-			companyName = "Erro"
+			// Could be timeout or other error
+			log.Printf("[Login] Warning: Error fetching context (timeout?): %v. Proceeding without context.", err)
+			// Don't fail login, just return empty context so user can enter
+			envName = "Carregando..."
+			groupName = "Carregando..."
+			companyName = "Carregando..."
 			companyID = ""
 		}
 
