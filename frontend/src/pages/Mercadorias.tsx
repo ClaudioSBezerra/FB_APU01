@@ -98,7 +98,9 @@ const Mercadorias = () => {
     })
       .then(res => {
         if (res.status === 401) {
-          throw new Error("Erro na API: 401 Unauthorized\n\nVerifique se o backend está rodando em http://localhost:8081");
+          // Limpar token se 401 for retornado (opcional, mas boa prática)
+          // localStorage.removeItem('token'); 
+          throw new Error("Sessão expirada ou acesso negado (401). Por favor, faça login novamente.");
         }
         if (!res.ok) throw new Error(`Erro na API: ${res.status} ${res.statusText}`);
         return res.json();
