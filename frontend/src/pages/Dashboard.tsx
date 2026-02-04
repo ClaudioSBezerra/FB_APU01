@@ -125,7 +125,11 @@ export default function Dashboard() {
                   >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="ano" />
-                  <YAxis tickFormatter={(val) => `R$ ${(val / 1000000).toFixed(1)}M`} />
+                  <YAxis 
+                    tickFormatter={(val) => `R$ ${(val / 1000000).toFixed(1)}M`} 
+                    tick={{ fontSize: 10 }}
+                    width={80}
+                  />
                   <Tooltip 
                     formatter={(value: number) => formatMoney(value)}
                     labelFormatter={(label) => `Ano: ${label}`}

@@ -609,8 +609,11 @@ const Mercadorias = () => {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={projectionData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                <YAxis 
+                  tickFormatter={(val) => val === 0 ? '0' : `${(val / 1000000).toFixed(1)}M`} 
+                  tick={{ fontSize: 10 }}
+                />
                 <Tooltip formatter={(value) => formatCurrency(Number(value))} />
                 <Legend />
                 <ReferenceLine y={0} stroke="#000" />
