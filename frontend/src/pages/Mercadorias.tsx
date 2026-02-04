@@ -453,39 +453,6 @@ const Mercadorias = () => {
         </div>
       </div>
 
-      {/* Apuração de Impostos Card (Simplificado) */}
-      <Card className="bg-white shadow-md border-l-4 border-l-blue-600 mb-6">
-        <CardHeader className="pb-2">
-            <CardTitle className="text-xl flex items-center gap-2">
-                <Scale className="h-5 w-5 text-blue-600" />
-                Apuração (Débito - Crédito)
-            </CardTitle>
-        </CardHeader>
-        <CardContent>
-            <div className="flex flex-col gap-2">
-                <div className="flex justify-between items-center text-lg">
-                    <span className="font-semibold text-gray-700">Saldo ICMS:</span>
-                    <span className="font-bold text-red-700">{formatCurrency(totals.saidas.icmsProj - totals.entradas.icmsProj)}</span>
-                </div>
-                <div className="flex justify-between items-center text-lg">
-                    <span className="font-semibold text-gray-700">Saldo IBS:</span>
-                    <span className="font-bold text-[#855a30]">{formatCurrency(totals.saidas.ibsProj - totals.entradas.ibsProj)}</span>
-                </div>
-                <div className="flex justify-between items-center text-lg">
-                    <span className="font-semibold text-gray-700">Saldo CBS:</span>
-                    <span className="font-bold text-orange-700">{formatCurrency(totals.saidas.cbsProj - totals.entradas.cbsProj)}</span>
-                </div>
-                
-                <div className="border-t border-gray-200 my-2"></div>
-                
-                <div className="flex justify-between items-center text-xl bg-blue-50 p-3 rounded-md">
-                    <span className="font-bold text-blue-900">Saldo A Pagar:</span>
-                    <span className="font-bold text-blue-700">{formatCurrency(saldoReforma)}</span>
-                </div>
-            </div>
-        </CardContent>
-      </Card>
-
       {/* Cards de Totais */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Total Saídas */}
@@ -568,37 +535,43 @@ const Mercadorias = () => {
           </CardContent>
         </Card>
 
-        {/* Apuração Projetada */}
+        {/* Apuração Projetada (Atualizada) */}
         <Card className="border-l-4 border-l-blue-500 bg-blue-50/30">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-base font-medium text-blue-800">Apuração</CardTitle>
+            <CardTitle className="text-base font-medium text-blue-800">Apuração (Débito - Crédito)</CardTitle>
             <Scale className="h-5 w-5 text-blue-600" />
           </CardHeader>
           <CardContent>
             <div className="space-y-3 text-xs">
-               <div className="flex justify-between items-center">
-                <span className="text-gray-600">Total Débitos:</span>
-                <span className="font-medium text-red-600">
-                  {formatCurrency(totalDebitos)}
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600 font-medium">Saldo ICMS:</span>
+                <span className={`font-medium ${(totals.saidas.icmsProj - totals.entradas.icmsProj) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {formatCurrency(totals.saidas.icmsProj - totals.entradas.icmsProj)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">Total Créditos:</span>
-                <span className="font-medium text-green-600">
-                  - {formatCurrency(totalCreditos)}
+                <span className="text-gray-600 font-medium">Saldo IBS:</span>
+                <span className={`font-medium ${(totals.saidas.ibsProj - totals.entradas.ibsProj) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {formatCurrency(totals.saidas.ibsProj - totals.entradas.ibsProj)}
                 </span>
               </div>
-              
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600 font-medium">Saldo CBS:</span>
+                <span className={`font-medium ${(totals.saidas.cbsProj - totals.entradas.cbsProj) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {formatCurrency(totals.saidas.cbsProj - totals.entradas.cbsProj)}
+                </span>
+              </div>
+
               <div className="border-t border-blue-300 my-2"></div>
 
               <div className="flex justify-between items-center">
-                <span className="text-blue-900 font-bold text-sm">Resultado:</span>
+                <span className="text-blue-900 font-bold text-sm">Saldo A Pagar:</span>
                 <span className={`font-bold text-xl ${saldoReforma > 0 ? 'text-red-600' : 'text-green-600'}`}>
                   {formatCurrency(saldoReforma)}
                 </span>
               </div>
               <div className="text-xs text-blue-500 text-right font-medium">
-                {saldoReforma > 0 ? "Imposto a Pagar" : "Crédito Acumulado"}
+                {saldoReforma > 0 ? "Imposto a Pagar (Soma dos 3)" : "Crédito Acumulado (Soma dos 3)"}
               </div>
             </div>
           </CardContent>
