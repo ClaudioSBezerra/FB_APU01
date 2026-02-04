@@ -23,6 +23,6 @@ FROM alpine:latest
 WORKDIR /root/
 COPY --from=builder /app/server .
 COPY --from=builder /app/migrations ./migrations
-EXPOSE 8080
+EXPOSE 8081
 CMD ["./server"]
 # Force Rebuild v4.9.0 - Tax Reform Update
