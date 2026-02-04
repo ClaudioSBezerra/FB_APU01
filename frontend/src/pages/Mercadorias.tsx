@@ -617,8 +617,6 @@ const Mercadorias = () => {
                 <Tooltip formatter={(value) => formatCurrency(Number(value))} />
                 <Legend />
                 <ReferenceLine y={0} stroke="#000" />
-                <Line type="monotone" dataKey="Debitos" name="Total Débitos (Projetado)" stroke="#dc2626" strokeWidth={2} />
-                <Line type="monotone" dataKey="Creditos" name="Total Créditos (Projetado)" stroke="#16a34a" strokeWidth={2} />
                 <Line type="monotone" dataKey="SaldoReforma" name="Saldo a Pagar (Projetado)" stroke="#2563eb" strokeWidth={3} dot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
