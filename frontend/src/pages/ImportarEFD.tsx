@@ -307,14 +307,34 @@ export default function ImportarEFD() {
         }
     }
 
-    // Trigger job refresh
-    const res = await fetch('/api/jobs');
-    if (res.ok) {
-        const data = await res.json();
-        setJobs(data);
-    }
+    // Trigger job refresh and Wait for Processing Completion
+    let allCompleted = false;
+    const processingToastId = toast.loading("Arquivos enviados. Aguardando processamento no servidor...");
     
-    // Notify user about View Refresh phase
+    // Wait for all jobs to finish (pending/processing -> completed/error)
+    while (!allCompleted) {
+        await new Promise(r => setTimeout(r, 2000)); // Poll every 2s
+        
+        try {
+            const res = await fetch('/api/jobs');
+            if (res.ok) {
+                const data: ImportJob[] = await res.json();
+                setJobs(data);
+                
+                // Check if any job is still active
+                const hasPending = data.some(j => j.status === 'pending' || j.status === 'processing');
+                if (!hasPending) {
+                    allCompleted = true;
+                }
+            }
+        } catch (e) {
+            console.error("Error polling jobs", e);
+            // Continue polling on error
+        }
+    }
+    toast.dismiss(processingToastId);
+    
+    // Notify user about View Refresh phase (Generate Once)
     const toastId = toast.loading("Consolidando dados e gerando relatórios... Aguarde.");
 
     try {
@@ -331,11 +351,11 @@ export default function ImportarEFD() {
             console.error("Erro ao atualizar views");
             toast.warning("Importação concluída, mas houve um atraso na atualização dos relatórios.");
         } else {
-            toast.success("Importação Total Concluida");
-            // Delay redirect slightly to let user see the success message
+            toast.success("Importação Total Concluída! Redirecionando...");
+            // Redirect to Commercial Dashboard as requested
             setTimeout(() => {
                 navigate('/mercadorias?tab=comercial');
-            }, 1000);
+            }, 1500);
         }
     } catch (e) {
         toast.dismiss(toastId);

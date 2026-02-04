@@ -122,7 +122,9 @@ func processNextJob(db *sql.DB, workerID int) {
 		db.Exec("UPDATE import_jobs SET status = 'completed', message = $1, updated_at = NOW() WHERE id = $2", summary, id)
 
 		// Trigger View Refresh immediately after success
-		// This ensures the dashboard is updated automatically without manual refresh
+		// DISABLED: Frontend now handles the "Refresh Once" strategy after all files are uploaded.
+		// This prevents redundant refreshes during batch imports.
+		/*
 		fmt.Printf("Worker #%d: Refreshing Materialized View (mv_mercadorias_agregada)...\n", workerID)
 		start := time.Now()
 		
@@ -139,6 +141,7 @@ func processNextJob(db *sql.DB, workerID int) {
 		} else {
 			fmt.Printf("Worker #%d: View refreshed successfully in %v.\n", workerID, time.Since(start))
 		}
+		*/
 	}
 }
 
