@@ -341,24 +341,20 @@ const Mercadorias = () => {
 
   const handleExport = () => {
     const exportData = filteredData.map(item => {
-      const totalAtual = (item.icms || 0);
-      const baseIbsCbs = (item.valor || 0) - (item.vl_icms_projetado || 0);
+      const totalAtual = (item.icms || 0); // PIS/COFINS assumed 0 as it's not in dataset
       const totalReforma = (item.vl_icms_projetado || 0) + (item.vl_ibs_projetado || 0) + (item.vl_cbs_projetado || 0);
       const diferenca = totalAtual - totalReforma;
 
       return {
         'Filial': item.filial_nome,
         'Mês/Ano': item.mes_ano,
-        'Detalhe': getCategoryLabel(item.tipo, item.tipo_cfop, item.origem, item.tipo_operacao),
-        'Valor': item.valor,
-        'ICMS': item.icms,
+        'Valor ICMS': item.icms,
         'ICMS Proj.': item.vl_icms_projetado,
-        'Base IBS/CBS': baseIbsCbs,
+        'PIS+COFINS (Atual)': 0,
         'IBS Proj.': item.vl_ibs_projetado,
         'CBS Proj.': item.vl_cbs_projetado,
-        'Total Atual (ICMS)': totalAtual,
         'Total Reforma': totalReforma,
-        'Diferença': diferenca
+        'Dif. deb/cred.': diferenca
       };
     });
     exportToExcel(exportData, 'relatorio_mercadorias_detalhado');
