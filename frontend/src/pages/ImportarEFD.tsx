@@ -49,7 +49,9 @@ export default function ImportarEFD() {
       try {
         const res = await fetch('/api/jobs', {
           headers: {
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${token}`,
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
           }
         }); 
         if (res.ok) {

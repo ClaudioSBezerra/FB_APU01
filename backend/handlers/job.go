@@ -126,7 +126,7 @@ func ListJobsHandler(db *sql.DB) http.HandlerFunc {
 			FROM import_jobs 
 			WHERE company_id = $1
 			ORDER BY created_at DESC 
-			LIMIT 50
+			LIMIT 100
 		`, companyID)
 		if err != nil {
 			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)

@@ -96,7 +96,7 @@ export function AppSidebar() {
           </div>
         </div>
         <div className="px-4 pb-2">
-           <CompanySwitcher />
+           {isAdmin && <CompanySwitcher />}
         </div>
       </SidebarHeader>
       <SidebarContent>

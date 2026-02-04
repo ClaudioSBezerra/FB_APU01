@@ -16,4 +16,4 @@ CREATE TABLE IF NOT EXISTS participants (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_participants_job_id ON participants(job_id);
+CREATE INDEX IF NOT EXISTS idx_participants_job_id ON participants(job_id);

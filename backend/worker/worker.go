@@ -132,7 +132,7 @@ func processNextJob(db *sql.DB, workerID int) {
 		// Trigger View Refresh immediately after success
 		// DISABLED: Frontend now handles the "Refresh Once" strategy after all files are uploaded.
 		// This prevents redundant refreshes during batch imports.
-		/*
+		
 		fmt.Printf("Worker #%d: Refreshing Materialized View (mv_mercadorias_agregada)...\n", workerID)
 		start := time.Now()
 		
@@ -149,7 +149,7 @@ func processNextJob(db *sql.DB, workerID int) {
 		} else {
 			fmt.Printf("Worker #%d: View refreshed successfully in %v.\n", workerID, time.Since(start))
 		}
-		*/
+		
 	}
 }
 
