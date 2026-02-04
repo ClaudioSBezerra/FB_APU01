@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Check, X, Trash2, Shield, Calendar, UserCheck } from "lucide-react";
@@ -43,11 +44,12 @@ export default function AdminUsers() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [newRole, setNewRole] = useState<string>("user");
   const [extendDays, setExtendDays] = useState<number>(0);
+  const [isOfficial, setIsOfficial] = useState<boolean>(false);
 
   const { data: users, isLoading } = useQuery<User[]>({
     queryKey: ['admin-users'],
     queryFn: async () => {
-      const response = await fetch(`${import.meta.env.VITE_API_TARGET}/api/admin/users`, {
+      const response = await fetch(`/api/admin/users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch users');
@@ -56,14 +58,14 @@ export default function AdminUsers() {
   });
 
   const promoteMutation = useMutation({
-    mutationFn: async (data: { userId: string, role: string, extendDays: number }) => {
-      const response = await fetch(`${import.meta.env.VITE_API_TARGET}/api/admin/users/promote?id=${data.userId}`, {
+    mutationFn: async (data: { userId: string, role: string, extendDays: number, isOfficial: boolean }) => {
+      const response = await fetch(`/api/admin/users/promote?id=${data.userId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ role: data.role, extend_days: data.extendDays })
+        body: JSON.stringify({ role: data.role, extend_days: data.extendDays, is_official: data.isOfficial })
       });
       if (!response.ok) throw new Error('Failed to update user');
       return response.json();
@@ -78,7 +80,7 @@ export default function AdminUsers() {
 
   const deleteMutation = useMutation({
     mutationFn: async (userId: string) => {
-      const response = await fetch(`${import.meta.env.VITE_API_TARGET}/api/admin/users/delete?id=${userId}`, {
+      const response = await fetch(`/api/admin/users/delete?id=${userId}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -96,6 +98,7 @@ export default function AdminUsers() {
     setSelectedUser(user);
     setNewRole(user.role);
     setExtendDays(0);
+    setIsOfficial(false);
     setPromoteDialogOpen(true);
   };
 
@@ -104,7 +107,8 @@ export default function AdminUsers() {
       promoteMutation.mutate({
         userId: selectedUser.id,
         role: newRole,
-        extendDays: extendDays
+        extendDays: extendDays,
+        isOfficial: isOfficial
       });
     }
   };
@@ -198,18 +202,34 @@ export default function AdminUsers() {
               </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="extend" className="text-right">
-                Estender Trial
+              <Label htmlFor="extendDays" className="text-right">
+                Estender (dias)
               </Label>
-              <div className="col-span-3 flex items-center gap-2">
-                <Input
-                  id="extend"
-                  type="number"
-                  value={extendDays}
-                  onChange={(e) => setExtendDays(parseInt(e.target.value) || 0)}
-                  className="w-24"
+              <Input
+                id="extendDays"
+                type="number"
+                value={extendDays}
+                onChange={(e) => setExtendDays(Number(e.target.value))}
+                className="col-span-3"
+                disabled={isOfficial}
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="isOfficial" className="text-right">
+                Cliente Oficial
+              </Label>
+              <div className="col-span-3 flex items-center space-x-2">
+                <Checkbox 
+                  id="isOfficial" 
+                  checked={isOfficial}
+                  onCheckedChange={(checked) => setIsOfficial(checked as boolean)}
                 />
-                <span className="text-sm text-muted-foreground">dias</span>
+                <label
+                  htmlFor="isOfficial"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Definir como cliente permanente (Até 2099)
+                </label>
               </div>
             </div>
           </div>

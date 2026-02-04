@@ -32,7 +32,7 @@ export function CompanySwitcher() {
 
   useEffect(() => {
     if (token) {
-      fetch(`${import.meta.env.VITE_API_TARGET}/api/user/companies`, {
+      fetch(`/api/user/companies`, {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then((res) => res.json())

@@ -51,7 +51,10 @@ interface TaxRate {
   perc_reduc_piscofins: number;
 }
 
+import { useAuth } from '@/contexts/AuthContext';
+
 const Mercadorias = () => {
+  const { token, companyId } = useAuth();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   
@@ -69,18 +72,34 @@ const Mercadorias = () => {
 
   // Fetch tax rates
   useEffect(() => {
-    fetch("/api/config/aliquotas")
+    if (!token) return;
+    
+    fetch("/api/config/aliquotas", {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
       .then((res) => res.json())
       .then((data) => setTaxRates(data || []))
       .catch((err) => console.error("Failed to fetch tax rates", err));
-  }, []);
+  }, [token]);
 
   // Fetch data from backend
   const fetchData = useCallback(() => {
+    if (!token) return;
+    
     setLoading(true);
     // Request 'todos' to get all operations (Commercial + Others)
-    fetch(`/api/reports/mercadorias?target_year=${selectedYear}&tipo_operacao=todos`)
+    fetch(`/api/reports/mercadorias?target_year=${selectedYear}&tipo_operacao=todos`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'X-Company-ID': companyId || ''
+      }
+    })
       .then(res => {
+        if (res.status === 401) {
+          throw new Error("Erro na API: 401 Unauthorized\n\nVerifique se o backend está rodando em http://localhost:8081");
+        }
         if (!res.ok) throw new Error(`Erro na API: ${res.status} ${res.statusText}`);
         return res.json();
       })
