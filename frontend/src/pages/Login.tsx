@@ -7,16 +7,21 @@ import { toast } from "sonner";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
+
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const navigate = useNavigate();
   const { login } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setErrorMsg(null);
 
     try {
       const res = await fetch("/api/auth/login", {
@@ -28,28 +33,51 @@ const Login = () => {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data || "Credenciais inválidas");
+        throw new Error(typeof data === 'string' ? data : "Credenciais inválidas");
       }
 
       login(data);
       toast.success("Login realizado com sucesso!");
       navigate("/mercadorias");
     } catch (error: any) {
-      toast.error("Erro no login: " + error.message);
+      const msg = error.message || "Erro desconhecido";
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <Card className="w-[400px]">
-        <CardHeader>
-          <CardTitle>Acesse sua conta</CardTitle>
-          <CardDescription>Entre com suas credenciais</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
+    <div className="flex items-center justify-center min-h-screen bg-gray-100 px-4">
+      <div className="w-full max-w-[400px] flex flex-col items-center space-y-6">
+        {/* Logo Area */}
+        <div className="flex justify-center">
+            <img 
+              src="/logo.png" 
+              alt="Logo da Empresa" 
+              className="h-20 w-auto object-contain"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none'; // Hide if missing
+              }} 
+            />
+        </div>
+
+        <Card className="w-full shadow-lg">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl font-bold">Acesse sua conta</CardTitle>
+            <CardDescription>Entre com suas credenciais para continuar</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {errorMsg && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Erro</AlertTitle>
+                <AlertDescription>{errorMsg}</AlertDescription>
+              </Alert>
+            )}
+            
+            <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">E-mail</Label>
               <Input
@@ -58,6 +86,7 @@ const Login = () => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                placeholder="seu@email.com"
               />
             </div>
             <div className="space-y-2">
@@ -87,6 +116,7 @@ const Login = () => {
           </form>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 };
