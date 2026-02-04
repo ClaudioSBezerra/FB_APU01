@@ -54,8 +54,8 @@ const menuItems = [
     isActive: true, // Default open
     items: [
       { title: "Importar SPEDs", url: "/importar-efd", icon: FileSpreadsheet },
-      { title: "Operações Comerciais", url: "/mercadorias?tab=comercial", icon: ShoppingCart },
-      { title: "Dashboards", url: "/dashboards", icon: LayoutDashboard, disabled: true },
+      { title: "Operações Comerciais", url: "/mercadorias?tab=comercial", icon: ShoppingCart, className: "whitespace-normal h-auto py-2 leading-tight" },
+      { title: "Dashboard Reforma", url: "/dashboards", icon: LayoutDashboard },
     ]
   },
   {
@@ -128,10 +128,10 @@ export function AppSidebar() {
                             <SidebarMenuSubButton 
                               asChild 
                               isActive={location.pathname === subItem.url}
-                              className={subItem.disabled ? "opacity-50 pointer-events-none" : ""}
+                              className={`${subItem.disabled ? "opacity-50 pointer-events-none" : ""} ${(subItem as any).className || ""}`}
                             >
                               <Link to={subItem.url}>
-                                {subItem.icon && <subItem.icon className="mr-2 h-4 w-4" />}
+                                {subItem.icon && <subItem.icon className="mr-2 h-4 w-4 shrink-0" />}
                                 <span>{subItem.title}</span>
                                 {subItem.disabled && <span className="ml-auto text-xs text-muted-foreground">(Dev)</span>}
                               </Link>

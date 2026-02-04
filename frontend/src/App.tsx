@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from 'react
 import { Toaster } from "@/components/ui/sonner";
 import ImportarEFD from './pages/ImportarEFD';
 import Mercadorias from './pages/Mercadorias';
+import Dashboard from './pages/Dashboard';
 import TabelaAliquotas from './pages/TabelaAliquotas';
 import TabelaCFOP from './pages/TabelaCFOP';
 import GestaoAmbiente from './pages/GestaoAmbiente';
@@ -86,7 +87,7 @@ function AppLayout() {
             {/* Simulador da RT */}
             <Route path="/importar-efd" element={<ImportarEFD />} />
             <Route path="/mercadorias" element={<Mercadorias />} />
-            <Route path="/dashboards" element={<ComingSoon title="Dashboards" />} />
+            <Route path="/dashboards" element={<Dashboard />} />
             
             {/* Configurações */}
             <Route path="/config/aliquotas" element={<TabelaAliquotas />} />
