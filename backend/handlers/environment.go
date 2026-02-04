@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -44,6 +45,8 @@ func GetEnvironmentsHandler(db *sql.DB) http.HandlerFunc {
 		}
 		userID := claims["user_id"].(string)
 		role := claims["role"].(string)
+
+		log.Printf("[GetEnvironments] User: %s, Role: %s", userID, role)
 
 		var rows *sql.Rows
 		var err error

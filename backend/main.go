@@ -253,7 +253,7 @@ func main() {
 	http.HandleFunc("/api/config/cfop/import", handlers.ImportCFOPsHandler(db))
 
 	// Environment & Groups Endpoints
-	http.HandleFunc("/api/config/environments", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/config/environments", handlers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			handlers.GetEnvironmentsHandler(db)(w, r)
@@ -266,9 +266,9 @@ func main() {
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
+	}, ""))
 
-	http.HandleFunc("/api/config/groups", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/config/groups", handlers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			handlers.GetGroupsHandler(db)(w, r)
@@ -279,9 +279,9 @@ func main() {
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
+	}, ""))
 
-	http.HandleFunc("/api/config/companies", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/config/companies", handlers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			handlers.GetCompaniesHandler(db)(w, r)
@@ -292,7 +292,7 @@ func main() {
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
+	}, ""))
 
 	fmt.Printf("FB_APU01 Fiscal Engine (Go) starting on port %s...\n", port)
 
