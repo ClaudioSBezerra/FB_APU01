@@ -18,6 +18,7 @@ interface AuthContextType {
   cnpj: string | null;
   login: (data: any) => void;
   logout: () => void;
+  switchCompany: (id: string, name: string, cnpj: string) => void;
   isAuthenticated: boolean;
 }
 
@@ -83,6 +84,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     window.location.href = '/login';
   };
 
+  const switchCompany = (id: string, name: string, newCnpj: string) => {
+    setCompany(name);
+    setCompanyId(id);
+    setCnpj(newCnpj);
+    localStorage.setItem('company', name);
+    localStorage.setItem('companyId', id);
+    localStorage.setItem('cnpj', newCnpj);
+    // Optional: Reload to ensure all components refresh data with new company context
+    window.location.reload(); 
+  };
+
   return (
     <AuthContext.Provider value={{ 
       user, 
@@ -94,6 +106,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       cnpj,
       login, 
       logout,
+      switchCompany,
       isAuthenticated: !!user 
     }}>
       {children}

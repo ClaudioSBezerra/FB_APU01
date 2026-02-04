@@ -57,47 +57,10 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// Determine Target Company
-		// 1. Try to get from Form Data (sent by Frontend)
-		var companyID string
-		requestedCompanyID := r.FormValue("company_id")
-
-		if requestedCompanyID != "" {
-			// Validate user has access to this company
-			var exists bool
-			err := db.QueryRow(`
-				SELECT EXISTS(
-					SELECT 1
-					FROM companies c
-					JOIN enterprise_groups eg ON c.group_id = eg.id
-					JOIN user_environments ue ON ue.environment_id = eg.environment_id
-					WHERE ue.user_id = $1 AND c.id = $2
-				)
-			`, userID, requestedCompanyID).Scan(&exists)
-
-			if err == nil && exists {
-				companyID = requestedCompanyID
-			} else {
-				log.Printf("Warning: User %s requested access to invalid/unauthorized company %s. Falling back to default.", userID, requestedCompanyID)
-			}
-		}
-
-		// 2. Fallback: Find latest company linked to user if not specified or invalid
-		if companyID == "" {
-			err := db.QueryRow(`
-				SELECT c.id
-				FROM companies c
-				JOIN enterprise_groups eg ON c.group_id = eg.id
-				JOIN user_environments ue ON ue.environment_id = eg.environment_id
-				WHERE ue.user_id = $1
-				ORDER BY c.created_at DESC
-				LIMIT 1
-			`, userID).Scan(&companyID)
-
-			if err != nil {
-				log.Printf("Error finding company for user %s: %v", userID, err)
-				http.Error(w, "User not linked to any company", http.StatusForbidden)
-				return
-			}
+		companyID, err := GetEffectiveCompanyID(db, userID, r.Header.Get("X-Company-ID"))
+		if err != nil {
+			http.Error(w, "Error getting user company: "+err.Error(), http.StatusInternalServerError)
+			return
 		}
 
 		file, header, err := r.FormFile("file")
@@ -306,7 +269,7 @@ func CheckDuplicityHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		companyID, err := GetUserCompanyID(db, userID)
+		companyID, err := GetEffectiveCompanyID(db, userID, r.Header.Get("X-Company-ID"))
 		if err != nil {
 			http.Error(w, "Error getting user company: "+err.Error(), http.StatusInternalServerError)
 			return

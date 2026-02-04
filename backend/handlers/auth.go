@@ -149,14 +149,38 @@ func GetUserIDFromContext(r *http.Request) string {
 	return userID
 }
 
-// GetUserCompanyID fetches the company ID for a given user.
-// It prioritizes companies owned by the user, then falls back to companies where the user is a member.
-func GetUserCompanyID(db *sql.DB, userID string) (string, error) {
-	var companyID string
-
+// GetEffectiveCompanyID fetches the company ID to use for the current request.
+// If requestedCompanyID is provided (e.g. via header), it verifies if the user has access to it.
+// If not provided or invalid, it falls back to the default company (Owner > Member).
+func GetEffectiveCompanyID(db *sql.DB, userID, requestedCompanyID string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
+	// 1. If a specific company is requested, verify access
+	if requestedCompanyID != "" {
+		var exists bool
+		// Check if Owner OR Member in the same Group/Environment
+		err := db.QueryRowContext(ctx, `
+			SELECT EXISTS(
+				SELECT 1 
+				FROM companies c
+				LEFT JOIN enterprise_groups eg ON c.group_id = eg.id
+				LEFT JOIN user_environments ue ON eg.environment_id = ue.environment_id
+				WHERE c.id = $1 
+				AND (c.owner_id = $2 OR ue.user_id = $2)
+			)
+		`, requestedCompanyID, userID).Scan(&exists)
+
+		if err == nil && exists {
+			return requestedCompanyID, nil
+		}
+		// If requested ID is invalid/unauthorized, fall through to default logic
+		log.Printf("User %s requested invalid/unauthorized company %s. Falling back to default.", userID, requestedCompanyID)
+	}
+
+	// 2. Default Logic (Owner > Member)
+	var companyID string
+	
 	// Strategy A: Check if user OWNS a company
 	err := db.QueryRowContext(ctx, `
 		SELECT c.id
@@ -190,6 +214,61 @@ func GetUserCompanyID(db *sql.DB, userID string) (string, error) {
 	}
 
 	return companyID, nil
+}
+
+// Deprecated: Use GetEffectiveCompanyID instead
+func GetUserCompanyID(db *sql.DB, userID string) (string, error) {
+	return GetEffectiveCompanyID(db, userID, "")
+}
+
+type UserCompany struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	TradeName   string `json:"trade_name"`
+	IsOwner     bool   `json:"is_owner"`
+	Environment string `json:"environment"`
+	Group       string `json:"group"`
+}
+
+// GetUserCompaniesHandler lists all companies available to the user
+func GetUserCompaniesHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := GetUserIDFromContext(r)
+		if userID == "" {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Query companies where user is Owner OR Member (via Environment)
+		rows, err := db.Query(`
+			SELECT DISTINCT c.id, c.name, c.trade_name, (c.owner_id = $1) as is_owner, e.name as env_name, eg.name as group_name
+			FROM companies c
+			LEFT JOIN enterprise_groups eg ON c.group_id = eg.id
+			LEFT JOIN environments e ON eg.environment_id = e.id
+			LEFT JOIN user_environments ue ON e.id = ue.environment_id
+			WHERE c.owner_id = $1 OR ue.user_id = $1
+			ORDER BY is_owner DESC, c.name ASC
+		`, userID)
+
+		if err != nil {
+			log.Printf("Error listing companies: %v", err)
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		var companies []UserCompany
+		for rows.Next() {
+			var c UserCompany
+			if err := rows.Scan(&c.ID, &c.Name, &c.TradeName, &c.IsOwner, &c.Environment, &c.Group); err != nil {
+				continue
+			}
+			companies = append(companies, c)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(companies)
+	}
 }
 
 func RegisterHandler(db *sql.DB) http.HandlerFunc {

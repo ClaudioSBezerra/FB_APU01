@@ -229,6 +229,7 @@ func main() {
 	http.HandleFunc("/api/auth/login", handlers.LoginHandler(db))
 	http.HandleFunc("/api/auth/forgot-password", handlers.ForgotPasswordHandler(db))
 	http.HandleFunc("/api/user/hierarchy", handlers.AuthMiddleware(handlers.GetUserHierarchyHandler(db), ""))
+	http.HandleFunc("/api/user/companies", handlers.AuthMiddleware(handlers.GetUserCompaniesHandler(db), ""))
 
 	http.HandleFunc("/api/mercadorias", handlers.AuthMiddleware(handlers.GetMercadoriasReportHandler(db), ""))
 

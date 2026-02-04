@@ -46,7 +46,7 @@ func GetJobParticipantsHandler(db *sql.DB) http.HandlerFunc {
 		}
 		userID := claims["user_id"].(string)
 
-		companyID, err := GetUserCompanyID(db, userID)
+		companyID, err := GetEffectiveCompanyID(db, userID, r.Header.Get("X-Company-ID"))
 		if err != nil {
 			http.Error(w, "Error getting user company: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -115,7 +115,7 @@ func ListJobsHandler(db *sql.DB) http.HandlerFunc {
 		}
 		userID := claims["user_id"].(string)
 
-		companyID, err := GetUserCompanyID(db, userID)
+		companyID, err := GetEffectiveCompanyID(db, userID, r.Header.Get("X-Company-ID"))
 		if err != nil {
 			http.Error(w, "Error getting user company: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -166,7 +166,7 @@ func GetJobStatusHandler(db *sql.DB) http.HandlerFunc {
 		}
 		userID := claims["user_id"].(string)
 
-		companyID, err := GetUserCompanyID(db, userID)
+		companyID, err := GetEffectiveCompanyID(db, userID, r.Header.Get("X-Company-ID"))
 		if err != nil {
 			http.Error(w, "Error getting user company: "+err.Error(), http.StatusInternalServerError)
 			return

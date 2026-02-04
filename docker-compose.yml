@@ -8,8 +8,10 @@ services:
     restart: always
     # ports:
     #   - "8080:8080"
+    ports:
+      - "8081:8081"
     expose:
-      - "8080"
+      - "8081"
     environment:
       - PORT=8080
       - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable

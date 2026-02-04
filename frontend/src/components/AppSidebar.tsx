@@ -36,6 +36,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/AuthContext"
 
+import { CompanySwitcher } from "@/components/CompanySwitcher"
+
 // Menu definition
 const menuItems = [
   {
@@ -44,7 +46,7 @@ const menuItems = [
     items: [
       { title: "Tabela de Alíquotas", url: "/config/aliquotas", icon: Table },
       { title: "Tabela CFOP", url: "/config/cfop", icon: Table },
-      { title: "Gestão de Usuários", url: "/config/usuarios", icon: Users, disabled: true },
+      { title: "Gestão de Usuários", url: "/config/usuarios", icon: Users },
       { title: "Gestão de Ambiente", url: "/config/ambiente", icon: Building },
     ]
   },
@@ -92,6 +94,9 @@ export function AppSidebar() {
             <span className="truncate font-semibold">FB_APU01</span>
             <span className="truncate text-xs">Tax Reform System</span>
           </div>
+        </div>
+        <div className="px-4 pb-2">
+           <CompanySwitcher />
         </div>
       </SidebarHeader>
       <SidebarContent>
