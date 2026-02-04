@@ -276,10 +276,10 @@ func CreateUserHandler(db *sql.DB) http.HandlerFunc {
 			if groupID != "" {
 				db.Exec("INSERT INTO companies (group_id, name, trade_name, owner_id) VALUES ($1, $2, $2, $3)", groupID, "Empresa de "+req.FullName, userID)
 			}
-		}
 
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]string{"message": "User created successfully", "id": userID})
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(map[string]string{"message": "User created successfully", "id": userID})
+		}
 	}
 }
 

@@ -53,12 +53,20 @@ func GetUserHierarchyHandler(db *sql.DB) http.HandlerFunc {
 			// Log error but continue?
 		}
 
-		// 4. Get Company Details (First company in the group)
+		// 4. Get Company Details (Prioritize company owned by user)
 		var company Company
 		// var companyCNPJ string // CNPJ removed from companies table
 		if group.ID != "" {
 			// Removed 'cnpj' from SELECT list as it no longer exists in companies table
-			err = db.QueryRow("SELECT id, group_id, name, COALESCE(trade_name, ''), created_at FROM companies WHERE group_id = $1 LIMIT 1", group.ID).Scan(&company.ID, &company.GroupID, &company.Name, &company.TradeName, &company.CreatedAt)
+			// Prioritize the company owned by the user, then fallback to any company in the group
+			err = db.QueryRow(`
+				SELECT id, group_id, name, COALESCE(trade_name, ''), created_at 
+				FROM companies 
+				WHERE group_id = $1 
+				ORDER BY (owner_id = $2) DESC, created_at ASC 
+				LIMIT 1
+			`, group.ID, userID).Scan(&company.ID, &company.GroupID, &company.Name, &company.TradeName, &company.CreatedAt)
+
 			if err != nil && err != sql.ErrNoRows {
 				// Log error if needed
 			}

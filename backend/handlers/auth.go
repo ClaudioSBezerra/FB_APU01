@@ -348,47 +348,27 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// 4. Get Default Environment and Group
+		// 4. Create ISOLATED Environment and Group for the user
 		var envID, groupID, envName, groupName string
 
-		// Fetch default environment or CREATE if not exists
-		err = tx.QueryRow("SELECT id, name FROM environments WHERE name = 'Ambiente de Testes' LIMIT 1").Scan(&envID, &envName)
+		// Create Environment
+		envName = "Ambiente de " + req.FullName
+		err = tx.QueryRow("INSERT INTO environments (name, description) VALUES ($1, 'Ambiente Padrão do Usuário') RETURNING id", envName).Scan(&envID)
 		if err != nil {
-			if err == sql.ErrNoRows {
-				// Create Environment
-				err = tx.QueryRow("INSERT INTO environments (name, description) VALUES ('Ambiente de Testes', 'Ambiente compartilhado para usuários trial') RETURNING id, name").Scan(&envID, &envName)
-				if err != nil {
-					log.Printf("[Register] Error creating environment: %v", err)
-					tx.Rollback()
-					http.Error(w, "Error creating default environment", http.StatusInternalServerError)
-					return
-				}
-			} else {
-				log.Printf("[Register] Error fetching environment: %v", err)
-				tx.Rollback()
-				http.Error(w, "Database error fetching environment", http.StatusInternalServerError)
-				return
-			}
+			log.Printf("[Register] Error creating environment: %v", err)
+			tx.Rollback()
+			http.Error(w, "Error creating environment", http.StatusInternalServerError)
+			return
 		}
 
-		// Fetch default group in that environment or CREATE if not exists
-		err = tx.QueryRow("SELECT id, name FROM enterprise_groups WHERE environment_id = $1 AND name = 'Grupo de Empresas Testes' LIMIT 1", envID).Scan(&groupID, &groupName)
+		// Create Group
+		groupName = "Grupo de " + req.FullName
+		err = tx.QueryRow("INSERT INTO enterprise_groups (environment_id, name, description) VALUES ($1, $2, 'Grupo Padrão do Usuário') RETURNING id", envID, groupName).Scan(&groupID)
 		if err != nil {
-			if err == sql.ErrNoRows {
-				// Create Group
-				err = tx.QueryRow("INSERT INTO enterprise_groups (environment_id, name, description) VALUES ($1, 'Grupo de Empresas Testes', 'Grupo compartilhado para trial') RETURNING id, name", envID).Scan(&groupID, &groupName)
-				if err != nil {
-					log.Printf("[Register] Error creating group: %v", err)
-					tx.Rollback()
-					http.Error(w, "Error creating default group", http.StatusInternalServerError)
-					return
-				}
-			} else {
-				log.Printf("[Register] Error fetching group: %v", err)
-				tx.Rollback()
-				http.Error(w, "Database error fetching group", http.StatusInternalServerError)
-				return
-			}
+			log.Printf("[Register] Error creating group: %v", err)
+			tx.Rollback()
+			http.Error(w, "Error creating group", http.StatusInternalServerError)
+			return
 		}
 
 		// 5. Link User to Environment
