@@ -21,7 +21,7 @@ import (
 // Version information for backend deployment validation
 const (
 	BackendVersion = "5.0.6"
-	FeatureSet     = "Stable Release (04/02/2026), Auto-Provisioning Login, Concurrent View Refresh, Multi-File Import Optimization, Data Persistence Fix, UI Fixes (File Overflow)"
+	FeatureSet     = "Stable Release (04/02/2026), Auto-Provisioning Login, Concurrent View Refresh, Multi-File Import Optimization, Data Persistence Fix, UI Fixes (File Overflow), Duplicate Check"
 )
 
 func GetVersionInfo() string {
@@ -208,6 +208,9 @@ func main() {
 
 	// Register Upload Handler
 	http.HandleFunc("/api/upload", handlers.AuthMiddleware(handlers.UploadHandler(db), ""))
+
+	// Register Check Duplicity Handler
+	http.HandleFunc("/api/check-duplicity", handlers.AuthMiddleware(handlers.CheckDuplicityHandler(db), ""))
 
 	// Register Job Status Handler
 	http.HandleFunc("/api/jobs", handlers.ListJobsHandler(db))

@@ -279,3 +279,81 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 		json.NewEncoder(w).Encode(response)
 	}
 }
+
+type DuplicityResponse struct {
+	Exists   bool   `json:"exists"`
+	JobID    string `json:"job_id,omitempty"`
+	Filename string `json:"filename,omitempty"`
+	Message  string `json:"message,omitempty"`
+}
+
+func CheckDuplicityHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// CORS Headers
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		cnpj := r.URL.Query().Get("cnpj")
+		dtIniStr := r.URL.Query().Get("dt_ini") // Expecting format YYYY-MM-DD or DDMMYYYY
+
+		if cnpj == "" || dtIniStr == "" {
+			http.Error(w, "Missing cnpj or dt_ini parameters", http.StatusBadRequest)
+			return
+		}
+
+		// Clean CNPJ
+		cnpj = strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(cnpj, ".", ""), "/", ""), "-", "")
+
+		// Parse date
+		var date time.Time
+		var err error
+		if len(dtIniStr) == 8 {
+			date, err = time.Parse("02012006", dtIniStr)
+		} else {
+			date, err = time.Parse("2006-01-02", dtIniStr)
+		}
+
+		if err != nil {
+			http.Error(w, "Invalid date format (use YYYY-MM-DD or DDMMYYYY)", http.StatusBadRequest)
+			return
+		}
+
+		// Query: Check if there is any COMPLETED job for this CNPJ where
+		// EXTRACT(MONTH FROM dt_ini) = Month AND EXTRACT(YEAR FROM dt_ini) = Year
+		// AND status = 'completed'
+
+		var jobID, filename string
+		query := `
+			SELECT id, filename 
+			FROM import_jobs 
+			WHERE status = 'completed' 
+			AND cnpj = $1 
+			AND EXTRACT(MONTH FROM dt_ini) = $2 
+			AND EXTRACT(YEAR FROM dt_ini) = $3
+			LIMIT 1
+		`
+
+		err = db.QueryRow(query, cnpj, int(date.Month()), date.Year()).Scan(&jobID, &filename)
+
+		resp := DuplicityResponse{Exists: false}
+		if err == nil {
+			resp.Exists = true
+			resp.JobID = jobID
+			resp.Filename = filename
+			resp.Message = fmt.Sprintf("Já existe um arquivo importado para esta filial (%s) e competência (%02d/%d).", cnpj, int(date.Month()), date.Year())
+		} else if err != sql.ErrNoRows {
+			log.Printf("Error checking duplicity: %v", err)
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}
+}

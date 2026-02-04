@@ -121,6 +121,46 @@ export default function ImportarEFD() {
   };
 
   const processSingleFile = async (file: File): Promise<string | null> => {
+    // --- DUPLICITY CHECK ---
+    try {
+        const firstChunk = file.slice(0, 4096);
+        const text = await firstChunk.text();
+        const lines = text.split('\n');
+        const reg0000 = lines.find(l => l.startsWith('|0000|'));
+        
+        if (reg0000) {
+            const fields = reg0000.split('|');
+            // Standard SPED: |0000|COD_VER|COD_FIN|DT_INI|DT_FIN|NOME|CNPJ|...
+            // Split results: ["", "0000", "VER", "FIN", "DT_INI", "DT_FIN", "NOME", "CNPJ", ...]
+            if (fields.length >= 8) {
+                const dtIni = fields[4];
+                const cnpj = fields[7];
+                
+                if (dtIni && cnpj) {
+                     const authToken = token || localStorage.getItem('token');
+                     const res = await fetch(`/api/check-duplicity?cnpj=${cnpj}&dt_ini=${dtIni}`, {
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`
+                        }
+                     });
+                     
+                     if (res.ok) {
+                         const data = await res.json();
+                         if (data.exists) {
+                             const confirmMsg = `${data.message}\n\nDeseja continuar a importação mesmo assim? (Isso pode gerar duplicidade de dados)`;
+                             if (!window.confirm(confirmMsg)) {
+                                 toast.info(`Importação de ${file.name} cancelada.`);
+                                 return null;
+                             }
+                         }
+                     }
+                }
+            }
+        }
+    } catch (err) {
+        console.warn("Could not check duplicity:", err);
+    }
+
     // --- CLIENT-SIDE PARSING & FILTERING (PHASE 2.1 - FULL SCAN) ---
     // Reads file locally, filters only relevant lines, continues until EOF
     // Creates a smaller Payload for upload.
