@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface FileUploadProps {
   onUploadComplete?: (jobId: string) => void;
@@ -59,6 +60,9 @@ export function FileUpload({ onUploadComplete }: FileUploadProps) {
     try {
       const response = await fetch('/api/upload', {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         body: formData,
       });
 

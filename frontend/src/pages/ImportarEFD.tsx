@@ -45,8 +45,13 @@ export default function ImportarEFD() {
   // Poll jobs list
   useEffect(() => {
     const fetchJobs = async () => {
+      if (!token) return;
       try {
-        const res = await fetch('/api/jobs'); 
+        const res = await fetch('/api/jobs', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }); 
         if (res.ok) {
           const data = await res.json();
           setJobs(data);

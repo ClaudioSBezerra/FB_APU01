@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Participant {
   id: string;
@@ -14,13 +15,19 @@ interface ParticipantListProps {
 }
 
 export function ParticipantList({ jobId }: ParticipantListProps) {
+  const { token } = useAuth();
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!token) return;
     setLoading(true);
-    fetch(`/api/jobs/${jobId}/participants`)
+    fetch(`/api/jobs/${jobId}/participants`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
       .then((res) => {
         if (!res.ok) throw new Error('Erro ao buscar participantes');
         return res.json();
