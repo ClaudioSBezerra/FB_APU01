@@ -387,7 +387,14 @@ export default function ImportarEFD() {
         await new Promise(r => setTimeout(r, 2000)); // Poll every 2s
         
         try {
-            const res = await fetch('/api/jobs');
+            const authToken = token || localStorage.getItem('token');
+            const res = await fetch('/api/jobs', {
+              headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+              }
+            }); 
             if (res.ok) {
                 const data: ImportJob[] = await res.json();
                 setJobs(data);
@@ -405,6 +412,10 @@ export default function ImportarEFD() {
                 if (allFound && pendingCount === 0) {
                     allCompleted = true;
                 }
+            } else if (res.status === 401) {
+                 console.error("Unauthorized polling jobs - redirecting");
+                 navigate('/login');
+                 return; // Stop loop
             }
         } catch (e) {
             console.error("Error polling jobs", e);
@@ -512,7 +523,10 @@ export default function ImportarEFD() {
 
         if (res.ok) {
             toast.success(`Dados da empresa ${company} limpos com sucesso!`);
-            const jobsRes = await fetch('/api/jobs');
+            const authToken = token || localStorage.getItem('token');
+            const jobsRes = await fetch('/api/jobs', {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
             if (jobsRes.ok) {
                 const data = await jobsRes.json();
                 setJobs(data);

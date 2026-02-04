@@ -112,16 +112,17 @@ export default function Dashboard() {
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : data.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%" minHeight={300}>
-                <LineChart
-                  data={data}
-                  margin={{
-                    top: 5,
-                    right: 30,
-                    left: 20,
-                    bottom: 5,
-                  }}
-                >
+              <div style={{ width: '100%', height: '100%', minHeight: 300 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={data}
+                    margin={{
+                      top: 5,
+                      right: 30,
+                      left: 20,
+                      bottom: 5,
+                    }}
+                  >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="ano" />
                   <YAxis tickFormatter={(val) => `R$ ${(val / 1000000).toFixed(1)}M`} />
