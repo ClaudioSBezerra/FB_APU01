@@ -58,9 +58,19 @@ export default function AdminUsers() {
       const response = await fetch(`/api/admin/users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (!response.ok) throw new Error('Failed to fetch users');
+      if (!response.ok) {
+        const text = await response.text();
+        try {
+          const json = JSON.parse(text);
+          throw new Error(json.message || `Erro: ${response.status} ${response.statusText}`);
+        } catch {
+          // Se não for JSON (ex: HTML do Nginx 502/404), lança erro genérico com status
+          throw new Error(`Erro de Servidor (${response.status}): A API não respondeu corretamente.`);
+        }
+      }
       return response.json();
-    }
+    },
+    enabled: !!token
   });
 
   const createMutation = useMutation({
@@ -79,8 +89,13 @@ export default function AdminUsers() {
         })
       });
       if (!response.ok) {
-        if (response.status === 409) throw new Error('Email já cadastrado');
-        throw new Error('Failed to create user');
+        const text = await response.text();
+        try {
+          const json = JSON.parse(text);
+          throw new Error(json.message || 'Falha ao criar usuário');
+        } catch {
+          throw new Error(`Erro de Servidor (${response.status})`);
+        }
       }
       return response.json();
     },
