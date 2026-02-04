@@ -1,64 +1,98 @@
 # Especificações Técnicas - FB_APU01 (Fiscal Engine)
 
 ## 1. Visão Geral do Sistema
-O **FB_APU01** é um sistema de alta performance projetado para processamento assíncrono de arquivos fiscais (SPED EFD Contribuições) e apuração tributária no contexto da Reforma Tributária. A arquitetura prioriza escalabilidade, integridade de dados e feedback em tempo real.
+O **FB_APU01** é um sistema de alta performance para processamento assíncrono de arquivos fiscais (SPED EFD Contribuições) e apuração tributária, preparado para a Reforma Tributária (IBS/CBS). A plataforma opera em arquitetura Multi-Tenant com isolamento estrito de dados e processamento massivo via workers em Go.
 
 ## 2. Stack Tecnológico
 
 ### 2.1 Backend (Fiscal Engine)
 - **Linguagem**: Go (Golang) 1.22+
-- **Framework**: Standard Library (`net/http`) para máxima performance e baixo overhead.
-- **Drivers & Libs**:
-  - `github.com/lib/pq` (v1.10.9): Driver PostgreSQL puro em Go.
-  - `golang.org/x/text` (v0.14.0): Tratamento avançado de encoding (ISO-8859-1/Latin1 -> UTF-8).
-- **Arquitetura**:
-  - **Handlers**: Camada RESTful para gestão de uploads e consultas.
-  - **Workers**: Processamento em background via Goroutines (concorrência nativa).
-  - **Dependency Injection**: Injeção de dependências para conexões de banco de dados (`*sql.DB`).
+- **Framework**: Standard Library (`net/http`) para máxima performance.
+- **Autenticação**: JWT (JSON Web Tokens) com Claims personalizados (Role, UserID).
+- **Drivers**: `github.com/lib/pq` (PostgreSQL).
+- **Processamento**:
+  - **Workers**: Goroutines concorrentes para parsing de SPED.
+  - **Streaming**: `bufio.Scanner` para arquivos de grandes volumes (GBs) com consumo de memória O(1).
+  - **Encoding**: Conversão on-the-fly de ISO-8859-1 para UTF-8.
 
 ### 2.2 Frontend (Client Interface)
-- **Framework**: React 18.3.1
-- **Build Tool**: Vite 5.2.0 (Build otimizado com ESBuild).
-- **Linguagem**: TypeScript 5.2.2 (Tipagem estática estrita).
-- **Estilização**: Tailwind CSS 3.4.3 (Utility-first).
-- **Componentes**: `lucide-react` (Ícones), `clsx`, `tailwind-merge`.
-- **Server**: Nginx (Reverse Proxy & Static Server) com configuração otimizada para grandes payloads (`client_max_body_size 500M`).
+- **Framework**: React 18.3.1 (Vite 5.2.0).
+- **Linguagem**: TypeScript 5.2.2.
+- **Gerenciamento de Estado**: React Query (TanStack Query) para cache e sincronização server-side.
+- **Upload**: `webkitdirectory` para suporte a upload de pastas inteiras e múltiplos arquivos simultâneos.
+- **UI/UX**: Tailwind CSS, Shadcn/UI, Recharts (Gráficos).
 
-### 2.3 Banco de Dados & Armazenamento
-- **RDBMS**: PostgreSQL 15 (Alpine Linux).
-- **Cache/Queue Support**: Redis (Alpine) para suporte futuro a filas distribuídas e cache de sessão.
-- **Persistência**: Volumes Docker (`postgres_data`, `api_uploads`) garantindo durabilidade dos dados.
+### 2.3 Banco de Dados
+- **RDBMS**: PostgreSQL 15+.
+- **Schema**: Relacional com suporte a Materialized Views para agregações complexas.
+- **Migrações**: Sistema próprio de migração SQL (`migrations/*.sql`) executado no startup do backend.
 
-### 2.4 Infraestrutura & DevOps
-- **Containerização**: Docker & Docker Compose V2.
-- **Orquestração**: Suporte a deploy em VPS (Hostinger) via Coolify ou Docker Swarm.
-- **Rede**: Bridge Network isolada (`fb_net`) para comunicação segura entre containers.
+---
 
-## 3. Especificações de Processamento (SPED)
+## 3. Implementações Principais
 
-### 3.1 Fluxo de Ingestão
-1. **Upload**: Arquivo recebido via Multipart Form Data (`/api/upload`).
-2. **Validação Prévia**: Checagem de extensão (`.txt`, `.xml`) e tamanho.
-3. **Fila de Processamento**: Registro na tabela `import_jobs` com status `pending`.
-4. **Armazenamento**: Arquivo salvo em disco (volume persistente) com hash/timestamp para evitar colisão.
+### 3.1 Gestão de Usuários e Acesso (Auth & RBAC)
+O sistema implementa um controle de acesso baseado em funções (RBAC) com suporte a Trial.
 
-### 3.2 Lógica de Parsing (Worker)
-- **Polling**: Worker monitora a fila `import_jobs` (FIFO).
-- **Stream Processing**: Leitura do arquivo linha-a-linha via `bufio.Scanner` (consumo de memória constante O(1), independente do tamanho do arquivo).
-- **Encoding**: Conversão on-the-fly de `ISO-8859-1` para `UTF-8`.
-- **Extração de Blocos**:
-  - `0000`: Identificação da Entidade e Período.
-  - `0150`: Cadastro de Participantes (Clientes/Fornecedores).
-  - `C100/C170`: Documentos Fiscais (Futuro).
-- **Transacionalidade**: Uso de `db.Begin()` e `tx.Commit()` para garantir atomicidade na inserção de milhares de registros.
+- **Roles**:
+  - `admin`: Acesso total ao sistema, gestão de ambientes globais, promoção de usuários.
+  - `user`: Acesso restrito aos dados de suas próprias empresas/ambientes.
+- **Fluxo de Registro**:
+  - Novos usuários são criados automaticamente com um **Ambiente Isolado** (ex: "Ambiente de [Nome]").
+  - **Trial**: Período de 14 dias grátis. Expiração bloqueia login (exceto admins).
+- **Data Isolation**:
+  - Todo acesso a dados é filtrado por `company_id`.
+  - Middleware `AuthMiddleware` valida JWT e injeta contexto do usuário.
+  - Helpers `GetEffectiveCompanyID` garantem que o usuário só acesse empresas que possui ou é membro.
 
-## 4. Segurança e Performance
-- **CGO Disabled**: Build estático do binário Go (`CGO_ENABLED=0`) para portabilidade total e segurança (scratch/alpine).
-- **Optimized Builds**: Frontend com Code Splitting e Tree Shaking.
-- **Rate Limiting**: (Planejado) Implementação via Nginx ou Middleware Go.
-- **Sanitização**: Prepared Statements SQL para prevenção total de SQL Injection.
+### 3.2 Gestão de Ambiente (Multi-Tenancy)
+A arquitetura hierárquica permite organização flexível de conglomerados empresariais.
 
-## 5. Requisitos de Ambiente
-- **Hardware Mínimo**: 1 vCPU, 512MB RAM (Graças à eficiência do Go).
-- **Hardware Recomendado**: 2 vCPUs, 2GB RAM (Para processamento paralelo de múltiplos arquivos SPED).
-- **OS**: Linux (Debian/Alpine) ou Windows (via WSL2/Docker Desktop).
+- **Hierarquia**:
+  1. **Environment (Ambiente)**: O nível mais alto (ex: Grupo Empresarial X).
+  2. **Enterprise Group (Grupo)**: Subdivisão lógica (ex: Varejo, Indústria).
+  3. **Company (Empresa)**: A entidade legal (CNPJ raiz).
+  4. **Branches (Filiais)**: Detectadas automaticamente nos arquivos SPED (Campo 0000/C100).
+- **Isolamento**:
+  - Usuários são vinculados a Ambientes (`user_environments`).
+  - Consultas SQL utilizam `JOIN` com tabelas de permissão para garantir visibilidade restrita.
+
+### 3.3 Motor de Processamento (Parsing & Upload)
+Projetado para lidar com milhares de arquivos simultaneamente.
+
+- **Bulk Upload**:
+  - Frontend permite seleção de múltiplos arquivos ou pastas inteiras.
+  - Envio em chunks via `FormData`.
+- **Worker Pipeline**:
+  1. **Ingestão**: API recebe arquivo -> Salva em disco -> Cria Job `pending`.
+  2. **Worker**: Monitora Jobs -> Abre Stream -> Parse Linha-a-Linha.
+  3. **Batch Insert**: Dados inseridos em transações (`db.Begin`) a cada N linhas para performance.
+  4. **Pós-Processamento**: Trigger de `REFRESH MATERIALIZED VIEW` após sucesso.
+  5. **Cleanup**: Arquivo original deletado do disco para economia de espaço.
+- **Duplicidade**:
+  - Checksum (Hash) ou verificação lógica (CNPJ + Período) previne reimportação acidental.
+
+### 3.4 Views e Agregações (Relatórios)
+O sistema utiliza Materialized Views para entregar dashboards instantâneos sobre milhões de registros.
+
+- **MV_MERCADORIAS_AGREGADA**:
+  - Consolida registros C100, C500 (Energia), D100 (Transporte), D500 (Comunicação).
+  - Agrega por: `filial_cnpj`, `ano_mes`, `cfop`, `aliquota_icms`.
+  - **Campos Calculados**:
+    - `vl_total`, `vl_icms`, `vl_pis`, `vl_cofins`.
+    - Projeções de Reforma Tributária (IBS/CBS) baseadas em tabelas de alíquotas futuras.
+- **Reforma Tributária (2027-2033)**:
+  - Lógica de transição aplicada dinamicamente nas Views.
+  - Cálculo de IBS (Estadual/Municipal) e CBS (Federal) sobre base ajustada.
+
+### 3.5 Infraestrutura e DevOps
+- **Deploy**: Docker Compose em VPS (Hostinger).
+- **Proxy**: Nginx como Gateway (SSL/TLS, Gzip, Rate Limiting).
+- **Monitoramento**: Logs estruturados no stdout (coletados pelo Docker).
+- **Persistência**: Volumes Docker para Postgres Data e Uploads.
+
+## 4. Segurança
+- **JWT**: Tokens assinados com `HS256`. Expiração de 24h.
+- **Senhas**: Hashing com `bcrypt` (custo 14).
+- **Sanitização**: Prepared Statements em todas as queries SQL (sem concatenação de strings).
+- **CORS**: Configurado estritamente para domínios permitidos (`fbtax.cloud`).

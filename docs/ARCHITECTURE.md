@@ -1,82 +1,94 @@
 # Arquitetura do Sistema - FB_APU01
 
-## Diagrama de Fluxo de Dados (Data Flow)
+## 1. Diagrama de Entidade-Relacionamento (ERD) - Lógico
+
+A estrutura de dados suporta multi-tenancy hierárquico e processamento assíncrono.
+
+```mermaid
+erDiagram
+    USERS ||--o{ USER_ENVIRONMENTS : "acessa"
+    ENVIRONMENTS ||--|{ ENTERPRISE_GROUPS : "contém"
+    ENVIRONMENTS ||--o{ USER_ENVIRONMENTS : "permitido_para"
+    ENTERPRISE_GROUPS ||--|{ COMPANIES : "agrupa"
+    
+    COMPANIES ||--o{ IMPORT_JOBS : "gera"
+    IMPORT_JOBS ||--|{ SPED_REGISTERS : "contém (C100, etc)"
+    
+    USERS {
+        uuid id PK
+        string email
+        string role "admin|user"
+        timestamp trial_ends_at
+    }
+    
+    ENVIRONMENTS {
+        uuid id PK
+        string name "Ambiente Exclusivo"
+    }
+    
+    COMPANIES {
+        uuid id PK
+        string name
+        string trade_name
+        uuid owner_id FK
+    }
+    
+    IMPORT_JOBS {
+        uuid id PK
+        uuid company_id FK
+        string status "pending|processing|completed|error"
+        string filename
+    }
+```
+
+## 2. Fluxo de Dados (Data Flow)
+
+### 2.1 Fluxo de Upload e Processamento (Bulk)
 
 ```mermaid
 sequenceDiagram
     participant U as Usuário
     participant FE as Frontend (React)
-    participant NG as Nginx (Proxy)
-    participant API as Backend (Go)
+    participant API as Backend (Go API)
     participant DB as PostgreSQL
-    participant FS as File System
     participant W as Worker (Go Routine)
 
-    U->>FE: Seleciona Arquivo SPED
-    FE->>NG: POST /api/upload (Multipart)
-    NG->>API: Proxy Pass
-    API->>FS: Salva Arquivo em Disco
-    API->>DB: INSERT INTO import_jobs (pending)
-    API-->>FE: Retorna JobID
+    U->>FE: Seleciona Pasta/Arquivos (webkitdirectory)
+    FE->>API: POST /api/upload (Multipart FormData)
+    API->>API: Valida JWT & Company Access
+    API->>DB: INSERT INTO import_jobs (status='pending')
+    API-->>FE: 200 OK (Job Queued)
     
-    loop Polling de Status
-        FE->>API: GET /api/jobs/{id}
-        API->>DB: SELECT status FROM import_jobs
-        DB-->>API: status
-        API-->>FE: status (processing/completed)
+    loop Async Processing
+        W->>DB: Poll pending jobs
+        W->>W: Stream Parse (ISO-8859-1 -> UTF8)
+        W->>DB: INSERT Batch (Transaction)
+        W->>DB: REFRESH MATERIALIZED VIEW
+        W->>DB: UPDATE job status='completed'
     end
-
-    par Background Processing
-        W->>DB: SELECT * FROM import_jobs WHERE status='pending'
-        W->>DB: UPDATE status='processing'
-        W->>FS: Lê Arquivo (Stream)
-        W->>W: Parse & Convert (Latin1->UTF8)
-        W->>DB: Transaction Begin
-        W->>DB: BATCH INSERT participants
-        W->>DB: Transaction Commit
-        W->>DB: UPDATE status='completed'
-    end
+    
+    FE->>API: GET /api/jobs (Polling)
+    API-->>FE: Status Atualizado
 ```
 
-## Estrutura de Banco de Dados (ERD Simplificado)
+## 3. Componentes de Software
 
-```mermaid
-erDiagram
-    IMPORT_JOBS {
-        uuid id PK
-        string filename
-        string status
-        string message
-        timestamp created_at
-        timestamp updated_at
-    }
-    PARTICIPANTS {
-        uuid id PK
-        uuid job_id FK
-        string cod_part
-        string nome
-        string cnpj
-        string cpf
-        string ie
-        string cod_mun
-        string suframa
-        string endereco
-        string numero
-        string complemento
-        string bairro
-    }
-    IMPORT_JOBS ||--|{ PARTICIPANTS : "contém"
-```
+### 3.1 Backend (Go)
+- **Camada de Handlers**: Responsável pela validação de entrada, autenticação (Middleware) e roteamento.
+- **Camada de Serviço (Worker)**: Desacoplada da API HTTP. Processa arquivos pesados sem bloquear a interface.
+- **Camada de Dados**: Acesso direto via `database/sql` para performance máxima. Uso extensivo de SQL nativo para agregações complexas.
 
-## Componentes Principais
+### 3.2 Frontend (React)
+- **Context API**: `AuthContext` gerencia sessão e renovação de tokens.
+- **Hooks Personalizados**: `useUpload` para gerenciar fila de envio de arquivos.
+- **Componentes Visuais**: Shadcn/UI para consistência visual.
 
-### 1. API Gateway / Reverse Proxy (Nginx)
-Atua como ponto de entrada único, servindo o frontend estático e encaminhando requisições `/api` para o backend. Configurado para aceitar grandes payloads (necessário para arquivos SPED de 100MB+).
+### 3.3 Banco de Dados (PostgreSQL)
+- **Tabelas Raw**: Armazenam dados brutos do SPED (ex: `reg_c100`, `reg_0150`).
+- **Materialized Views**: Pré-calculam totais por período/CFOP/Alíquota para performance de leitura em dashboards.
+- **Schema Migrations**: Controle de versão do esquema de banco de dados.
 
-### 2. Fiscal Engine (Go)
-O coração do sistema. Diferente de soluções em Node.js ou Python, o motor em Go utiliza tipagem estática e compilação nativa para processar gigabytes de texto em segundos.
-- **Worker Pool**: Gerencia a carga de processamento sem bloquear a API principal.
-- **Streaming Decoder**: Processa arquivos maiores que a memória RAM disponível.
-
-### 3. Camada de Persistência (PostgreSQL)
-Banco de dados relacional robusto. Utiliza chaves estrangeiras (`ON DELETE CASCADE`) para garantir integridade referencial (se um Job é deletado, seus dados importados também são).
+## 4. Estratégia de Deploy
+- **Ambiente**: Linux VPS (Hostinger).
+- **Containerização**: Docker Compose gerenciando serviços (App, DB, Nginx).
+- **CI/CD**: Git-based deployment (Push to Main -> Pull & Restart on Server).
