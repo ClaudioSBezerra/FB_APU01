@@ -24,6 +24,7 @@ func GetDashboardProjectionHandler(db *sql.DB) http.HandlerFunc {
 		mesAno := r.URL.Query().Get("mes_ano")
 		
 		// 1. Get Base Data (Current Reality) Split by Type (Entrada vs Saida)
+		// We also need to separate "Taxable" base (Excluding T and O) for IBS/CBS calculation
 		var queryBase string
 		var args []interface{}
 		
@@ -31,8 +32,10 @@ func GetDashboardProjectionHandler(db *sql.DB) http.HandlerFunc {
 			queryBase = `
 				SELECT 
 					tipo,
-					COALESCE(SUM(valor_contabil), 0),
-					COALESCE(SUM(vl_icms_origem), 0)
+					COALESCE(SUM(valor_contabil), 0) as total_valor,
+					COALESCE(SUM(vl_icms_origem), 0) as total_icms,
+					COALESCE(SUM(CASE WHEN tipo_cfop NOT IN ('T', 'O') THEN valor_contabil ELSE 0 END), 0) as taxable_valor,
+					COALESCE(SUM(CASE WHEN tipo_cfop NOT IN ('T', 'O') THEN vl_icms_origem ELSE 0 END), 0) as taxable_icms
 				FROM mv_mercadorias_agregada
 				WHERE mes_ano = $1
 				GROUP BY tipo
@@ -42,8 +45,10 @@ func GetDashboardProjectionHandler(db *sql.DB) http.HandlerFunc {
 			queryBase = `
 				SELECT 
 					tipo,
-					COALESCE(SUM(valor_contabil), 0),
-					COALESCE(SUM(vl_icms_origem), 0)
+					COALESCE(SUM(valor_contabil), 0) as total_valor,
+					COALESCE(SUM(vl_icms_origem), 0) as total_icms,
+					COALESCE(SUM(CASE WHEN tipo_cfop NOT IN ('T', 'O') THEN valor_contabil ELSE 0 END), 0) as taxable_valor,
+					COALESCE(SUM(CASE WHEN tipo_cfop NOT IN ('T', 'O') THEN vl_icms_origem ELSE 0 END), 0) as taxable_icms
 				FROM mv_mercadorias_agregada
 				GROUP BY tipo
 			`
@@ -57,22 +62,28 @@ func GetDashboardProjectionHandler(db *sql.DB) http.HandlerFunc {
 		defer rowsBase.Close()
 
 		var (
-			valSaida, icmsSaida     float64
-			valEntrada, icmsEntrada float64
+			valSaida, icmsSaida             float64
+			valEntrada, icmsEntrada         float64
+			valSaidaTaxable, icmsSaidaTaxable     float64
+			valEntradaTaxable, icmsEntradaTaxable float64
 		)
 
 		for rowsBase.Next() {
 			var tipo string
-			var val, icms float64
-			if err := rowsBase.Scan(&tipo, &val, &icms); err != nil {
+			var val, icms, valTax, icmsTax float64
+			if err := rowsBase.Scan(&tipo, &val, &icms, &valTax, &icmsTax); err != nil {
 				continue
 			}
 			if tipo == "SAIDA" {
 				valSaida += val
 				icmsSaida += icms
+				valSaidaTaxable += valTax
+				icmsSaidaTaxable += icmsTax
 			} else if tipo == "ENTRADA" {
 				valEntrada += val
 				icmsEntrada += icms
+				valEntradaTaxable += valTax
+				icmsEntradaTaxable += icmsTax
 			}
 		}
 
@@ -100,15 +111,18 @@ func GetDashboardProjectionHandler(db *sql.DB) http.HandlerFunc {
 
 			// Calculation Logic (Net = Debit - Credit)
 			
-			// ICMS Projected (Debit & Credit)
+			// ICMS Projected (Debit & Credit) - Applies to ALL operations
 			icmsProjDebit := icmsSaida * (1.0 - (reducIcms / 100.0))
 			icmsProjCredit := icmsEntrada * (1.0 - (reducIcms / 100.0))
 			icmsNet := icmsProjDebit - icmsProjCredit
 			
-			// Base for IBS/CBS (Debit & Credit)
-			// Base = Valor - ICMS Projected
-			baseDebit := valSaida - icmsProjDebit
-			baseCredit := valEntrada - icmsProjCredit
+			// Base for IBS/CBS (Debit & Credit) - Applies only to Taxable (Non-T/O) operations
+			// Base = ValorTaxable - ICMS Projected (on Taxable portion)
+			icmsProjDebitTaxable := icmsSaidaTaxable * (1.0 - (reducIcms / 100.0))
+			icmsProjCreditTaxable := icmsEntradaTaxable * (1.0 - (reducIcms / 100.0))
+
+			baseDebit := valSaidaTaxable - icmsProjDebitTaxable
+			baseCredit := valEntradaTaxable - icmsProjCreditTaxable
 			
 			// IBS/CBS Rates
 			ibsRate := (ibsUf + ibsMun) / 100.0
