@@ -152,12 +152,12 @@ export default function Dashboard() {
                     strokeWidth={3}
                   />
                   
-                  {/* CBS - Orange */}
+                  {/* CBS - Green */}
                   <Line 
                     type="monotone" 
                     dataKey="vl_cbs" 
                     name="CBS" 
-                    stroke="#f97316" 
+                    stroke="#16a34a" 
                     strokeWidth={3}
                   />
                   

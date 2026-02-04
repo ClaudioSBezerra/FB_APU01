@@ -249,7 +249,8 @@ const Mercadorias = () => {
   const formatNumber = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      maximumFractionDigits: 2,
+      minimumIntegerDigits: 1
     }).format(value);
   };
 
@@ -706,26 +707,26 @@ const Mercadorias = () => {
 
                   return (
                     <TableRow key={i} className="hover:bg-gray-50 h-6">
-                      <TableCell className="font-medium text-[10px] whitespace-nowrap py-0.5" title={row.filial_nome}>{maskCnpj(row.filial_cnpj)}</TableCell>
-                      <TableCell className="text-[10px] whitespace-nowrap py-0.5">{row.mes_ano}</TableCell>
+                      <TableCell className="font-medium text-[9px] whitespace-nowrap py-0.5" title={row.filial_nome}>{maskCnpj(row.filial_cnpj)}</TableCell>
+                      <TableCell className="text-[9px] whitespace-nowrap py-0.5">{row.mes_ano}</TableCell>
                       <TableCell className="whitespace-nowrap py-0.5">
-                        <span className={`px-2 py-0 rounded text-[10px] font-bold ${
+                        <span className={`px-2 py-0 rounded text-[9px] font-bold ${
                           row.tipo === 'SAIDA' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
                         }`}>
                           {getCategoryLabel(row.tipo, row.tipo_cfop, row.origem, row.tipo_operacao)}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right text-[10px] whitespace-nowrap py-0.5">{formatNumber(row.valor)}</TableCell>
-                      <TableCell className="text-right text-[10px] text-gray-500 whitespace-nowrap py-0.5">{formatNumber(row.icms)}</TableCell>
-                      <TableCell className="text-right text-[10px] text-blue-600 bg-blue-50 whitespace-nowrap py-0.5">{formatNumber(row.vl_icms_projetado)}</TableCell>
-                      <TableCell className="text-right text-[10px] text-gray-400 bg-blue-50 whitespace-nowrap py-0.5">{formatNumber(baseIbsCbs)}</TableCell>
-                      <TableCell className="text-right text-[10px] text-blue-600 bg-blue-50 whitespace-nowrap py-0.5">{formatNumber(row.vl_ibs_projetado)}</TableCell>
-                      <TableCell className="text-right text-[10px] text-blue-600 bg-blue-50 whitespace-nowrap py-0.5">{formatNumber(row.vl_cbs_projetado)}</TableCell>
+                      <TableCell className="text-right text-[9px] whitespace-nowrap py-0.5">{formatNumber(row.valor)}</TableCell>
+                      <TableCell className="text-right text-[9px] text-gray-500 whitespace-nowrap py-0.5">{formatNumber(row.icms)}</TableCell>
+                      <TableCell className="text-right text-[9px] text-blue-600 bg-blue-50 whitespace-nowrap py-0.5">{formatNumber(row.vl_icms_projetado)}</TableCell>
+                      <TableCell className="text-right text-[9px] text-gray-400 bg-blue-50 whitespace-nowrap py-0.5">{formatNumber(baseIbsCbs)}</TableCell>
+                      <TableCell className="text-right text-[9px] text-blue-600 bg-blue-50 whitespace-nowrap py-0.5">{formatNumber(row.vl_ibs_projetado)}</TableCell>
+                      <TableCell className="text-right text-[9px] text-blue-600 bg-blue-50 whitespace-nowrap py-0.5">{formatNumber(row.vl_cbs_projetado)}</TableCell>
                       
-                      <TableCell className="text-right text-[10px] font-bold border-l border-r bg-gray-50 whitespace-nowrap py-0.5">{formatNumber(totalAtual)}</TableCell>
-                      <TableCell className="text-right text-[10px] font-bold bg-blue-100 text-blue-800 border-r border-blue-200 whitespace-nowrap py-0.5">{formatNumber(totalReforma)}</TableCell>
+                      <TableCell className="text-right text-[9px] font-bold border-l border-r bg-gray-50 whitespace-nowrap py-0.5">{formatNumber(totalAtual)}</TableCell>
+                      <TableCell className="text-right text-[9px] font-bold bg-blue-100 text-blue-800 border-r border-blue-200 whitespace-nowrap py-0.5">{formatNumber(totalReforma)}</TableCell>
                       
-                      <TableCell className={`text-right text-[10px] font-bold whitespace-nowrap py-0.5 ${diferenca > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <TableCell className={`text-right text-[9px] font-bold whitespace-nowrap py-0.5 ${diferenca > 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {formatNumber(diferenca)}
                       </TableCell>
                     </TableRow>
