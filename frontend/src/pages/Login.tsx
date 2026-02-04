@@ -50,23 +50,23 @@ const Login = () => {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 px-4">
-      <div className="w-full max-w-[400px] flex flex-col items-center space-y-6">
-        {/* Logo Area */}
-        <div className="flex justify-center">
-            <img 
-              src="/logo.png" 
-              alt="Logo da Empresa" 
-              className="h-20 w-auto object-contain"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none'; // Hide if missing
-              }} 
-            />
-        </div>
-
+      <div className="w-full max-w-[450px]">
         <Card className="w-full shadow-lg">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold">Acesse sua conta</CardTitle>
-            <CardDescription>Entre com suas credenciais para continuar</CardDescription>
+          <CardHeader className="flex flex-row items-center gap-4 space-y-0 pb-6">
+            <div className="flex-shrink-0">
+              <img 
+                src="/logo.png" 
+                alt="Logo da Empresa" 
+                className="h-16 w-auto object-contain"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none'; // Hide if missing
+                }} 
+              />
+            </div>
+            <div className="flex flex-col space-y-1.5">
+              <CardTitle className="text-xl font-bold">Acesse sua conta</CardTitle>
+              <CardDescription>Entre com suas credenciais para continuar</CardDescription>
+            </div>
           </CardHeader>
           <CardContent>
             {errorMsg && (
@@ -113,9 +113,9 @@ const Login = () => {
                 Crie grátis
               </Link>
             </div>
-          </form>
-        </CardContent>
-      </Card>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
