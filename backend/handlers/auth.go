@@ -89,6 +89,32 @@ func GenerateToken(userID, role string) (string, error) {
 
 // --- Handlers ---
 
+// GetMeHandler returns the current authenticated user's details
+func GetMeHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+
+		var user User
+		err := db.QueryRow(`
+			SELECT id, email, full_name, is_verified, COALESCE(trial_ends_at, NOW()), COALESCE(role, 'user'), created_at
+			FROM users WHERE id = $1
+		`, userID).Scan(&user.ID, &user.Email, &user.FullName, &user.IsVerified, &user.TrialEndsAt, &user.Role, &user.CreatedAt)
+
+		if err != nil {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(user)
+	}
+}
+
 func AuthMiddleware(next http.HandlerFunc, requiredRole string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
@@ -180,7 +206,7 @@ func GetEffectiveCompanyID(db *sql.DB, userID, requestedCompanyID string) (strin
 
 	// 2. Default Logic (Owner > Member)
 	var companyID string
-	
+
 	// Strategy A: Check if user OWNS a company
 	err := db.QueryRowContext(ctx, `
 		SELECT c.id

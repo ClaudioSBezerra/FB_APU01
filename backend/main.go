@@ -231,6 +231,7 @@ func main() {
 	// Auth Routes
 	http.HandleFunc("/api/auth/register", handlers.RegisterHandler(db))
 	http.HandleFunc("/api/auth/login", handlers.LoginHandler(db))
+	http.HandleFunc("/api/auth/me", handlers.AuthMiddleware(handlers.GetMeHandler(db), ""))
 	http.HandleFunc("/api/auth/forgot-password", handlers.ForgotPasswordHandler(db))
 	http.HandleFunc("/api/user/hierarchy", handlers.AuthMiddleware(handlers.GetUserHierarchyHandler(db), ""))
 	http.HandleFunc("/api/user/companies", handlers.AuthMiddleware(handlers.GetUserCompaniesHandler(db), ""))

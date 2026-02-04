@@ -51,6 +51,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setCompany(storedCompany);
       setCompanyId(storedCompanyId);
       setCnpj(storedCnpj);
+
+      // Refresh user profile from server to ensure role and trial status are up to date
+      fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${storedToken}` }
+      })
+      .then(res => {
+        if (res.ok) return res.json();
+        if (res.status === 401) {
+          // Token expired or invalid
+          localStorage.clear();
+          window.location.href = '/login';
+          throw new Error('Session expired');
+        }
+        throw new Error('Failed to refresh user data');
+      })
+      .then(userData => {
+        setUser(userData);
+        localStorage.setItem('user', JSON.stringify(userData));
+      })
+      .catch(err => console.error("Session refresh error:", err));
     }
   }, []);
 
