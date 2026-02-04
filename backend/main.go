@@ -20,8 +20,8 @@ import (
 
 // Version information for backend deployment validation
 const (
-	BackendVersion = "5.0.3"
-	FeatureSet     = "TIPO_OPERACAO Logic, Mercadorias: Filtros acima, CNPJ Mascarado, Datas Corretas (031)"
+	BackendVersion = "5.0.4"
+	FeatureSet     = "Stable Release (04/02/2026), Auto-Provisioning Login, Concurrent View Refresh, Multi-File Import Optimization"
 )
 
 func GetVersionInfo() string {

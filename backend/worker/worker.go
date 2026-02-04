@@ -125,7 +125,15 @@ func processNextJob(db *sql.DB, workerID int) {
 		// This ensures the dashboard is updated automatically without manual refresh
 		fmt.Printf("Worker #%d: Refreshing Materialized View (mv_mercadorias_agregada)...\n", workerID)
 		start := time.Now()
-		_, err := db.Exec("REFRESH MATERIALIZED VIEW mv_mercadorias_agregada")
+		
+		// Try Concurrent first (Non-blocking for reads)
+		// Requires UNIQUE INDEX (Added in migration 034)
+		_, err := db.Exec("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_mercadorias_agregada")
+		if err != nil {
+			fmt.Printf("Worker #%d: Concurrent refresh failed (might lack index), trying standard: %v\n", workerID, err)
+			_, err = db.Exec("REFRESH MATERIALIZED VIEW mv_mercadorias_agregada")
+		}
+
 		if err != nil {
 			fmt.Printf("Worker #%d: Error refreshing view: %v\n", workerID, err)
 		} else {
