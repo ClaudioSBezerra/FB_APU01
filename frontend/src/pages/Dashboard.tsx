@@ -172,6 +172,7 @@ export default function Dashboard() {
                   />
                 </LineChart>
               </ResponsiveContainer>
+              </div>
             ) : (
               <div className="flex h-full items-center justify-center text-muted-foreground">
                 Nenhum dado disponível para projeção. Importe arquivos SPED primeiro.
