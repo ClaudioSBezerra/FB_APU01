@@ -84,6 +84,15 @@ func ResetCompanyDataHandler(db *sql.DB) http.HandlerFunc {
 		rowsDeleted, _ := res.RowsAffected()
 		log.Printf("ResetCompanyData: Deleted %d jobs for CompanyID %s", rowsDeleted, req.CompanyID)
 
+		// Trigger Refresh to clear dashboard data
+		go func() {
+			log.Printf("ResetCompanyData: Triggering view refresh for CompanyID %s...", req.CompanyID)
+			if _, err := db.Exec("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_mercadorias_agregada"); err != nil {
+				log.Printf("ResetCompanyData: Concurrent refresh failed, trying standard: %v", err)
+				db.Exec("REFRESH MATERIALIZED VIEW mv_mercadorias_agregada")
+			}
+		}()
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"message":      "Company data deleted successfully",
@@ -112,7 +121,7 @@ func RefreshViewsHandler(db *sql.DB) http.HandlerFunc {
 
 		// Refresh Mercadorias View
 		start := time.Now()
-		
+
 		// Use standard REFRESH for now as CONCURRENTLY needs unique index and data populated
 		// And we want to be safe.
 		_, err := db.Exec("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_mercadorias_agregada")

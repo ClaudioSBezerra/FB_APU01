@@ -132,24 +132,29 @@ func processNextJob(db *sql.DB, workerID int) {
 		// Trigger View Refresh immediately after success
 		// DISABLED: Frontend now handles the "Refresh Once" strategy after all files are uploaded.
 		// This prevents redundant refreshes during batch imports.
-		
-		fmt.Printf("Worker #%d: Refreshing Materialized View (mv_mercadorias_agregada)...\n", workerID)
-		start := time.Now()
-		
-		// Try Concurrent first (Non-blocking for reads)
-		// Requires UNIQUE INDEX (Added in migration 034)
-		_, err := db.Exec("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_mercadorias_agregada")
-		if err != nil {
-			fmt.Printf("Worker #%d: Concurrent refresh failed (might lack index), trying standard: %v\n", workerID, err)
-			_, err = db.Exec("REFRESH MATERIALIZED VIEW mv_mercadorias_agregada")
-		}
 
-		if err != nil {
-			fmt.Printf("Worker #%d: Error refreshing view: %v\n", workerID, err)
-		} else {
-			fmt.Printf("Worker #%d: View refreshed successfully in %v.\n", workerID, time.Since(start))
-		}
-		
+		fmt.Printf("Worker #%d: Refreshing Materialized View (mv_mercadorias_agregada)...\n", workerID)
+
+		// Run refresh in background so the worker can pick up the next file immediately
+		// Use CONCURRENTLY to avoid locking reads
+		go func(wID int) {
+			start := time.Now()
+			// Try Concurrent first (Non-blocking for reads)
+			// Requires UNIQUE INDEX (Added in migration 034)
+			_, err := db.Exec("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_mercadorias_agregada")
+			if err != nil {
+				fmt.Printf("Worker #%d: Concurrent refresh failed (might lack index or running in parallel), trying standard: %v\n", wID, err)
+				// Note: Standard refresh blocks everything, so we might want to skip it if it fails frequently
+				// But for now we keep it as fallback
+				_, err = db.Exec("REFRESH MATERIALIZED VIEW mv_mercadorias_agregada")
+			}
+
+			if err != nil {
+				fmt.Printf("Worker #%d: Error refreshing view: %v\n", wID, err)
+			} else {
+				fmt.Printf("Worker #%d: View refreshed successfully in %v.\n", wID, time.Since(start))
+			}
+		}(workerID)
 	}
 }
 
