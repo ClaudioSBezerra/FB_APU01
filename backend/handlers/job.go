@@ -38,6 +38,20 @@ func GetJobParticipantsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		// Get User Context
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+
+		companyID, err := GetUserCompanyID(db, userID)
+		if err != nil {
+			http.Error(w, "Error getting user company: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		pathParts := strings.Split(r.URL.Path, "/")
 		// Expected: /api/jobs/{id}/participants
 		if len(pathParts) < 5 {
@@ -45,6 +59,18 @@ func GetJobParticipantsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 		jobID := pathParts[3]
+
+		// Verify Job Ownership
+		var exists bool
+		err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM import_jobs WHERE id = $1 AND company_id = $2)", jobID, companyID).Scan(&exists)
+		if err != nil {
+			http.Error(w, "Database error checking ownership: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !exists {
+			http.Error(w, "Job not found or access denied", http.StatusNotFound)
+			return
+		}
 
 		rows, err := db.Query(`
 			SELECT id, cod_part, nome, cnpj, cpf, ie 
@@ -132,6 +158,20 @@ func GetJobStatusHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		// Get User Context
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+
+		companyID, err := GetUserCompanyID(db, userID)
+		if err != nil {
+			http.Error(w, "Error getting user company: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		// Extract ID from URL (simple path parsing)
 		// Expected path: /api/jobs/{id}
 		pathParts := strings.Split(r.URL.Path, "/")
@@ -142,9 +182,9 @@ func GetJobStatusHandler(db *sql.DB) http.HandlerFunc {
 		jobID := pathParts[3]
 
 		var job JobStatusResponse
-		query := `SELECT id, filename, status, message, created_at, updated_at FROM import_jobs WHERE id = $1`
+		query := `SELECT id, filename, status, message, created_at, updated_at FROM import_jobs WHERE id = $1 AND company_id = $2`
 
-		err := db.QueryRow(query, jobID).Scan(&job.ID, &job.Filename, &job.Status, &job.Message, &job.CreatedAt, &job.UpdatedAt)
+		err = db.QueryRow(query, jobID, companyID).Scan(&job.ID, &job.Filename, &job.Status, &job.Message, &job.CreatedAt, &job.UpdatedAt)
 		if err == sql.ErrNoRows {
 			http.Error(w, "Job not found", http.StatusNotFound)
 			return
