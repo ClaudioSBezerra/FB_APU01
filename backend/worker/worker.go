@@ -121,6 +121,14 @@ func processNextJob(db *sql.DB, workerID int) {
 		fmt.Printf("Worker #%d: Job %s completed: %s\n", workerID, id, summary)
 		db.Exec("UPDATE import_jobs SET status = 'completed', message = $1, updated_at = NOW() WHERE id = $2", summary, id)
 
+		// DELETE FILE FROM STORAGE (Cleanup)
+		filePath := filepath.Join("uploads", filename)
+		if err := os.Remove(filePath); err != nil {
+			fmt.Printf("Worker #%d: Warning: Failed to delete file %s: %v\n", workerID, filePath, err)
+		} else {
+			fmt.Printf("Worker #%d: File %s deleted from storage.\n", workerID, filePath)
+		}
+
 		// Trigger View Refresh immediately after success
 		// DISABLED: Frontend now handles the "Refresh Once" strategy after all files are uploaded.
 		// This prevents redundant refreshes during batch imports.
