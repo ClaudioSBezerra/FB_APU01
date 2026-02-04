@@ -23,7 +23,7 @@ import {
   Line,
   ReferenceLine
 } from 'recharts';
-import { Download, RefreshCcw, ArrowDownCircle, ArrowUpCircle, Scale } from "lucide-react";
+import { Download, RefreshCcw, ArrowDownCircle, ArrowUpCircle, Scale, Info } from "lucide-react";
 import { exportToExcel } from "@/lib/exportToExcel";
 import { formatCurrency } from "@/lib/utils";
 
@@ -590,8 +590,8 @@ const Mercadorias = () => {
                 <Tooltip formatter={(value) => formatCurrency(Number(value))} />
                 <Legend />
                 <ReferenceLine y={0} stroke="#000" />
-                <Line type="monotone" dataKey="Debitos" name="Total Débitos (Projetado)" stroke="#dc2626" strokeDasharray="3 3" />
-                <Line type="monotone" dataKey="Creditos" name="Total Créditos (Projetado)" stroke="#16a34a" strokeDasharray="3 3" />
+                <Line type="monotone" dataKey="Debitos" name="Total Débitos (Projetado)" stroke="#dc2626" strokeWidth={2} />
+                <Line type="monotone" dataKey="Creditos" name="Total Créditos (Projetado)" stroke="#16a34a" strokeWidth={2} />
                 <Line type="monotone" dataKey="SaldoReforma" name="Saldo a Pagar (Projetado)" stroke="#2563eb" strokeWidth={3} dot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
@@ -664,7 +664,14 @@ const Mercadorias = () => {
                   <TableHead className="text-right text-xs bg-blue-50 whitespace-nowrap py-1">CBS Proj.</TableHead>
                   <TableHead className="text-right font-bold border-l border-r bg-gray-50 whitespace-nowrap py-1">Total Atual (ICMS)</TableHead>
                   <TableHead className="text-right font-bold bg-blue-100 border-r border-blue-200 whitespace-nowrap py-1">Total Reforma</TableHead>
-                  <TableHead className="text-right font-bold whitespace-nowrap py-1">Diferença</TableHead>
+                  <TableHead className="text-right font-bold whitespace-nowrap py-1">
+                    <div className="flex items-center justify-end gap-1">
+                      Diferença
+                      <div title="Fórmula: Total Atual (ICMS) - Total Reforma (ICMS Proj. + IBS + CBS)">
+                        <Info className="h-3 w-3 text-gray-500 cursor-help" />
+                      </div>
+                    </div>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
