@@ -641,17 +641,17 @@ export default function ImportarEFD() {
             ) : (
               <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
                 {jobs.map((job) => (
-                  <div key={job.id} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex items-center gap-3">
-                      {job.status === 'completed' && <CheckCircle className="h-4 w-4 text-green-500" />}
-                      {job.status === 'processing' && <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />}
-                      {job.status === 'error' && <XCircle className="h-4 w-4 text-red-500" />}
-                      {job.status === 'pending' && <Clock className="h-4 w-4 text-gray-500" />}
+                  <div key={job.id} className="flex items-center justify-between p-3 border rounded-lg gap-3">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {job.status === 'completed' && <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />}
+                      {job.status === 'processing' && <Loader2 className="h-4 w-4 text-blue-500 animate-spin flex-shrink-0" />}
+                      {job.status === 'error' && <XCircle className="h-4 w-4 text-red-500 flex-shrink-0" />}
+                      {job.status === 'pending' && <Clock className="h-4 w-4 text-gray-500 flex-shrink-0" />}
                       
                       <div className="flex flex-col flex-1 min-w-0">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-sm font-medium truncate max-w-[150px]" title={job.filename}>{job.filename}</span>
-                          <div className="flex items-center gap-2">
+                        <div className="flex justify-between items-center mb-1 gap-2">
+                          <span className="text-sm font-medium truncate flex-1 min-w-0" title={job.filename}>{job.filename}</span>
+                          <div className="flex items-center gap-2 flex-shrink-0">
                             <span className="text-xs text-muted-foreground whitespace-nowrap">
                               {new Date(job.created_at).toLocaleString()}
                             </span>

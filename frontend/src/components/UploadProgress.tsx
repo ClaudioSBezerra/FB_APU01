@@ -65,7 +65,7 @@ export function UploadProgressDisplay({
           {status === 'paused' && <Pause className="h-4 w-4 text-warning flex-shrink-0" />}
           {status === 'completed' && <CheckCircle className="h-4 w-4 text-positive flex-shrink-0" />}
           {status === 'error' && <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0" />}
-          <span className="text-sm font-medium truncate">{fileName}</span>
+          <span className="text-sm font-medium truncate flex-1 min-w-0">{fileName}</span>
         </div>
         
         <div className="flex items-center gap-1 flex-shrink-0">
