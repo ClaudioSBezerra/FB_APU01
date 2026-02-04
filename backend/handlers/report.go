@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type MercadoriasReport struct {
@@ -27,6 +29,20 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		// Get User Context
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+
+		companyID, err := GetUserCompanyID(db, userID)
+		if err != nil {
+			http.Error(w, "Error getting user company: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 
 		targetYearStr := r.URL.Query().Get("target_year")
 		var targetYear interface{} = nil
@@ -93,11 +109,11 @@ func GetMercadoriasReportHandler(db *sql.DB) http.HandlerFunc {
 				) as cbs_projetado
 			FROM mv_mercadorias_agregada mv
 			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($1, mv.ano)
-			WHERE %s
+			WHERE mv.company_id = $2 AND %s
 			GROUP BY 1, 2, 3, 4, 5, 6, 7
 		`, typeFilter)
 
-		rows, err := db.Query(query, targetYear)
+		rows, err := db.Query(query, targetYear, companyID)
 		if err != nil {
 			fmt.Printf("Error querying mercadorias report: %v\n", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -129,6 +145,20 @@ func GetTransporteReportHandler(db *sql.DB) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
+		// Get User Context
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+
+		companyID, err := GetUserCompanyID(db, userID)
+		if err != nil {
+			http.Error(w, "Error getting user company: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		targetYearStr := r.URL.Query().Get("target_year")
 		var targetYear interface{} = nil
 		if targetYearStr != "" {
@@ -150,10 +180,11 @@ func GetTransporteReportHandler(db *sql.DB) http.HandlerFunc {
 			FROM reg_d100 d
 			JOIN import_jobs j ON j.id = d.job_id
 			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($1, CAST(TO_CHAR(d.dt_doc, 'YYYY') AS INTEGER))
+			WHERE j.company_id = $2
 			GROUP BY 1, 2, 3
 		`
 
-		rows, err := db.Query(query, targetYear)
+		rows, err := db.Query(query, targetYear, companyID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -186,6 +217,20 @@ func GetEnergiaReportHandler(db *sql.DB) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
+		// Get User Context
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+
+		companyID, err := GetUserCompanyID(db, userID)
+		if err != nil {
+			http.Error(w, "Error getting user company: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		targetYearStr := r.URL.Query().Get("target_year")
 		var targetYear interface{} = nil
 		if targetYearStr != "" {
@@ -207,10 +252,11 @@ func GetEnergiaReportHandler(db *sql.DB) http.HandlerFunc {
 			FROM reg_c500 c5
 			JOIN import_jobs j ON j.id = c5.job_id
 			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($1, CAST(TO_CHAR(c5.dt_doc, 'YYYY') AS INTEGER))
+			WHERE j.company_id = $2
 			GROUP BY 1, 2
 		`
 
-		rows, err := db.Query(query, targetYear)
+		rows, err := db.Query(query, targetYear, companyID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -242,6 +288,20 @@ func GetComunicacoesReportHandler(db *sql.DB) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
+		// Get User Context
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+
+		companyID, err := GetUserCompanyID(db, userID)
+		if err != nil {
+			http.Error(w, "Error getting user company: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		targetYearStr := r.URL.Query().Get("target_year")
 		var targetYear interface{} = nil
 		if targetYearStr != "" {
@@ -264,10 +324,11 @@ func GetComunicacoesReportHandler(db *sql.DB) http.HandlerFunc {
 			FROM reg_d500 d5
 			JOIN import_jobs j ON j.id = d5.job_id
 			LEFT JOIN tabela_aliquotas ta ON ta.ano = COALESCE($1, CAST(TO_CHAR(d5.dt_doc, 'YYYY') AS INTEGER))
+			WHERE j.company_id = $2
 			GROUP BY 1, 2, 3
 		`
 
-		rows, err := db.Query(query, targetYear)
+		rows, err := db.Query(query, targetYear, companyID)
 		if err != nil {
 			// Se a tabela não existir ou erro de query, retorna vazio por enquanto para não quebrar
 			fmt.Printf("Error querying comunicacoes report: %v\n", err)

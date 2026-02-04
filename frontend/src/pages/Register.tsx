@@ -50,8 +50,14 @@ const Register = () => {
       }
 
       // login(data); // Removido para forçar login manual conforme solicitado
-      toast.success("Conta criada com sucesso! Faça login para continuar.");
-      navigate("/login");
+      toast.success("Conta criada com sucesso! Redirecionando para o login...", {
+        duration: 3000,
+      });
+      
+      // Delay navigation to ensure toast is seen
+      setTimeout(() => {
+        navigate("/login");
+      }, 2000);
     } catch (error: any) {
       toast.error("Erro no cadastro: " + error.message);
     } finally {

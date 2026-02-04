@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type JobStatusResponse struct {
@@ -79,12 +81,27 @@ func ListJobsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		// Get User Context
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+
+		companyID, err := GetUserCompanyID(db, userID)
+		if err != nil {
+			http.Error(w, "Error getting user company: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		rows, err := db.Query(`
 			SELECT id, filename, status, message, created_at, updated_at 
 			FROM import_jobs 
+			WHERE company_id = $1
 			ORDER BY created_at DESC 
 			LIMIT 50
-		`)
+		`, companyID)
 		if err != nil {
 			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -126,7 +143,7 @@ func GetJobStatusHandler(db *sql.DB) http.HandlerFunc {
 
 		var job JobStatusResponse
 		query := `SELECT id, filename, status, message, created_at, updated_at FROM import_jobs WHERE id = $1`
-		
+
 		err := db.QueryRow(query, jobID).Scan(&job.ID, &job.Filename, &job.Status, &job.Message, &job.CreatedAt, &job.UpdatedAt)
 		if err == sql.ErrNoRows {
 			http.Error(w, "Job not found", http.StatusNotFound)

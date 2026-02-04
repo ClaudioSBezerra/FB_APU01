@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type ProjectionPoint struct {
@@ -21,6 +23,20 @@ func GetDashboardProjectionHandler(db *sql.DB) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
+		// Get User Context
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+
+		companyID, err := GetUserCompanyID(db, userID)
+		if err != nil {
+			http.Error(w, "Error getting user company: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		mesAno := r.URL.Query().Get("mes_ano")
 		
 		// 1. Get Base Data (Current Reality) Split by Type (Entrada vs Saida)
@@ -37,10 +53,10 @@ func GetDashboardProjectionHandler(db *sql.DB) http.HandlerFunc {
 					COALESCE(SUM(CASE WHEN tipo_cfop NOT IN ('T', 'O') THEN valor_contabil ELSE 0 END), 0) as taxable_valor,
 					COALESCE(SUM(CASE WHEN tipo_cfop NOT IN ('T', 'O') THEN vl_icms_origem ELSE 0 END), 0) as taxable_icms
 				FROM mv_mercadorias_agregada
-				WHERE mes_ano = $1
+				WHERE mes_ano = $1 AND company_id = $2
 				GROUP BY tipo
 			`
-			args = append(args, mesAno)
+			args = append(args, mesAno, companyID)
 		} else {
 			queryBase = `
 				SELECT 
@@ -50,8 +66,10 @@ func GetDashboardProjectionHandler(db *sql.DB) http.HandlerFunc {
 					COALESCE(SUM(CASE WHEN tipo_cfop NOT IN ('T', 'O') THEN valor_contabil ELSE 0 END), 0) as taxable_valor,
 					COALESCE(SUM(CASE WHEN tipo_cfop NOT IN ('T', 'O') THEN vl_icms_origem ELSE 0 END), 0) as taxable_icms
 				FROM mv_mercadorias_agregada
+				WHERE company_id = $1
 				GROUP BY tipo
 			`
+			args = append(args, companyID)
 		}
 
 		rowsBase, err := db.Query(queryBase, args...)

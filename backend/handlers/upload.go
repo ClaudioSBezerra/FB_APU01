@@ -299,6 +299,19 @@ func CheckDuplicityHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		// Get User Context
+		userID := GetUserIDFromContext(r)
+		if userID == "" {
+			http.Error(w, "Unauthorized: User ID not found", http.StatusUnauthorized)
+			return
+		}
+
+		companyID, err := GetUserCompanyID(db, userID)
+		if err != nil {
+			http.Error(w, "Error getting user company: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		cnpj := r.URL.Query().Get("cnpj")
 		dtIniStr := r.URL.Query().Get("dt_ini") // Expecting format YYYY-MM-DD or DDMMYYYY
 
@@ -312,7 +325,6 @@ func CheckDuplicityHandler(db *sql.DB) http.HandlerFunc {
 
 		// Parse date
 		var date time.Time
-		var err error
 		if len(dtIniStr) == 8 {
 			date, err = time.Parse("02012006", dtIniStr)
 		} else {
@@ -326,7 +338,7 @@ func CheckDuplicityHandler(db *sql.DB) http.HandlerFunc {
 
 		// Query: Check if there is any COMPLETED job for this CNPJ where
 		// EXTRACT(MONTH FROM dt_ini) = Month AND EXTRACT(YEAR FROM dt_ini) = Year
-		// AND status = 'completed'
+		// AND status = 'completed' AND company_id = $4
 
 		var jobID, filename string
 		query := `
@@ -336,10 +348,11 @@ func CheckDuplicityHandler(db *sql.DB) http.HandlerFunc {
 			AND cnpj = $1 
 			AND EXTRACT(MONTH FROM dt_ini) = $2 
 			AND EXTRACT(YEAR FROM dt_ini) = $3
+			AND company_id = $4
 			LIMIT 1
 		`
 
-		err = db.QueryRow(query, cnpj, int(date.Month()), date.Year()).Scan(&jobID, &filename)
+		err = db.QueryRow(query, cnpj, int(date.Month()), date.Year(), companyID).Scan(&jobID, &filename)
 
 		resp := DuplicityResponse{Exists: false}
 		if err == nil {

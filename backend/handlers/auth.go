@@ -149,6 +149,49 @@ func GetUserIDFromContext(r *http.Request) string {
 	return userID
 }
 
+// GetUserCompanyID fetches the company ID for a given user.
+// It prioritizes companies owned by the user, then falls back to companies where the user is a member.
+func GetUserCompanyID(db *sql.DB, userID string) (string, error) {
+	var companyID string
+	
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Strategy A: Check if user OWNS a company
+	err := db.QueryRowContext(ctx, `
+		SELECT c.id
+		FROM companies c
+		WHERE c.owner_id = $1
+		ORDER BY c.created_at DESC
+		LIMIT 1
+	`, userID).Scan(&companyID)
+
+	if err == nil {
+		return companyID, nil
+	}
+
+	if err != sql.ErrNoRows {
+		return "", err
+	}
+
+	// Strategy B: Check via User Environment
+	err = db.QueryRowContext(ctx, `
+		SELECT c.id
+		FROM user_environments ue
+		JOIN enterprise_groups eg ON eg.environment_id = ue.environment_id
+		JOIN companies c ON c.group_id = eg.id
+		WHERE ue.user_id = $1
+		ORDER BY c.created_at DESC
+		LIMIT 1
+	`, userID).Scan(&companyID)
+
+	if err != nil {
+		return "", err
+	}
+
+	return companyID, nil
+}
+
 func RegisterHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req RegisterRequest
