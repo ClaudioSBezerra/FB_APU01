@@ -15,13 +15,14 @@ import (
 	"fb_apu01/handlers"
 	"fb_apu01/worker"
 
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
 // Version information for backend deployment validation
 const (
-	BackendVersion = "5.0.7"
-	FeatureSet     = "Stable Release (04/02/2026), Auto-Provisioning Login, Concurrent View Refresh, Multi-File Import Optimization, Data Persistence Fix, UI Fixes (File Overflow), Duplicate Check, Storage Cleanup, Tax Reform Projection Dashboard"
+	BackendVersion = "5.0.8"
+	FeatureSet     = "User Management (Admin), Company Switcher, Port Fix (8081), Vendor Fix, Auto-Provisioning Login, Concurrent View Refresh, Tax Reform Projection Dashboard"
 )
 
 func GetVersionInfo() string {
@@ -85,6 +86,9 @@ func resetStuckJobs(db *sql.DB) {
 }
 
 func main() {
+	// Load .env file if it exists
+	_ = godotenv.Load()
+
 	PrintVersion()
 	initDB()
 	defer db.Close()
