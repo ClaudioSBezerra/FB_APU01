@@ -46,7 +46,7 @@ const menuItems = [
     items: [
       { title: "Tabela de Alíquotas", url: "/config/aliquotas", icon: Table },
       { title: "Tabela CFOP", url: "/config/cfop", icon: Table },
-      { title: "Gestão de Usuários", url: "/config/usuarios", icon: Users },
+      { title: "Gestão de Usuários", url: "/config/usuarios", icon: Users, adminOnly: true },
       { title: "Gestão de Ambiente", url: "/config/ambiente", icon: Building },
     ]
   },
