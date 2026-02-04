@@ -34,7 +34,14 @@ CREATE TABLE IF NOT EXISTS companies (
 -- Índices para performance
 CREATE INDEX IF NOT EXISTS idx_enterprise_groups_env ON enterprise_groups(environment_id);
 CREATE INDEX IF NOT EXISTS idx_companies_group ON companies(group_id);
-CREATE INDEX IF NOT EXISTS idx_companies_cnpj ON companies(cnpj);
+
+-- Only create CNPJ index if column exists (legacy support)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='cnpj') THEN
+        CREATE INDEX IF NOT EXISTS idx_companies_cnpj ON companies(cnpj);
+    END IF;
+END $$;
 
 -- Alteração futura (comentada por enquanto) será adicionar environment_id ou group_id em import_jobs
 -- ALTER TABLE import_jobs ADD COLUMN group_id UUID REFERENCES enterprise_groups(id);
