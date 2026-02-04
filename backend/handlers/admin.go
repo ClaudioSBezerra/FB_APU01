@@ -206,6 +206,83 @@ func ResetDatabaseHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+// CreateUserRequest struct
+type CreateUserRequest struct {
+	FullName string `json:"full_name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Role     string `json:"role"`
+}
+
+// CreateUserHandler creates a new user directly (Admin only)
+func CreateUserHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req CreateUserRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+
+		if req.Email == "" || req.Password == "" || req.FullName == "" {
+			http.Error(w, "Missing required fields", http.StatusBadRequest)
+			return
+		}
+
+		// Hash Password
+		hash, err := HashPassword(req.Password)
+		if err != nil {
+			http.Error(w, "Error hashing password", http.StatusInternalServerError)
+			return
+		}
+
+		// Default Role
+		if req.Role == "" {
+			req.Role = "user"
+		}
+
+		// Insert User
+		trialEnds := time.Now().Add(time.Hour * 24 * 14) // 14 days
+		var userID string
+		err = db.QueryRow(`
+			INSERT INTO users (email, password_hash, full_name, trial_ends_at, is_verified, role)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			RETURNING id
+		`, req.Email, hash, req.FullName, trialEnds, true, req.Role).Scan(&userID)
+
+		if err != nil {
+			log.Printf("Error creating user: %v", err)
+			http.Error(w, "Error creating user (email might be taken)", http.StatusConflict)
+			return
+		}
+
+		// Auto-provision environment for the new user (similar to RegisterHandler but simplified)
+		// We can reuse the logic or just create a default company.
+		// For admin creation, we might skip company creation or create a default "Personal Company".
+		// Let's create a default structure to ensure consistency.
+		
+		// 1. Get or Create Environment (Admin's environment or new? Let's create a new Environment for the user)
+		// Actually, RegisterHandler creates a new Environment per user.
+		var envID string
+		err = db.QueryRow("INSERT INTO environments (name, description) VALUES ($1, 'Ambiente Padrão') RETURNING id", "Ambiente de "+req.FullName).Scan(&envID)
+		if err == nil {
+			// 2. Create Group
+			var groupID string
+			db.QueryRow("INSERT INTO enterprise_groups (environment_id, name, description) VALUES ($1, 'Grupo Padrão', 'Grupo Inicial') RETURNING id", envID).Scan(&groupID)
+			
+			// 3. Link User
+			db.Exec("INSERT INTO user_environments (user_id, environment_id, role) VALUES ($1, $2, 'admin')", userID, envID)
+
+			// 4. Create Company
+			if groupID != "" {
+				db.Exec("INSERT INTO companies (group_id, name, trade_name, owner_id) VALUES ($1, $2, $2, $3)", groupID, "Empresa de "+req.FullName, userID)
+			}
+		}
+
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]string{"message": "User created successfully", "id": userID})
+	}
+}
+
 // ListUsersHandler returns all users (Admin only)
 func ListUsersHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

@@ -41,10 +41,16 @@ export default function AdminUsers() {
   const { token } = useAuth();
   const queryClient = useQueryClient();
   const [promoteDialogOpen, setPromoteDialogOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  
+  // State for Promote/Edit
   const [newRole, setNewRole] = useState<string>("user");
   const [extendDays, setExtendDays] = useState<number>(0);
   const [isOfficial, setIsOfficial] = useState<boolean>(false);
+
+  // State for Create
+  const [newUser, setNewUser] = useState({ fullName: "", email: "", password: "", role: "user" });
 
   const { data: users, isLoading } = useQuery<User[]>({
     queryKey: ['admin-users'],
@@ -55,6 +61,36 @@ export default function AdminUsers() {
       if (!response.ok) throw new Error('Failed to fetch users');
       return response.json();
     }
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: typeof newUser) => {
+      const response = await fetch(`/api/admin/users/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          full_name: data.fullName,
+          email: data.email,
+          password: data.password,
+          role: data.role
+        })
+      });
+      if (!response.ok) {
+        if (response.status === 409) throw new Error('Email já cadastrado');
+        throw new Error('Failed to create user');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      toast.success("Usuário criado com sucesso");
+      setCreateDialogOpen(false);
+      setNewUser({ fullName: "", email: "", password: "", role: "user" });
+    },
+    onError: (error: Error) => toast.error(error.message || "Erro ao criar usuário")
   });
 
   const promoteMutation = useMutation({
@@ -94,6 +130,14 @@ export default function AdminUsers() {
     onError: () => toast.error("Erro ao remover usuário")
   });
 
+  const handleCreate = () => {
+    if (!newUser.fullName || !newUser.email || !newUser.password) {
+      toast.error("Preencha todos os campos obrigatórios");
+      return;
+    }
+    createMutation.mutate(newUser);
+  };
+
   const handleOpenPromote = (user: User) => {
     setSelectedUser(user);
     setNewRole(user.role);
@@ -125,6 +169,9 @@ export default function AdminUsers() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold tracking-tight">Gestão de Usuários</h2>
+        <Button onClick={() => setCreateDialogOpen(true)}>
+          <Check className="mr-2 h-4 w-4" /> Novo Usuário
+        </Button>
       </div>
 
       <div className="rounded-md border">
@@ -177,6 +224,66 @@ export default function AdminUsers() {
           </TableBody>
         </Table>
       </div>
+
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo Usuário</DialogTitle>
+            <DialogDescription>
+              Criar um novo usuário manualmente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="newName" className="text-right">Nome</Label>
+              <Input
+                id="newName"
+                value={newUser.fullName}
+                onChange={(e) => setNewUser({...newUser, fullName: e.target.value})}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="newEmail" className="text-right">Email</Label>
+              <Input
+                id="newEmail"
+                type="email"
+                value={newUser.email}
+                onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="newPassword" className="text-right">Senha</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                value={newUser.password}
+                onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="newRole" className="text-right">Role</Label>
+              <Select value={newUser.role} onValueChange={(val) => setNewUser({...newUser, role: val})}>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleCreate} disabled={createMutation.isPending}>
+              {createMutation.isPending ? "Criando..." : "Criar Usuário"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={promoteDialogOpen} onOpenChange={setPromoteDialogOpen}>
         <DialogContent>

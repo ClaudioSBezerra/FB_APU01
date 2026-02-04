@@ -242,6 +242,7 @@ func main() {
 	http.HandleFunc("/api/company/reset-data", handlers.AuthMiddleware(handlers.ResetCompanyDataHandler(db), "")) // Authenticated users can reset their own data
 	http.HandleFunc("/api/admin/refresh-views", handlers.AuthMiddleware(handlers.RefreshViewsHandler(db), ""))    // Authenticated users can refresh views
 	http.HandleFunc("/api/admin/users", handlers.AuthMiddleware(handlers.ListUsersHandler(db), "admin"))
+	http.HandleFunc("/api/admin/users/create", handlers.AuthMiddleware(handlers.CreateUserHandler(db), "admin"))
 	http.HandleFunc("/api/admin/users/promote", handlers.AuthMiddleware(handlers.PromoteUserHandler(db), "admin"))
 	http.HandleFunc("/api/admin/users/delete", handlers.AuthMiddleware(handlers.DeleteUserHandler(db), "admin"))
 
