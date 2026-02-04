@@ -130,31 +130,38 @@ func processNextJob(db *sql.DB, workerID int) {
 		}
 
 		// Trigger View Refresh immediately after success
-		// DISABLED: Frontend now handles the "Refresh Once" strategy after all files are uploaded.
+		// OPTIMIZATION: Check if there are other jobs in the queue.
+		// Only refresh if this is the LAST job (pending/processing count == 0).
 		// This prevents redundant refreshes during batch imports.
-
-		fmt.Printf("Worker #%d: Refreshing Materialized View (mv_mercadorias_agregada)...\n", workerID)
-
-		// Run refresh in background so the worker can pick up the next file immediately
-		// Use CONCURRENTLY to avoid locking reads
-		go func(wID int) {
+		
+		var pendingCount int
+		// Check for any jobs that are 'pending' or 'processing' (excluding current which is already 'completed')
+		err := db.QueryRow("SELECT COUNT(*) FROM import_jobs WHERE status IN ('pending', 'processing')").Scan(&pendingCount)
+		
+		if err == nil && pendingCount > 0 {
+			fmt.Printf("Worker #%d: Skipping view refresh (Queue has %d jobs pending/processing)...\n", workerID, pendingCount)
+		} else {
+			fmt.Printf("Worker #%d: Queue empty (Last Job). Refreshing Materialized View (mv_mercadorias_agregada)...\n", workerID)
+			
+			// Use CONCURRENTLY to avoid locking reads
+			// We can run this in background OR blocking.
+			// Since it's the last job, blocking is fine and safer to ensure data consistency.
 			start := time.Now()
+			
 			// Try Concurrent first (Non-blocking for reads)
 			// Requires UNIQUE INDEX (Added in migration 034)
 			_, err := db.Exec("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_mercadorias_agregada")
 			if err != nil {
-				fmt.Printf("Worker #%d: Concurrent refresh failed (might lack index or running in parallel), trying standard: %v\n", wID, err)
-				// Note: Standard refresh blocks everything, so we might want to skip it if it fails frequently
-				// But for now we keep it as fallback
+				fmt.Printf("Worker #%d: Concurrent refresh failed (might lack index or running in parallel), trying standard: %v\n", workerID, err)
 				_, err = db.Exec("REFRESH MATERIALIZED VIEW mv_mercadorias_agregada")
 			}
 
 			if err != nil {
-				fmt.Printf("Worker #%d: Error refreshing view: %v\n", wID, err)
+				fmt.Printf("Worker #%d: Error refreshing view: %v\n", workerID, err)
 			} else {
-				fmt.Printf("Worker #%d: View refreshed successfully in %v.\n", wID, time.Since(start))
+				fmt.Printf("Worker #%d: View refreshed successfully in %v.\n", workerID, time.Since(start))
 			}
-		}(workerID)
+		}
 	}
 }
 
