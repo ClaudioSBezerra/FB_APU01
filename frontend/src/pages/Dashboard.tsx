@@ -113,7 +113,7 @@ export default function Dashboard() {
               </div>
             ) : data.length > 0 ? (
               <div style={{ width: '100%', height: '100%', minHeight: 300 }}>
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minHeight={300}>
                   <LineChart
                     data={data}
                     margin={{

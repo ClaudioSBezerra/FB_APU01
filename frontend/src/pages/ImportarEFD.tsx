@@ -44,6 +44,8 @@ export default function ImportarEFD() {
 
   // Poll jobs list
   useEffect(() => {
+    let pollInterval: NodeJS.Timeout;
+
     const fetchJobs = async () => {
       if (!token) return;
       try {
@@ -58,19 +60,24 @@ export default function ImportarEFD() {
           const data = await res.json();
           setJobs(data);
         } else if (res.status === 401) {
-            console.error('Unauthorized access to /api/jobs. Token might be invalid or expired.');
+            console.error("Unauthorized polling jobs - redirecting");
+            clearInterval(pollInterval);
             navigate('/login');
+            return; // Stop loop
         }
       } catch (error) {
-        console.error('Error fetching jobs:', error);
+        console.error("Error polling jobs:", error);
       }
     };
 
-    fetchJobs(); // Initial fetch
+    // Initial fetch
+    fetchJobs();
 
-    const interval = setInterval(fetchJobs, 5000); // Poll every 5s
-    return () => clearInterval(interval);
-  }, [token]);
+    // Set interval
+    pollInterval = setInterval(fetchJobs, 2000);
+
+    return () => clearInterval(pollInterval);
+  }, [token, navigate]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
