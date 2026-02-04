@@ -120,11 +120,13 @@ export default function ImportarEFD() {
       setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const processSingleFile = async (file: File) => {
+  const processSingleFile = async (file: File): Promise<string | null> => {
     // --- CLIENT-SIDE PARSING & FILTERING (PHASE 2.1 - FULL SCAN) ---
     // Reads file locally, filters only relevant lines, continues until EOF
     // Creates a smaller Payload for upload.
     
+    let createdJobId: string | null = null;
+
     setUploadProgress({
       status: 'uploading',
       percentage: 0,
@@ -222,6 +224,10 @@ export default function ImportarEFD() {
         formData.append('upload_id', uploadId);
         formData.append('chunk_index', chunkIndex.toString());
         formData.append('total_chunks', totalChunks.toString());
+        // Integrity Metadata
+        formData.append('expected_lines', totalRelevantLines.toString());
+        formData.append('expected_size', filteredFile.size.toString());
+
         // Fix: Send company_id to backend to ensure data is linked to the correct company
         if (companyId) {
             formData.append('company_id', companyId);
@@ -253,10 +259,14 @@ export default function ImportarEFD() {
         });
 
         // Last Chunk Verification
-        if (chunkIndex === totalChunks - 1 && responseJson && responseJson.detected_lines) {
-           const receivedLines = responseJson.detected_lines;
-           // Simple log for now
-           console.log(`Verification: Sent ~${totalRelevantLines} lines, Backend received ${receivedLines}`);
+        if (chunkIndex === totalChunks - 1 && responseJson) {
+           if (responseJson.detected_lines) {
+               const receivedLines = responseJson.detected_lines;
+               console.log(`Verification: Sent ~${totalRelevantLines} lines, Backend received ${receivedLines}`);
+           }
+           if (responseJson.job_id) {
+               createdJobId = responseJson.job_id;
+           }
         }
 
         // Update Progress
@@ -281,6 +291,7 @@ export default function ImportarEFD() {
 
       setUploadProgress(prev => ({ ...prev, status: 'completed', percentage: 100 }));
       toast.success(`Arquivo ${file.name} enviado!`);
+      return createdJobId;
       
     } catch (error) {
       console.error(`Upload error for ${file.name}:`, error);
@@ -295,11 +306,14 @@ export default function ImportarEFD() {
 
     setIsUploading(true);
     
+    const batchJobIds: string[] = [];
+
     // Process files sequentially
     for (let i = 0; i < selectedFiles.length; i++) {
         setCurrentFileIndex(i);
         try {
-            await processSingleFile(selectedFiles[i]);
+            const jobId = await processSingleFile(selectedFiles[i]);
+            if (jobId) batchJobIds.push(jobId);
         } catch (err) {
             // Option: Continue to next file or stop?
             // Let's continue but log error
@@ -307,9 +321,15 @@ export default function ImportarEFD() {
         }
     }
 
+    if (batchJobIds.length === 0) {
+        setIsUploading(false);
+        setCurrentFileIndex(-1);
+        return;
+    }
+
     // Trigger job refresh and Wait for Processing Completion
     let allCompleted = false;
-    const processingToastId = toast.loading("Arquivos enviados. Aguardando processamento no servidor...");
+    const processingToastId = toast.loading(`Processando ${batchJobIds.length} arquivos no servidor...`);
     
     // Wait for all jobs to finish (pending/processing -> completed/error)
     while (!allCompleted) {
@@ -321,9 +341,17 @@ export default function ImportarEFD() {
                 const data: ImportJob[] = await res.json();
                 setJobs(data);
                 
-                // Check if any job is still active
-                const hasPending = data.some(j => j.status === 'pending' || j.status === 'processing');
-                if (!hasPending) {
+                // Check if any RELEVANT job is still active
+                const relevantJobs = data.filter(j => batchJobIds.includes(j.id));
+                const pendingCount = relevantJobs.filter(j => j.status === 'pending' || j.status === 'processing').length;
+                
+                // Ensure we found the jobs and none are pending
+                const foundIds = relevantJobs.map(j => j.id);
+                // We only care about jobs we just created. If they are not in the list yet, we wait.
+                // Note: If ListJobs has a limit (50), and we uploaded, they should be at the top.
+                const allFound = batchJobIds.every(id => foundIds.includes(id));
+
+                if (allFound && pendingCount === 0) {
                     allCompleted = true;
                 }
             }

@@ -248,7 +248,7 @@ const Mercadorias = () => {
 
   // Filter data
   const filteredData = data.filter(item => {
-    const matchFilial = selectedFilial === "all" || item.filial_nome === selectedFilial;
+    const matchFilial = selectedFilial === "all" || item.filial_cnpj === selectedFilial;
     const matchMonth = selectedMonth === "all" || item.mes_ano === selectedMonth;
     const matchOperation = selectedOperationType === "all" || 
       getCategoryLabel(item.tipo, item.tipo_cfop, item.origem, item.tipo_operacao) === selectedOperationType;
@@ -612,7 +612,7 @@ const Mercadorias = () => {
           <SelectContent>
             <SelectItem value="all">Filial: Todas</SelectItem>
             {uniqueFiliais.map((f) => (
-              <SelectItem key={f.nome} value={f.nome}>
+              <SelectItem key={f.cnpj} value={f.cnpj}>
                 {maskCnpj(f.cnpj)}
               </SelectItem>
             ))}
