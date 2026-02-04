@@ -22,42 +22,58 @@ func GetDashboardProjectionHandler(db *sql.DB) http.HandlerFunc {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
 		mesAno := r.URL.Query().Get("mes_ano")
-		if mesAno == "" {
-			// If no filter, maybe return empty or aggregate all?
-			// Let's aggregate all for now, or require a filter.
-			// User asked for "Filtro mesano", implying it's optional or selectable.
-		}
-
-		// 1. Get Base Data (Current Reality)
-		// We sum the "Origin" values (what we have today) to project into the future.
-		// If mes_ano is present, filter by it.
-
+		
+		// 1. Get Base Data (Current Reality) Split by Type (Entrada vs Saida)
 		var queryBase string
 		var args []interface{}
-
+		
 		if mesAno != "" {
 			queryBase = `
 				SELECT 
+					tipo,
 					COALESCE(SUM(valor_contabil), 0),
 					COALESCE(SUM(vl_icms_origem), 0)
 				FROM mv_mercadorias_agregada
 				WHERE mes_ano = $1
+				GROUP BY tipo
 			`
 			args = append(args, mesAno)
 		} else {
 			queryBase = `
 				SELECT 
+					tipo,
 					COALESCE(SUM(valor_contabil), 0),
 					COALESCE(SUM(vl_icms_origem), 0)
 				FROM mv_mercadorias_agregada
+				GROUP BY tipo
 			`
 		}
 
-		var baseValor, baseIcms float64
-		err := db.QueryRow(queryBase, args...).Scan(&baseValor, &baseIcms)
+		rowsBase, err := db.Query(queryBase, args...)
 		if err != nil {
 			http.Error(w, "Error querying base data: "+err.Error(), http.StatusInternalServerError)
 			return
+		}
+		defer rowsBase.Close()
+
+		var (
+			valSaida, icmsSaida     float64
+			valEntrada, icmsEntrada float64
+		)
+
+		for rowsBase.Next() {
+			var tipo string
+			var val, icms float64
+			if err := rowsBase.Scan(&tipo, &val, &icms); err != nil {
+				continue
+			}
+			if tipo == "SAIDA" {
+				valSaida += val
+				icmsSaida += icms
+			} else if tipo == "ENTRADA" {
+				valEntrada += val
+				icmsEntrada += icms
+			}
 		}
 
 		// 2. Get Future Aliquotas (2027-2033)
@@ -77,35 +93,41 @@ func GetDashboardProjectionHandler(db *sql.DB) http.HandlerFunc {
 		for rows.Next() {
 			var ano int
 			var reducIcms, ibsUf, ibsMun, cbs float64
-
+			
 			if err := rows.Scan(&ano, &reducIcms, &ibsUf, &ibsMun, &cbs); err != nil {
 				continue
 			}
 
-			// Calculation Logic
-			// ICMS Projected = Current ICMS * (1 - Reduction)
-			icmsProj := baseIcms * (1.0 - (reducIcms / 100.0))
-
-			// Base for IBS/CBS = Valor Contabil - ICMS Projected (Tax on Tax removal? Or just new base?)
-			// The memory says: "Base IBS/CBS = VL_DOC - VL_ICMS_PROJ"
-			baseIbsCbs := baseValor - icmsProj
-
-			// IBS Rate = UF + Mun
+			// Calculation Logic (Net = Debit - Credit)
+			
+			// ICMS Projected (Debit & Credit)
+			icmsProjDebit := icmsSaida * (1.0 - (reducIcms / 100.0))
+			icmsProjCredit := icmsEntrada * (1.0 - (reducIcms / 100.0))
+			icmsNet := icmsProjDebit - icmsProjCredit
+			
+			// Base for IBS/CBS (Debit & Credit)
+			// Base = Valor - ICMS Projected
+			baseDebit := valSaida - icmsProjDebit
+			baseCredit := valEntrada - icmsProjCredit
+			
+			// IBS/CBS Rates
 			ibsRate := (ibsUf + ibsMun) / 100.0
 			cbsRate := cbs / 100.0
-
-			ibsProj := baseIbsCbs * ibsRate
-			cbsProj := baseIbsCbs * cbsRate
-
-			saldo := icmsProj + ibsProj + cbsProj
+			
+			// IBS/CBS Projected
+			ibsNet := (baseDebit * ibsRate) - (baseCredit * ibsRate)
+			cbsNet := (baseDebit * cbsRate) - (baseCredit * cbsRate)
+			
+			// Total Saldo a Pagar
+			saldo := icmsNet + ibsNet + cbsNet
 
 			points = append(points, ProjectionPoint{
 				Ano:           ano,
-				Icms:          icmsProj,
-				Ibs:           ibsProj,
-				Cbs:           cbsProj,
+				Icms:          icmsNet,
+				Ibs:           ibsNet,
+				Cbs:           cbsNet,
 				Saldo:         saldo,
-				BaseCalculo:   baseIbsCbs,
+				BaseCalculo:   baseDebit - baseCredit, // Net Base
 				PercReducIcms: reducIcms,
 			})
 		}
