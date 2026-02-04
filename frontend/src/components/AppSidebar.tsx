@@ -54,7 +54,7 @@ const menuItems = [
     isActive: true, // Default open
     items: [
       { title: "Importar SPEDs", url: "/importar-efd", icon: FileSpreadsheet },
-      { title: "Operações Comerciais", url: "/mercadorias?tab=comercial", icon: ShoppingCart, className: "whitespace-normal h-auto py-2 leading-tight" },
+      { title: "Operações Comerciais", url: "/mercadorias?tab=comercial", icon: ShoppingCart, className: "whitespace-normal h-auto py-2 leading-tight text-xs" },
       { title: "Dashboard Reforma", url: "/dashboards", icon: LayoutDashboard },
     ]
   },
