@@ -117,10 +117,27 @@ func main() {
 	if err != nil {
 		log.Printf("Error finding migration files: %v", err)
 	} else {
+		// Ensure schema_migrations table exists
+		_, err = db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+			filename VARCHAR(255) PRIMARY KEY,
+			executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		)`)
+		if err != nil {
+			log.Printf("Warning: Failed to ensure schema_migrations table exists: %v", err)
+		}
+
 		if len(files) == 0 {
 			log.Println("Warning: No migration files found!")
 		}
 		for _, file := range files {
+			baseName := filepath.Base(file)
+			var alreadyExecuted bool
+			// Check if migration was already executed
+			errCheck := db.QueryRow("SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE filename=$1)", baseName).Scan(&alreadyExecuted)
+			if errCheck == nil && alreadyExecuted {
+				continue
+			}
+
 			fmt.Printf("Executing migration: %s\n", file)
 			migration, err := os.ReadFile(file)
 			if err != nil {
@@ -132,6 +149,8 @@ func main() {
 				log.Printf("Migration %s warning: %v", file, err)
 			} else {
 				fmt.Printf("Migration %s executed successfully.\n", file)
+				// Record successful migration
+				_, _ = db.Exec("INSERT INTO schema_migrations (filename) VALUES ($1)", baseName)
 			}
 		}
 	}
