@@ -228,6 +228,7 @@ func ListUsersHandler(db *sql.DB) http.HandlerFunc {
 type PromoteUserRequest struct {
 	Role       string `json:"role"`        // 'admin' or 'user'
 	ExtendDays int    `json:"extend_days"` // Days to add to trial
+	IsOfficial bool   `json:"is_official"` // If true, sets trial to 2099
 }
 
 // PromoteUserHandler updates user role or trial (Admin only)
@@ -254,7 +255,15 @@ func PromoteUserHandler(db *sql.DB) http.HandlerFunc {
 			}
 		}
 
-		if req.ExtendDays > 0 {
+		if req.IsOfficial {
+			// Set to far future (Official Client)
+			newEnd := time.Date(2099, 12, 31, 23, 59, 59, 0, time.UTC)
+			_, err := db.Exec("UPDATE users SET trial_ends_at = $1 WHERE id = $2", newEnd, userID)
+			if err != nil {
+				http.Error(w, "Failed to update trial status", http.StatusInternalServerError)
+				return
+			}
+		} else if req.ExtendDays > 0 {
 			// Get current trial end
 			var currentEnd time.Time
 			err := db.QueryRow("SELECT trial_ends_at FROM users WHERE id = $1", userID).Scan(&currentEnd)

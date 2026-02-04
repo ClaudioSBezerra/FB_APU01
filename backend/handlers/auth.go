@@ -153,7 +153,7 @@ func GetUserIDFromContext(r *http.Request) string {
 // It prioritizes companies owned by the user, then falls back to companies where the user is a member.
 func GetUserCompanyID(db *sql.DB, userID string) (string, error) {
 	var companyID string
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
@@ -380,6 +380,15 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		// Check Trial Status
+		if user.Role != "admin" && user.TrialEndsAt.Before(time.Now()) {
+			log.Printf("[Login] Trial expired for: %s", req.Email)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode("Período de teste expirado. Entre em contato para assinar.")
+			return
+		}
+
 		// 2. Generate Token
 		token, err := GenerateToken(user.ID, user.Role)
 		if err != nil {
@@ -432,7 +441,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			if errEnv == sql.ErrNoRows {
 				errEnv = db.QueryRowContext(ctx, "INSERT INTO environments (name, description) VALUES ('Ambiente de Testes', 'Ambiente auto-gerado') RETURNING id, name").Scan(&envID, &envName)
 			}
-			
+
 			if errEnv != nil {
 				log.Printf("[Login] Auto-provision failed at Environment: %v", errEnv)
 				envName = "Sem Ambiente"
@@ -455,7 +464,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 				} else {
 					// 3. Link User to Environment (Idempotent)
 					// We use ON CONFLICT DO NOTHING assuming there's a unique constraint or primary key on (user_id, environment_id)
-					// If not, we might duplicate, but standard schema usually has it. 
+					// If not, we might duplicate, but standard schema usually has it.
 					// Checking user_environments definition would be good, but let's assume standard PK.
 					_, _ = db.ExecContext(ctx, "INSERT INTO user_environments (user_id, environment_id, role) VALUES ($1, $2, 'admin') ON CONFLICT DO NOTHING", user.ID, envID)
 
@@ -464,7 +473,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 					if user.FullName == "" {
 						companyName = "Minha Empresa"
 					}
-					
+
 					errComp := db.QueryRowContext(ctx, `
 						INSERT INTO companies (group_id, name, trade_name, owner_id)
 						VALUES ($1, $2, $2, $3)

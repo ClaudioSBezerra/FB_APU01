@@ -184,11 +184,11 @@ func main() {
 	})
 
 	// Report Endpoints
-	http.HandleFunc("/api/reports/mercadorias", handlers.GetMercadoriasReportHandler(db))
-	http.HandleFunc("/api/reports/energia", handlers.GetEnergiaReportHandler(db))
-	http.HandleFunc("/api/reports/transporte", handlers.GetTransporteReportHandler(db))
-	http.HandleFunc("/api/reports/comunicacoes", handlers.GetComunicacoesReportHandler(db))
-	http.HandleFunc("/api/dashboard/projection", handlers.GetDashboardProjectionHandler(db))
+	http.HandleFunc("/api/reports/mercadorias", handlers.AuthMiddleware(handlers.GetMercadoriasReportHandler(db), ""))
+	http.HandleFunc("/api/reports/energia", handlers.AuthMiddleware(handlers.GetEnergiaReportHandler(db), ""))
+	http.HandleFunc("/api/reports/transporte", handlers.AuthMiddleware(handlers.GetTransporteReportHandler(db), ""))
+	http.HandleFunc("/api/reports/comunicacoes", handlers.AuthMiddleware(handlers.GetComunicacoesReportHandler(db), ""))
+	http.HandleFunc("/api/dashboard/projection", handlers.AuthMiddleware(handlers.GetDashboardProjectionHandler(db), ""))
 
 	// Start Background Worker
 	worker.StartWorker(db)
@@ -214,15 +214,15 @@ func main() {
 	http.HandleFunc("/api/check-duplicity", handlers.AuthMiddleware(handlers.CheckDuplicityHandler(db), ""))
 
 	// Register Job Status Handler
-	http.HandleFunc("/api/jobs", handlers.ListJobsHandler(db))
-	http.HandleFunc("/api/jobs/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/jobs", handlers.AuthMiddleware(handlers.ListJobsHandler(db), ""))
+	http.HandleFunc("/api/jobs/", handlers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		id := strings.TrimPrefix(r.URL.Path, "/api/jobs/")
 		if strings.HasSuffix(id, "/participants") {
 			handlers.GetJobParticipantsHandler(db)(w, r)
 			return
 		}
 		handlers.GetJobStatusHandler(db)(w, r)
-	})
+	}, ""))
 
 	// Auth Routes
 	http.HandleFunc("/api/auth/register", handlers.RegisterHandler(db))
@@ -230,7 +230,7 @@ func main() {
 	http.HandleFunc("/api/auth/forgot-password", handlers.ForgotPasswordHandler(db))
 	http.HandleFunc("/api/user/hierarchy", handlers.AuthMiddleware(handlers.GetUserHierarchyHandler(db), ""))
 
-	http.HandleFunc("/api/mercadorias", handlers.GetMercadoriasReportHandler(db))
+	http.HandleFunc("/api/mercadorias", handlers.AuthMiddleware(handlers.GetMercadoriasReportHandler(db), ""))
 
 	// Admin Endpoints
 	http.HandleFunc("/api/admin/reset-db", handlers.AuthMiddleware(handlers.ResetDatabaseHandler(db), "admin"))
