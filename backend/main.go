@@ -20,8 +20,8 @@ import (
 
 // Version information for backend deployment validation
 const (
-	BackendVersion = "5.0.6"
-	FeatureSet     = "Stable Release (04/02/2026), Auto-Provisioning Login, Concurrent View Refresh, Multi-File Import Optimization, Data Persistence Fix, UI Fixes (File Overflow), Duplicate Check, Storage Cleanup"
+	BackendVersion = "5.0.7"
+	FeatureSet     = "Stable Release (04/02/2026), Auto-Provisioning Login, Concurrent View Refresh, Multi-File Import Optimization, Data Persistence Fix, UI Fixes (File Overflow), Duplicate Check, Storage Cleanup, Tax Reform Projection Dashboard"
 )
 
 func GetVersionInfo() string {
@@ -188,6 +188,7 @@ func main() {
 	http.HandleFunc("/api/reports/energia", handlers.GetEnergiaReportHandler(db))
 	http.HandleFunc("/api/reports/transporte", handlers.GetTransporteReportHandler(db))
 	http.HandleFunc("/api/reports/comunicacoes", handlers.GetComunicacoesReportHandler(db))
+	http.HandleFunc("/api/dashboard/projection", handlers.GetDashboardProjectionHandler(db))
 
 	// Start Background Worker
 	worker.StartWorker(db)
