@@ -57,16 +57,20 @@ export default function ImportarEFD() {
         if (res.ok) {
           const data = await res.json();
           setJobs(data);
+        } else if (res.status === 401) {
+            console.error('Unauthorized access to /api/jobs. Token might be invalid or expired.');
+            navigate('/login');
         }
       } catch (error) {
         console.error('Error fetching jobs:', error);
       }
     };
 
-    fetchJobs();
-    const interval = setInterval(fetchJobs, 2000);
+    fetchJobs(); // Initial fetch
+
+    const interval = setInterval(fetchJobs, 5000); // Poll every 5s
     return () => clearInterval(interval);
-  }, []);
+  }, [token]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
