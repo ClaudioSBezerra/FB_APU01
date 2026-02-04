@@ -380,12 +380,66 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		if err == sql.ErrNoRows {
-			// No company found at all
-			log.Printf("[Login] No company context found for user: %s", req.Email)
-			envName = "Sem Ambiente"
-			groupName = "Sem Grupo"
-			companyName = "Sem Empresa"
-			companyID = ""
+			// No company found at all - Auto-provisioning
+			log.Printf("[Login] No company context found for user: %s. Auto-provisioning default context...", req.Email)
+
+			// 1. Get/Create Default Environment
+			var envID string
+			errEnv := db.QueryRowContext(ctx, "SELECT id, name FROM environments WHERE name = 'Ambiente de Testes' LIMIT 1").Scan(&envID, &envName)
+			if errEnv == sql.ErrNoRows {
+				errEnv = db.QueryRowContext(ctx, "INSERT INTO environments (name, description) VALUES ('Ambiente de Testes', 'Ambiente auto-gerado') RETURNING id, name").Scan(&envID, &envName)
+			}
+			
+			if errEnv != nil {
+				log.Printf("[Login] Auto-provision failed at Environment: %v", errEnv)
+				envName = "Sem Ambiente"
+				groupName = "Sem Grupo"
+				companyName = "Sem Empresa"
+				companyID = ""
+			} else {
+				// 2. Get/Create Default Group
+				var groupID string
+				errGroup := db.QueryRowContext(ctx, "SELECT id, name FROM enterprise_groups WHERE environment_id = $1 AND name = 'Grupo de Empresas Testes' LIMIT 1", envID).Scan(&groupID, &groupName)
+				if errGroup == sql.ErrNoRows {
+					errGroup = db.QueryRowContext(ctx, "INSERT INTO enterprise_groups (environment_id, name, description) VALUES ($1, 'Grupo de Empresas Testes', 'Grupo auto-gerado') RETURNING id, name", envID).Scan(&groupID, &groupName)
+				}
+
+				if errGroup != nil {
+					log.Printf("[Login] Auto-provision failed at Group: %v", errGroup)
+					groupName = "Sem Grupo"
+					companyName = "Sem Empresa"
+					companyID = ""
+				} else {
+					// 3. Link User to Environment (Idempotent)
+					// We use ON CONFLICT DO NOTHING assuming there's a unique constraint or primary key on (user_id, environment_id)
+					// If not, we might duplicate, but standard schema usually has it. 
+					// Checking user_environments definition would be good, but let's assume standard PK.
+					_, _ = db.ExecContext(ctx, "INSERT INTO user_environments (user_id, environment_id, role) VALUES ($1, $2, 'admin') ON CONFLICT DO NOTHING", user.ID, envID)
+
+					// 4. Create Company for User
+					companyName = "Empresa de " + user.FullName
+					if user.FullName == "" {
+						companyName = "Minha Empresa"
+					}
+					
+					errComp := db.QueryRowContext(ctx, `
+						INSERT INTO companies (group_id, name, trade_name, owner_id)
+						VALUES ($1, $2, $2, $3)
+						RETURNING id
+					`, groupID, companyName, user.ID).Scan(&companyID)
+
+					if errComp != nil {
+						log.Printf("[Login] Auto-provision failed at Company: %v", errComp)
+						companyName = "Sem Empresa"
+						companyID = ""
+					} else {
+						log.Printf("[Login] Auto-provision success: Created %s (%s)", companyName, companyID)
+					}
+				}
+			}
+			// Reset error to nil so we don't trigger the next error block
+			err = nil
+
 		} else if err != nil {
 			// Could be timeout or other error
 			log.Printf("[Login] Warning: Error fetching context (timeout?): %v. Proceeding without context.", err)
