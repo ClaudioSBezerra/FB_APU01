@@ -453,90 +453,34 @@ const Mercadorias = () => {
         </div>
       </div>
 
-      {/* Apuração de Impostos Card */}
+      {/* Apuração de Impostos Card (Simplificado) */}
       <Card className="bg-white shadow-md border-l-4 border-l-blue-600 mb-6">
         <CardHeader className="pb-2">
             <CardTitle className="text-xl flex items-center gap-2">
                 <Scale className="h-5 w-5 text-blue-600" />
-                Apuração de Impostos ({selectedYear})
+                Apuração (Débito - Crédito)
             </CardTitle>
         </CardHeader>
         <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* ICMS */}
-                <div className="bg-red-50 p-4 rounded-lg border border-red-100 shadow-sm">
-                    <h3 className="font-bold text-red-700 mb-3 border-b border-red-200 pb-1 flex justify-between">
-                        <span>ICMS</span>
-                        <span className="text-xs font-normal text-red-500 self-center">Estadual</span>
-                    </h3>
-                    <div className="space-y-1 text-sm">
-                        <div className="flex justify-between text-gray-600">
-                            <span>Débitos (Saídas):</span>
-                            <span className="font-medium">{formatCurrency(totals.saidas.icmsProj)}</span>
-                        </div>
-                        <div className="flex justify-between text-gray-600">
-                            <span>Créditos (Entradas):</span>
-                            <span className="font-medium">{formatCurrency(totals.entradas.icmsProj)}</span>
-                        </div>
-                        <div className="flex justify-between font-bold text-red-800 pt-2 border-t border-red-200 mt-2 text-base">
-                            <span>Saldo a Recolher:</span>
-                            <span>{formatCurrency(totals.saidas.icmsProj - totals.entradas.icmsProj)}</span>
-                        </div>
-                    </div>
+            <div className="flex flex-col gap-2">
+                <div className="flex justify-between items-center text-lg">
+                    <span className="font-semibold text-gray-700">Saldo ICMS:</span>
+                    <span className="font-bold text-red-700">{formatCurrency(totals.saidas.icmsProj - totals.entradas.icmsProj)}</span>
                 </div>
-
-                {/* IBS */}
-                <div className="bg-[#fff8f0] p-4 rounded-lg border border-[#f5e6d3] shadow-sm">
-                    <h3 className="font-bold text-[#855a30] mb-3 border-b border-[#e6d0b3] pb-1 flex justify-between">
-                        <span>IBS</span>
-                        <span className="text-xs font-normal text-[#a68b6c] self-center">Estadual/Municipal</span>
-                    </h3>
-                    <div className="space-y-1 text-sm">
-                        <div className="flex justify-between text-gray-600">
-                            <span>Débitos (Saídas):</span>
-                            <span className="font-medium">{formatCurrency(totals.saidas.ibsProj)}</span>
-                        </div>
-                        <div className="flex justify-between text-gray-600">
-                            <span>Créditos (Entradas):</span>
-                            <span className="font-medium">{formatCurrency(totals.entradas.ibsProj)}</span>
-                        </div>
-                        <div className="flex justify-between font-bold text-[#855a30] pt-2 border-t border-[#e6d0b3] mt-2 text-base">
-                            <span>Saldo a Recolher:</span>
-                            <span>{formatCurrency(totals.saidas.ibsProj - totals.entradas.ibsProj)}</span>
-                        </div>
-                    </div>
+                <div className="flex justify-between items-center text-lg">
+                    <span className="font-semibold text-gray-700">Saldo IBS:</span>
+                    <span className="font-bold text-[#855a30]">{formatCurrency(totals.saidas.ibsProj - totals.entradas.ibsProj)}</span>
                 </div>
-
-                {/* CBS */}
-                <div className="bg-orange-50 p-4 rounded-lg border border-orange-100 shadow-sm">
-                    <h3 className="font-bold text-orange-700 mb-3 border-b border-orange-200 pb-1 flex justify-between">
-                        <span>CBS</span>
-                        <span className="text-xs font-normal text-orange-500 self-center">Federal</span>
-                    </h3>
-                    <div className="space-y-1 text-sm">
-                        <div className="flex justify-between text-gray-600">
-                            <span>Débitos (Saídas):</span>
-                            <span className="font-medium">{formatCurrency(totals.saidas.cbsProj)}</span>
-                        </div>
-                        <div className="flex justify-between text-gray-600">
-                            <span>Créditos (Entradas):</span>
-                            <span className="font-medium">{formatCurrency(totals.entradas.cbsProj)}</span>
-                        </div>
-                        <div className="flex justify-between font-bold text-orange-800 pt-2 border-t border-orange-200 mt-2 text-base">
-                            <span>Saldo a Recolher:</span>
-                            <span>{formatCurrency(totals.saidas.cbsProj - totals.entradas.cbsProj)}</span>
-                        </div>
-                    </div>
+                <div className="flex justify-between items-center text-lg">
+                    <span className="font-semibold text-gray-700">Saldo CBS:</span>
+                    <span className="font-bold text-orange-700">{formatCurrency(totals.saidas.cbsProj - totals.entradas.cbsProj)}</span>
                 </div>
-            </div>
-
-            <div className="mt-6 p-4 bg-blue-600 text-white rounded-lg shadow-md flex justify-between items-center">
-                <div className="flex flex-col">
-                    <span className="text-blue-100 text-sm font-medium">TOTAL GERAL A RECOLHER</span>
-                    <span className="text-xs opacity-80">(ICMS + IBS + CBS)</span>
-                </div>
-                <div className="text-3xl font-bold">
-                    {formatCurrency(saldoReforma)}
+                
+                <div className="border-t border-gray-200 my-2"></div>
+                
+                <div className="flex justify-between items-center text-xl bg-blue-50 p-3 rounded-md">
+                    <span className="font-bold text-blue-900">Saldo A Pagar:</span>
+                    <span className="font-bold text-blue-700">{formatCurrency(saldoReforma)}</span>
                 </div>
             </div>
         </CardContent>
