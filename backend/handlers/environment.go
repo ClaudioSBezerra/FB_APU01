@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // Structures
@@ -35,7 +37,31 @@ type Company struct {
 
 func GetEnvironmentsHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		rows, err := db.Query("SELECT id, name, COALESCE(description, ''), created_at FROM environments ORDER BY name")
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+		role := claims["role"].(string)
+
+		var rows *sql.Rows
+		var err error
+
+		if role == "admin" {
+			// Platform Admin sees all environments
+			rows, err = db.Query("SELECT id, name, COALESCE(description, ''), created_at FROM environments ORDER BY name")
+		} else {
+			// Regular users see only assigned environments
+			rows, err = db.Query(`
+				SELECT e.id, e.name, COALESCE(e.description, ''), e.created_at 
+				FROM environments e
+				JOIN user_environments ue ON e.id = ue.environment_id
+				WHERE ue.user_id = $1
+				ORDER BY e.name
+			`, userID)
+		}
+
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
