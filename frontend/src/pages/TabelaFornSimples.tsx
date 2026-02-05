@@ -182,11 +182,11 @@ export default function TabelaFornSimples() {
                         </TableRow>
                     ) : (
                         data.map((item) => (
-                            <TableRow key={item.cnpj}>
-                            <TableCell className="font-medium">{item.cnpj}</TableCell>
-                            <TableCell className="text-right">
-                                <Button variant="ghost" size="icon" onClick={() => handleDelete(item.cnpj)}>
-                                    <Trash2 className="h-4 w-4 text-red-500" />
+                            <TableRow key={item.cnpj} className="h-8">
+                            <TableCell className="font-medium py-1">{item.cnpj}</TableCell>
+                            <TableCell className="text-right py-1">
+                                <Button variant="ghost" size="icon" onClick={() => handleDelete(item.cnpj)} className="h-6 w-6">
+                                    <Trash2 className="h-3 w-3 text-red-500" />
                                 </Button>
                             </TableCell>
                             </TableRow>

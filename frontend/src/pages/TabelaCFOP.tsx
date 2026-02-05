@@ -131,10 +131,10 @@ export default function TabelaCFOP() {
                         </TableRow>
                     ) : (
                         cfops.map((c) => (
-                            <TableRow key={c.cfop}>
-                            <TableCell className="font-medium">{c.cfop}</TableCell>
-                            <TableCell>{c.descricao_cfop}</TableCell>
-                            <TableCell>{c.tipo}</TableCell>
+                            <TableRow key={c.cfop} className="h-8">
+                            <TableCell className="font-medium py-1">{c.cfop}</TableCell>
+                            <TableCell className="py-1">{c.descricao_cfop}</TableCell>
+                            <TableCell className="py-1">{c.tipo}</TableCell>
                             </TableRow>
                         ))
                     )}
