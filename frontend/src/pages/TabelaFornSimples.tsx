@@ -34,14 +34,20 @@ export default function TabelaFornSimples() {
   const fetchData = () => {
     setLoading(true);
     fetch("/api/config/forn-simples")
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Erro ${res.status}: ${text.slice(0, 50)}...`);
+        }
+        return res.json();
+      })
       .then((data) => {
         setData(data || []);
         setLoading(false);
       })
       .catch((err) => {
         console.error("Failed to fetch FornSimples", err);
-        toast.error("Erro ao carregar tabela Fornecedores Simples");
+        toast.error("Erro ao carregar tabela: " + err.message);
         setLoading(false);
       });
   };

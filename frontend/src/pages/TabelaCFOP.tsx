@@ -33,14 +33,20 @@ export default function TabelaCFOP() {
   const fetchCFOPs = () => {
     setLoading(true);
     fetch("/api/config/cfop")
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Erro ${res.status}: ${text.slice(0, 50)}...`);
+        }
+        return res.json();
+      })
       .then((data) => {
         setCfops(data || []);
         setLoading(false);
       })
       .catch((err) => {
         console.error("Failed to fetch CFOPs", err);
-        toast.error("Erro ao carregar tabela CFOP");
+        toast.error("Erro ao carregar tabela CFOP: " + err.message);
         setLoading(false);
       });
   };
