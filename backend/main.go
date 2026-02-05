@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"fb_apu01/handlers"
@@ -21,8 +22,8 @@ import (
 
 // Version information for backend deployment validation
 const (
-	BackendVersion = "5.0.8"
-	FeatureSet     = "User Management (Admin), Company Switcher, Port Fix (8081), Vendor Fix, Auto-Provisioning Login, Concurrent View Refresh, Tax Reform Projection Dashboard"
+	BackendVersion = "5.0.9"
+	FeatureSet     = "Async DB Init, User Management (Admin), Company Switcher, Port Fix (8081), Vendor Fix, Auto-Provisioning Login, Concurrent View Refresh, Tax Reform Projection Dashboard"
 )
 
 func GetVersionInfo() string {
@@ -40,72 +41,72 @@ type HealthResponse struct {
 	Version   string `json:"version"`
 	Features  string `json:"features"`
 	Database  string `json:"database"`
+	DBError   string `json:"db_error,omitempty"`
 }
 
-var db *sql.DB
+var (
+	db      *sql.DB
+	dbMutex sync.RWMutex
+	dbErr   error
+)
 
-func initDB() {
-	var err error
-	connStr := os.Getenv("DATABASE_URL")
-	if connStr == "" {
-		// Fallback for local development
-		connStr = "postgres://postgres:postgres@localhost:5432/fiscal_db?sslmode=disable"
-		fmt.Println("DATABASE_URL not set, using default local connection:", connStr)
-	}
+func getDB() *sql.DB {
+	dbMutex.RLock()
+	defer dbMutex.RUnlock()
+	return db
+}
 
-	// Retry logic for database connection
-	for i := 0; i < 10; i++ {
-		db, err = sql.Open("postgres", connStr)
-		if err == nil {
-			err = db.Ping()
+func initDBAsync() {
+	go func() {
+		var conn *sql.DB
+		var err error
+		connStr := os.Getenv("DATABASE_URL")
+		if connStr == "" {
+			// Fallback for local development
+			connStr = "postgres://postgres:postgres@localhost:5432/fiscal_db?sslmode=disable"
+			fmt.Println("DATABASE_URL not set, using default local connection:", connStr)
+		}
+
+		// Retry logic for database connection (Infinite loop until success)
+		attempt := 0
+		for {
+			attempt++
+			conn, err = sql.Open("postgres", connStr)
 			if err == nil {
-				// Configure Connection Pool
-				db.SetMaxOpenConns(25)
-				db.SetMaxIdleConns(5)
-				db.SetConnMaxLifetime(5 * time.Minute)
-				fmt.Println("Successfully connected to the database!")
-				return
+				err = conn.Ping()
+				if err == nil {
+					// Configure Connection Pool
+					conn.SetMaxOpenConns(25)
+					conn.SetMaxIdleConns(5)
+					conn.SetConnMaxLifetime(5 * time.Minute)
+
+					dbMutex.Lock()
+					db = conn
+					dbErr = nil
+					dbMutex.Unlock()
+
+					fmt.Println("Successfully connected to the database!")
+
+					// Initialize components that depend on DB
+					onDBConnected()
+					return
+				}
 			}
+
+			dbMutex.Lock()
+			dbErr = fmt.Errorf("attempt %d: %v", attempt, err)
+			dbMutex.Unlock()
+
+			fmt.Printf("Failed to connect to database (attempt %d): %v. Retrying in 5s...\n", attempt, err)
+			time.Sleep(5 * time.Second)
 		}
-		fmt.Printf("Failed to connect to database (attempt %d/10): %v. Retrying in 2s...\n", i+1, err)
-		time.Sleep(2 * time.Second)
-	}
-	log.Fatalf("Could not connect to database after retries: %v", err)
+	}()
 }
 
-func resetStuckJobs(db *sql.DB) {
-	res, err := db.Exec("UPDATE import_jobs SET status='failed', message=message || ' [Interrupted by server restart]' WHERE status='processing'")
-	if err != nil {
-		log.Printf("Error resetting stuck jobs: %v", err)
-		return
-	}
-	count, _ := res.RowsAffected()
-	if count > 0 {
-		fmt.Printf("Startup: Reset %d stuck jobs to 'failed' status.\n", count)
-	}
-}
-
-func main() {
-	// Load .env file if it exists
-	_ = godotenv.Load()
-
-	PrintVersion()
-	initDB()
-	defer db.Close()
-
-	// DEBUG: Emergency route to delete Iolanda
-	http.HandleFunc("/api/debug/nuke-iolanda", func(w http.ResponseWriter, r *http.Request) {
-		email := "iolanda_fortes@hotmail.com"
-		// Delete related data first if cascades aren't set up (assuming cascades work for simplicity, but let's be safe)
-		// Actually, let's rely on CASCADE or manual cleanup if needed.
-		// For now, just delete user.
-		_, err := db.Exec("DELETE FROM users WHERE email = $1", email)
-		if err != nil {
-			http.Error(w, "Error deleting user: "+err.Error(), 500)
-			return
-		}
-		w.Write([]byte("User " + email + " deleted successfully. Please register again."))
-	})
+func onDBConnected() {
+	// Execute migrations and other initialization tasks here
+	// This function is called once DB is connected
+	database := getDB()
 
 	// Execute migrations
 	migrationDir := "migrations"
@@ -122,7 +123,7 @@ func main() {
 		log.Printf("Error finding migration files: %v", err)
 	} else {
 		// Ensure schema_migrations table exists
-		_, err = db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+		_, err = database.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
 			filename VARCHAR(255) PRIMARY KEY,
 			executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 		)`)
@@ -137,7 +138,7 @@ func main() {
 			baseName := filepath.Base(file)
 			var alreadyExecuted bool
 			// Check if migration was already executed
-			errCheck := db.QueryRow("SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE filename=$1)", baseName).Scan(&alreadyExecuted)
+			errCheck := database.QueryRow("SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE filename=$1)", baseName).Scan(&alreadyExecuted)
 			if errCheck == nil && alreadyExecuted {
 				continue
 			}
@@ -148,16 +149,78 @@ func main() {
 				log.Printf("Could not read migration file %s: %v", file, err)
 				continue
 			}
-			_, err = db.Exec(string(migration))
+			_, err = database.Exec(string(migration))
 			if err != nil {
 				log.Printf("Migration %s warning: %v", file, err)
 			} else {
 				fmt.Printf("Migration %s executed successfully.\n", file)
 				// Record successful migration
-				_, _ = db.Exec("INSERT INTO schema_migrations (filename) VALUES ($1)", baseName)
+				_, _ = database.Exec("INSERT INTO schema_migrations (filename) VALUES ($1)", baseName)
 			}
 		}
 	}
+
+	// Start Background Worker
+	worker.StartWorker(database)
+
+	// Trigger async refresh of views (Startup)
+	go func() {
+		// Wait for server to start serving requests
+		time.Sleep(5 * time.Second)
+		log.Println("Background: Triggering initial view refresh (mv_mercadorias_agregada)...")
+		_, err := database.Exec("REFRESH MATERIALIZED VIEW mv_mercadorias_agregada")
+		if err != nil {
+			log.Printf("Background: Initial view refresh failed: %v", err)
+		} else {
+			log.Println("Background: Initial view refresh completed successfully.")
+		}
+	}()
+}
+
+// Middleware to check if DB is ready
+func DBMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		database := getDB()
+		if database == nil {
+			dbMutex.RLock()
+			err := dbErr
+			dbMutex.RUnlock()
+			errMsg := "Database not initialized yet"
+			if err != nil {
+				errMsg += ": " + err.Error()
+			}
+			http.Error(w, errMsg, http.StatusServiceUnavailable)
+			return
+		}
+		next(w, r)
+	}
+}
+
+func main() {
+	// Load .env file if it exists
+	_ = godotenv.Load()
+
+	PrintVersion()
+
+	// Start DB connection in background
+	initDBAsync()
+	// defer db.Close() // Cannot defer nil, handle in shutdown if needed
+
+	// DEBUG: Emergency route to delete Iolanda
+	http.HandleFunc("/api/debug/nuke-iolanda", func(w http.ResponseWriter, r *http.Request) {
+		database := getDB()
+		if database == nil {
+			http.Error(w, "Database not ready", http.StatusServiceUnavailable)
+			return
+		}
+		email := "iolanda_fortes@hotmail.com"
+		_, err := database.Exec("DELETE FROM users WHERE email = $1", email)
+		if err != nil {
+			http.Error(w, "Error deleting user: "+err.Error(), 500)
+			return
+		}
+		w.Write([]byte("User " + email + " deleted successfully. Please register again."))
+	})
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -169,10 +232,26 @@ func main() {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Content-Type", "application/json")
 
-		dbStatus := "connected"
-		stats := db.Stats()
-		if err := db.Ping(); err != nil {
-			dbStatus = "error: " + err.Error()
+		dbStatus := "connecting..."
+		database := getDB()
+		var dbStats string
+		var lastErr string
+
+		if database != nil {
+			stats := database.Stats()
+			if err := database.Ping(); err != nil {
+				dbStatus = "error: " + err.Error()
+			} else {
+				dbStatus = "connected"
+			}
+			dbStats = fmt.Sprintf("Open: %d, InUse: %d, Idle: %d, Wait: %v", stats.OpenConnections, stats.InUse, stats.Idle, stats.WaitDuration)
+		} else {
+			dbMutex.RLock()
+			if dbErr != nil {
+				dbStatus = "error"
+				lastErr = dbErr.Error()
+			}
+			dbMutex.RUnlock()
 		}
 
 		response := HealthResponse{
@@ -181,130 +260,179 @@ func main() {
 			Service:   "FB_APU01 Fiscal Engine",
 			Version:   BackendVersion,
 			Features:  FeatureSet,
-			Database:  fmt.Sprintf("%s (Open: %d, InUse: %d, Idle: %d, Wait: %v)", dbStatus, stats.OpenConnections, stats.InUse, stats.Idle, stats.WaitDuration),
+			Database:  fmt.Sprintf("%s (%s)", dbStatus, dbStats),
+			DBError:   lastErr,
 		}
 
 		json.NewEncoder(w).Encode(response)
 	})
 
-	// Report Endpoints
-	http.HandleFunc("/api/reports/mercadorias", handlers.AuthMiddleware(handlers.GetMercadoriasReportHandler(db), ""))
-	http.HandleFunc("/api/reports/energia", handlers.AuthMiddleware(handlers.GetEnergiaReportHandler(db), ""))
-	http.HandleFunc("/api/reports/transporte", handlers.AuthMiddleware(handlers.GetTransporteReportHandler(db), ""))
-	http.HandleFunc("/api/reports/comunicacoes", handlers.AuthMiddleware(handlers.GetComunicacoesReportHandler(db), ""))
-	http.HandleFunc("/api/dashboard/projection", handlers.AuthMiddleware(handlers.GetDashboardProjectionHandler(db), ""))
+	// Wrap handlers with DBMiddleware where db is required, but we need to inject the db instance safely.
+	// Since existing handlers expect *sql.DB, we need a wrapper that gets the current DB instance.
+	// A better approach for this refactor without rewriting all handlers is to make handlers accept a getter or check for nil.
+	// However, most handlers in 'handlers' package likely accept *sql.DB.
+	// If we pass 'db' variable (which is nil initially) to handlers factories, they will have nil.
+	// We need to delay the DB access inside handlers.
 
-	// Start Background Worker
-	worker.StartWorker(db)
+	// CRITICAL: The current architecture passes 'db' (pointer) to handler factories.
+	// If 'db' is nil at startup, handlers get nil.
+	// We need a proxy DB object or change how handlers are registered.
+	// Since we can't easily change all handlers signatures now, we will rely on the fact that
+	// we are passing the global 'db' variable. BUT, in Go, arguments are passed by value.
+	// Passing a nil pointer means the handler has a nil pointer forever.
 
-	// Trigger async refresh of views (Startup)
-	// Added manual trigger comment to force git sync
-	go func() {
-		// Wait for server to start serving requests
-		time.Sleep(5 * time.Second)
-		log.Println("Background: Triggering initial view refresh (mv_mercadorias_agregada)...")
-		_, err := db.Exec("REFRESH MATERIALIZED VIEW mv_mercadorias_agregada")
-		if err != nil {
-			log.Printf("Background: Initial view refresh failed: %v", err)
-		} else {
-			log.Println("Background: Initial view refresh completed successfully.")
+	// FIX: We will create a proxy handler that gets the DB on request.
+	// But handlers.GetMeHandler(db) returns a func.
+	// We have to wrap the FACTORY calls.
+
+	// Helper to wrap DB dependency
+	withDB := func(handlerFactory func(*sql.DB) http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			database := getDB()
+			if database == nil {
+				http.Error(w, "Database initializing, please wait...", http.StatusServiceUnavailable)
+				return
+			}
+			// Create handler with ready DB and serve
+			handlerFactory(database)(w, r)
 		}
-	}()
+	}
+
+	// Auth AuthMiddleware wrapper needs special care as it takes a handler.
+	withAuth := func(handlerFactory func(*sql.DB) http.HandlerFunc, role string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			database := getDB()
+			if database == nil {
+				http.Error(w, "Database initializing...", http.StatusServiceUnavailable)
+				return
+			}
+			// Create handler, then wrap in Auth
+			h := handlerFactory(database)
+			handlers.AuthMiddleware(h, role)(w, r)
+		}
+	}
+
+	// Report Endpoints
+	http.HandleFunc("/api/reports/mercadorias", withAuth(handlers.GetMercadoriasReportHandler, ""))
+	http.HandleFunc("/api/reports/energia", withAuth(handlers.GetEnergiaReportHandler, ""))
+	http.HandleFunc("/api/reports/transporte", withAuth(handlers.GetTransporteReportHandler, ""))
+	http.HandleFunc("/api/reports/comunicacoes", withAuth(handlers.GetComunicacoesReportHandler, ""))
+	http.HandleFunc("/api/dashboard/projection", withAuth(handlers.GetDashboardProjectionHandler, ""))
 
 	// Register Upload Handler
-	http.HandleFunc("/api/upload", handlers.AuthMiddleware(handlers.UploadHandler(db), ""))
+	http.HandleFunc("/api/upload", withAuth(handlers.UploadHandler, ""))
 
 	// Register Check Duplicity Handler
-	http.HandleFunc("/api/check-duplicity", handlers.AuthMiddleware(handlers.CheckDuplicityHandler(db), ""))
+	http.HandleFunc("/api/check-duplicity", withAuth(handlers.CheckDuplicityHandler, ""))
 
 	// Register Job Status Handler
-	http.HandleFunc("/api/jobs", handlers.AuthMiddleware(handlers.ListJobsHandler(db), ""))
-	http.HandleFunc("/api/jobs/", handlers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		id := strings.TrimPrefix(r.URL.Path, "/api/jobs/")
-		if strings.HasSuffix(id, "/participants") {
-			handlers.GetJobParticipantsHandler(db)(w, r)
+	http.HandleFunc("/api/jobs", withAuth(handlers.ListJobsHandler, ""))
+
+	// Custom wrapper for jobs/id
+	http.HandleFunc("/api/jobs/", func(w http.ResponseWriter, r *http.Request) {
+		database := getDB()
+		if database == nil {
+			http.Error(w, "Database initializing...", http.StatusServiceUnavailable)
 			return
 		}
-		handlers.GetJobStatusHandler(db)(w, r)
-	}, ""))
+		handlers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
+			id := strings.TrimPrefix(r.URL.Path, "/api/jobs/")
+			if strings.HasSuffix(id, "/participants") {
+				handlers.GetJobParticipantsHandler(database)(w, r)
+				return
+			}
+			handlers.GetJobStatusHandler(database)(w, r)
+		}, "")(w, r)
+	})
 
 	// Auth Routes
-	http.HandleFunc("/api/auth/register", handlers.RegisterHandler(db))
-	http.HandleFunc("/api/auth/login", handlers.LoginHandler(db))
-	http.HandleFunc("/api/auth/me", handlers.AuthMiddleware(handlers.GetMeHandler(db), ""))
-	http.HandleFunc("/api/auth/forgot-password", handlers.ForgotPasswordHandler(db))
-	http.HandleFunc("/api/user/hierarchy", handlers.AuthMiddleware(handlers.GetUserHierarchyHandler(db), ""))
-	http.HandleFunc("/api/user/companies", handlers.AuthMiddleware(handlers.GetUserCompaniesHandler(db), ""))
+	http.HandleFunc("/api/auth/register", withDB(handlers.RegisterHandler))
+	http.HandleFunc("/api/auth/login", withDB(handlers.LoginHandler))
+	http.HandleFunc("/api/auth/me", withAuth(handlers.GetMeHandler, ""))
+	http.HandleFunc("/api/auth/forgot-password", withDB(handlers.ForgotPasswordHandler))
+	http.HandleFunc("/api/user/hierarchy", withAuth(handlers.GetUserHierarchyHandler, ""))
+	http.HandleFunc("/api/user/companies", withAuth(handlers.GetUserCompaniesHandler, ""))
 
-	http.HandleFunc("/api/mercadorias", handlers.AuthMiddleware(handlers.GetMercadoriasReportHandler(db), ""))
+	http.HandleFunc("/api/mercadorias", withAuth(handlers.GetMercadoriasReportHandler, ""))
 
 	// Admin Endpoints
-	http.HandleFunc("/api/admin/reset-db", handlers.AuthMiddleware(handlers.ResetDatabaseHandler(db), "admin"))
-	http.HandleFunc("/api/company/reset-data", handlers.AuthMiddleware(handlers.ResetCompanyDataHandler(db), "")) // Authenticated users can reset their own data
-	http.HandleFunc("/api/admin/refresh-views", handlers.AuthMiddleware(handlers.RefreshViewsHandler(db), ""))    // Authenticated users can refresh views
-	http.HandleFunc("/api/admin/users", handlers.AuthMiddleware(handlers.ListUsersHandler(db), "admin"))
-	http.HandleFunc("/api/admin/users/create", handlers.AuthMiddleware(handlers.CreateUserHandler(db), "admin"))
-	http.HandleFunc("/api/admin/users/promote", handlers.AuthMiddleware(handlers.PromoteUserHandler(db), "admin"))
-	http.HandleFunc("/api/admin/users/delete", handlers.AuthMiddleware(handlers.DeleteUserHandler(db), "admin"))
+	http.HandleFunc("/api/admin/reset-db", withAuth(handlers.ResetDatabaseHandler, "admin"))
+	http.HandleFunc("/api/company/reset-data", withAuth(handlers.ResetCompanyDataHandler, ""))
+	http.HandleFunc("/api/admin/refresh-views", withAuth(handlers.RefreshViewsHandler, ""))
+	http.HandleFunc("/api/admin/users", withAuth(handlers.ListUsersHandler, "admin"))
+	http.HandleFunc("/api/admin/users/create", withAuth(handlers.CreateUserHandler, "admin"))
+	http.HandleFunc("/api/admin/users/promote", withAuth(handlers.PromoteUserHandler, "admin"))
+	http.HandleFunc("/api/admin/users/delete", withAuth(handlers.DeleteUserHandler, "admin"))
 
 	// Configuration Endpoints
-	http.HandleFunc("/api/config/aliquotas", handlers.GetTaxRatesHandler(db))
-	http.HandleFunc("/api/config/cfop", handlers.ListCFOPsHandler(db))
-	http.HandleFunc("/api/config/cfop/import", handlers.ImportCFOPsHandler(db))
+	http.HandleFunc("/api/config/aliquotas", withDB(handlers.GetTaxRatesHandler))
+	http.HandleFunc("/api/config/cfop", withDB(handlers.ListCFOPsHandler))
+	http.HandleFunc("/api/config/cfop/import", withDB(handlers.ImportCFOPsHandler))
 
 	http.HandleFunc("/api/config/forn-simples", func(w http.ResponseWriter, r *http.Request) {
+		database := getDB()
+		if database == nil {
+			http.Error(w, "Database initializing...", http.StatusServiceUnavailable)
+			return
+		}
 		switch r.Method {
 		case http.MethodGet:
-			handlers.ListFornSimplesHandler(db)(w, r)
+			handlers.ListFornSimplesHandler(database)(w, r)
 		case http.MethodPost:
-			handlers.CreateFornSimplesHandler(db)(w, r)
+			handlers.CreateFornSimplesHandler(database)(w, r)
 		case http.MethodDelete:
-			handlers.DeleteFornSimplesHandler(db)(w, r)
+			handlers.DeleteFornSimplesHandler(database)(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	http.HandleFunc("/api/config/forn-simples/import", handlers.ImportFornSimplesHandler(db))
+	http.HandleFunc("/api/config/forn-simples/import", withDB(handlers.ImportFornSimplesHandler))
 
 	// Environment & Groups Endpoints
-	http.HandleFunc("/api/config/environments", handlers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			handlers.GetEnvironmentsHandler(db)(w, r)
-		case http.MethodPost:
-			handlers.CreateEnvironmentHandler(db)(w, r)
-		case http.MethodPut:
-			handlers.UpdateEnvironmentHandler(db)(w, r)
-		case http.MethodDelete:
-			handlers.DeleteEnvironmentHandler(db)(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	http.HandleFunc("/api/config/environments", withAuth(func(db *sql.DB) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				handlers.GetEnvironmentsHandler(db)(w, r)
+			case http.MethodPost:
+				handlers.CreateEnvironmentHandler(db)(w, r)
+			case http.MethodPut:
+				handlers.UpdateEnvironmentHandler(db)(w, r)
+			case http.MethodDelete:
+				handlers.DeleteEnvironmentHandler(db)(w, r)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
 		}
 	}, ""))
 
-	http.HandleFunc("/api/config/groups", handlers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			handlers.GetGroupsHandler(db)(w, r)
-		case http.MethodPost:
-			handlers.CreateGroupHandler(db)(w, r)
-		case http.MethodDelete:
-			handlers.DeleteGroupHandler(db)(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	http.HandleFunc("/api/config/groups", withAuth(func(db *sql.DB) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				handlers.GetGroupsHandler(db)(w, r)
+			case http.MethodPost:
+				handlers.CreateGroupHandler(db)(w, r)
+			case http.MethodDelete:
+				handlers.DeleteGroupHandler(db)(w, r)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
 		}
 	}, ""))
 
-	http.HandleFunc("/api/config/companies", handlers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			handlers.GetCompaniesHandler(db)(w, r)
-		case http.MethodPost:
-			handlers.CreateCompanyHandler(db)(w, r)
-		case http.MethodDelete:
-			handlers.DeleteCompanyHandler(db)(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	http.HandleFunc("/api/config/companies", withAuth(func(db *sql.DB) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				handlers.GetCompaniesHandler(db)(w, r)
+			case http.MethodPost:
+				handlers.CreateCompanyHandler(db)(w, r)
+			case http.MethodDelete:
+				handlers.DeleteCompanyHandler(db)(w, r)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
 		}
 	}, ""))
 
