@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+// Tabela CFOP
 import {
   Table,
   TableBody,

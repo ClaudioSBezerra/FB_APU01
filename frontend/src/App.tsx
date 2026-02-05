@@ -126,7 +126,7 @@ function AppLayout() {
 }
 
 function App() {
-  console.log("App Version: 0.3.1 - Fix QueryClient & Data Isolation");
+  console.log("App Version: 0.3.2 - Simples Nacional & UI Fixes");
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
