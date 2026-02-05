@@ -6,6 +6,7 @@ import Mercadorias from './pages/Mercadorias';
 import Dashboard from './pages/Dashboard';
 import TabelaAliquotas from './pages/TabelaAliquotas';
 import TabelaCFOP from './pages/TabelaCFOP';
+import TabelaFornSimples from './pages/TabelaFornSimples';
 import GestaoAmbiente from './pages/GestaoAmbiente';
 import AdminUsers from './pages/AdminUsers';
 import Login from './pages/Login';
@@ -95,6 +96,7 @@ function AppLayout() {
             {/* Configurações */}
             <Route path="/config/aliquotas" element={<TabelaAliquotas />} />
             <Route path="/config/cfop" element={<TabelaCFOP />} />
+            <Route path="/config/forn-simples" element={<TabelaFornSimples />} />
             
             {/* Admin Routes */}
             <Route path="/config/usuarios" element={

@@ -252,6 +252,20 @@ func main() {
 	http.HandleFunc("/api/config/cfop", handlers.ListCFOPsHandler(db))
 	http.HandleFunc("/api/config/cfop/import", handlers.ImportCFOPsHandler(db))
 
+	http.HandleFunc("/api/config/forn-simples", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.ListFornSimplesHandler(db)(w, r)
+		case http.MethodPost:
+			handlers.CreateFornSimplesHandler(db)(w, r)
+		case http.MethodDelete:
+			handlers.DeleteFornSimplesHandler(db)(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	http.HandleFunc("/api/config/forn-simples/import", handlers.ImportFornSimplesHandler(db))
+
 	// Environment & Groups Endpoints
 	http.HandleFunc("/api/config/environments", handlers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
