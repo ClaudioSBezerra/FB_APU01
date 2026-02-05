@@ -1,14 +1,6 @@
 import React, { useEffect, useState } from "react";
 // Tabela Fornecedores Simples Nacional
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Card,
   CardContent,
   CardDescription,
@@ -168,40 +160,31 @@ export default function TabelaFornSimples() {
             </div>
 
             {loading ? (
-                 <div className="space-y-2">
-                    <Skeleton className="h-8 w-full" />
-                    <Skeleton className="h-8 w-full" />
-                    <Skeleton className="h-8 w-full" />
+                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
                  </div>
             ) : (
-                <div className="rounded-md border">
-                <Table>
-                    <TableHeader>
-                    <TableRow>
-                        <TableHead>CNPJ</TableHead>
-                        <TableHead className="w-[100px] text-right">Ações</TableHead>
-                    </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                    {data.length === 0 ? (
-                        <TableRow>
-                            <TableCell colSpan={2} className="text-center">Nenhum registro encontrado.</TableCell>
-                        </TableRow>
-                    ) : (
-                        data.map((item) => (
-                            <TableRow key={item.cnpj} className="h-8">
-                            <TableCell className="font-medium py-1">{item.cnpj}</TableCell>
-                            <TableCell className="text-right py-1">
-                                <Button variant="ghost" size="icon" onClick={() => handleDelete(item.cnpj)} className="h-6 w-6">
-                                    <Trash2 className="h-3 w-3 text-red-500" />
+                <>
+                {data.length === 0 ? (
+                    <div className="text-center text-muted-foreground p-8 border rounded-md">
+                        Nenhum registro encontrado.
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {data.map((item) => (
+                            <div key={item.cnpj} className="flex items-center justify-between p-2 border rounded-md bg-card text-card-foreground shadow-sm hover:bg-accent/50 transition-colors">
+                                <span className="font-medium font-mono text-sm pl-2">{item.cnpj}</span>
+                                <Button variant="ghost" size="icon" onClick={() => handleDelete(item.cnpj)} className="h-8 w-8 text-muted-foreground hover:text-red-500">
+                                    <Trash2 className="h-4 w-4" />
                                 </Button>
-                            </TableCell>
-                            </TableRow>
-                        ))
-                    )}
-                    </TableBody>
-                </Table>
-                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                </>
             )}
         </CardContent>
       </Card>
