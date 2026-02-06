@@ -209,9 +209,8 @@ export default function OperacoesSimplesNacional() {
             Valores de crédito que deixariam de ser aproveitados (IBS + CBS)
           </CardDescription>
         </CardHeader>
-        <CardContent className="h-[200px] md:h-[250px] w-full">
-          <div style={{ width: '100%', height: '100%', minHeight: 200 }}>
-            <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+        <CardContent className="h-[200px] md:h-[250px] w-full p-2">
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
@@ -230,7 +229,6 @@ export default function OperacoesSimplesNacional() {
               <Bar dataKey="Valor" fill="#cbd5e1" radius={[4, 4, 0, 0]} name="Valor Total" />
             </BarChart>
           </ResponsiveContainer>
-          </div>
         </CardContent>
       </Card>
 
