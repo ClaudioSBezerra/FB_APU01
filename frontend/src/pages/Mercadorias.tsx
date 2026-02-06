@@ -427,10 +427,10 @@ const Mercadorias = () => {
   });
 
   return (
-    <div className="container mx-auto p-6 space-y-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="container mx-auto p-2 md:p-4 space-y-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Comparativo de impostos atuais<br/>com IBS e CBS</h1>
+          <h1 className="text-lg md:text-xl lg:text-2xl font-bold text-gray-900">Comparativo de impostos atuais<br/>com IBS e CBS</h1>
         </div>
 
         <div className="flex gap-2 items-center flex-wrap">
@@ -472,7 +472,7 @@ const Mercadorias = () => {
       </div>
 
       {/* Cards de Totais */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
         {/* Total Saídas */}
         <Card className="border-l-4 border-l-red-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -604,10 +604,11 @@ const Mercadorias = () => {
             Projeção baseada nos totais filtrados e na tabela de alíquotas de transição.
           </div>
         </CardHeader>
-        <CardContent className="h-[350px]">
+        <CardContent className="h-[200px] md:h-[250px] w-full">
           {projectionData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={projectionData}>
+            <div style={{ width: '100%', height: '100%', minHeight: 200 }}>
+              <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+                <LineChart data={projectionData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                 <YAxis 
@@ -620,6 +621,7 @@ const Mercadorias = () => {
                 <Line type="monotone" dataKey="SaldoReforma" name="Saldo a Pagar (Projetado)" stroke="#2563eb" strokeWidth={3} dot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
+            </div>
           ) : (
             <div className="flex items-center justify-center h-full text-gray-500">
               Não foi possível gerar a projeção. Verifique se a tabela de alíquotas está configurada.

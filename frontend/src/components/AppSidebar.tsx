@@ -13,7 +13,8 @@ import {
   Download,
   ChevronRight,
   Database,
-  LogOut
+  LogOut,
+  Store
 } from "lucide-react"
 import {
   Sidebar,
@@ -57,7 +58,8 @@ const menuItems = [
     isActive: true, // Default open
     items: [
       { title: "Importar SPEDs", url: "/importar-efd", icon: FileSpreadsheet },
-      { title: "Operações Comerciais", url: "/mercadorias?tab=comercial", icon: ShoppingCart, className: "whitespace-normal h-auto py-2 leading-tight text-xs" },
+      { title: "Operações Comerciais", url: "/mercadorias?tab=comercial", icon: ShoppingCart },
+      { title: "Operações Simples Nacional", url: "/operacoes/simples", icon: Store },
       { title: "Dashboard Reforma", url: "/dashboards", icon: LayoutDashboard },
     ]
   },
@@ -87,16 +89,16 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-4 py-2">
-          <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Database className="size-4" />
+        <div className="flex items-center gap-1 px-2 py-2">
+          <div className="flex aspect-square size-6 md:size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <Database className="size-3 md:size-4" />
           </div>
-          <div className="grid flex-1 text-left text-sm leading-tight">
-            <span className="truncate font-semibold">FB_APU01</span>
-            <span className="truncate text-xs">Tax Reform System</span>
+          <div className="grid flex-1 text-left">
+            <span className="truncate font-semibold text-xs md:text-sm">FB_APU01</span>
+            <span className="truncate text-[8px] md:text-xs">Tax Reform System</span>
           </div>
         </div>
-        <div className="px-4 pb-2">
+        <div className="px-2 pb-1">
            {isAdmin && <CompanySwitcher />}
         </div>
       </SidebarHeader>
@@ -114,9 +116,9 @@ export function AppSidebar() {
                 >
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuButton tooltip={item.title}>
+                      <SidebarMenuButton tooltip={item.title} className="h-auto py-1.5 px-2 whitespace-normal text-[10px] md:text-xs md:px-4">
                         {item.icon && <item.icon />}
-                        <span>{item.title}</span>
+                        <span className="leading-tight text-xs md:text-xs">{item.title}</span>
                         <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
@@ -134,12 +136,12 @@ export function AppSidebar() {
                             <SidebarMenuSubButton 
                               asChild 
                               isActive={location.pathname === subItem.url}
-                              className={`${subItem.disabled ? "opacity-50 pointer-events-none" : ""} ${(subItem as any).className || ""}`}
+                              className={`h-auto py-1.5 whitespace-normal leading-tight text-xs ${subItem.disabled ? "opacity-50 pointer-events-none" : ""} ${(subItem as any).className || ""}`}
                             >
                               <Link to={subItem.url}>
-                                {subItem.icon && <subItem.icon className="mr-2 h-4 w-4 shrink-0" />}
-                                <span>{subItem.title}</span>
-                                {subItem.disabled && <span className="ml-auto text-xs text-muted-foreground">(Dev)</span>}
+                                {subItem.icon && <subItem.icon className="mr-2 h-3 w-3 shrink-0" />}
+                                <span className="text-xs">{subItem.title}</span>
+                                {subItem.disabled && <span className="ml-auto text-[8px] text-muted-foreground">(Dev)</span>}
                               </Link>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
@@ -154,21 +156,21 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <div className="p-2 border-t mt-auto">
+        <div className="p-1 border-t mt-auto">
           {user && (
-            <div className="flex flex-col gap-2 p-2 bg-sidebar-accent/50 rounded-md">
-              <div className="text-xs italic truncate">
+            <div className="flex flex-col gap-1 p-1 bg-sidebar-accent/50 rounded-md">
+              <div className="text-[10px] italic truncate">
                 {company || "Empresa não identificada"}
               </div>
               <div className="flex flex-col gap-1">
-                <div className="text-xs truncate">{user.full_name}</div>
-                <div className="bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded text-[10px] font-medium border border-yellow-200 self-start">
+                <div className="text-[10px] truncate">{user.full_name}</div>
+                <div className="bg-yellow-100 text-yellow-700 px-1 py-0.5 rounded text-[8px] font-medium border border-yellow-200 self-start">
                    Vencimento: {new Date(user.trial_ends_at).toLocaleDateString()}
                 </div>
               </div>
-              <Button variant="ghost" size="sm" className="w-full justify-start h-7 px-0 text-muted-foreground hover:text-foreground" onClick={logout}>
+              <Button variant="ghost" size="sm" className="w-full justify-start h-5 px-0 text-muted-foreground hover:text-foreground" onClick={logout}>
                 <LogOut className="mr-2 h-3 w-3" />
-                <span className="text-xs">Sair</span>
+                <span className="text-[10px]">Sair</span>
               </Button>
             </div>
           )}

@@ -128,11 +128,11 @@ export default function TabelaFornSimples() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto p-2 md:p-4 space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Fornecedores Simples Nacional</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-lg md:text-xl lg:text-2xl">Fornecedores Simples Nacional</CardTitle>
+          <CardDescription className="text-[10px] md:text-sm">
             Gerencie os CNPJs de fornecedores do Simples Nacional. Importe via CSV (coluna única: CNPJ, delimitador ';').
           </CardDescription>
         </CardHeader>
@@ -140,12 +140,13 @@ export default function TabelaFornSimples() {
             <div className="flex flex-col gap-6 mb-6">
                 <div className="flex items-end gap-4">
                     <div className="grid w-full max-w-sm items-center gap-1.5">
-                        <Label htmlFor="cnpj_input">Adicionar CNPJ Manualmente</Label>
+                        <Label htmlFor="cnpj_input" className="text-[10px]">Adicionar CNPJ Manualmente</Label>
                         <Input 
                             id="cnpj_input" 
                             placeholder="00.000.000/0000-00" 
                             value={newCnpj} 
                             onChange={(e) => setNewCnpj(e.target.value)} 
+                            className="h-8"
                         />
                     </div>
                     <Button onClick={handleAdd} disabled={!newCnpj}>
@@ -154,7 +155,7 @@ export default function TabelaFornSimples() {
                 </div>
 
                 <div className="grid w-full max-w-sm items-center gap-1.5">
-                    <Label htmlFor="csv_upload">Importar CSV (Lista de CNPJs)</Label>
+                    <Label htmlFor="csv_upload" className="text-[10px]">Importar CSV (Lista de CNPJs)</Label>
                     <Input id="csv_upload" type="file" accept=".csv" onChange={handleFileUpload} disabled={uploading} />
                 </div>
             </div>
@@ -176,9 +177,9 @@ export default function TabelaFornSimples() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                         {data.map((item) => (
                             <div key={item.cnpj} className="flex items-center justify-between p-2 border rounded-md bg-card text-card-foreground shadow-sm hover:bg-accent/50 transition-colors">
-                                <span className="font-medium font-mono text-sm pl-2">{item.cnpj}</span>
-                                <Button variant="ghost" size="icon" onClick={() => handleDelete(item.cnpj)} className="h-8 w-8 text-muted-foreground hover:text-red-500">
-                                    <Trash2 className="h-4 w-4" />
+                                <span className="font-medium font-mono text-[10px] pl-2">{item.cnpj}</span>
+                                <Button variant="ghost" size="icon" onClick={() => handleDelete(item.cnpj)} className="h-6 w-6 text-muted-foreground hover:text-red-500">
+                                    <Trash2 className="h-3 w-3" />
                                 </Button>
                             </div>
                         ))}

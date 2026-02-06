@@ -71,10 +71,10 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard da Reforma Tributária</h1>
-        <p className="text-muted-foreground">
+    <div className="space-y-4">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-lg md:text-xl lg:text-2xl font-bold tracking-tight">Dashboard da Reforma Tributária</h1>
+        <p className="text-[10px] md:text-sm text-muted-foreground">
           Projeção de impacto tributário (2027-2033) baseada nas operações consolidadas.
         </p>
       </div>
@@ -106,14 +106,14 @@ export default function Dashboard() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="h-[400px] w-full">
+          <div className="h-[180px] md:h-[220px] w-full">
             {loading ? (
               <div className="flex h-full items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : data.length > 0 ? (
-              <div style={{ width: '100%', height: '100%', minHeight: 300 }}>
-                <ResponsiveContainer width="100%" height="100%" minHeight={300}>
+              <div style={{ width: '100%', height: '100%', minHeight: 200 }}>
+                <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                   <LineChart
                     data={data}
                     margin={{
@@ -186,7 +186,7 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {data.length > 0 && (
            <>
              <Card>
@@ -194,8 +194,8 @@ export default function Dashboard() {
                   <CardTitle className="text-sm font-medium">Carga Tributária 2027</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{formatMoney(data.find(d => d.ano === 2027)?.vl_saldo || 0)}</div>
-                  <p className="text-xs text-muted-foreground">Início da Transição</p>
+                  <div className="text-lg md:text-xl font-bold">{formatMoney(data.find(d => d.ano === 2027)?.vl_saldo || 0)}</div>
+                  <p className="text-[10px] md:text-xs text-muted-foreground">Início da Transição</p>
                 </CardContent>
              </Card>
              <Card>
@@ -203,8 +203,8 @@ export default function Dashboard() {
                   <CardTitle className="text-sm font-medium">Carga Tributária 2033</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{formatMoney(data.find(d => d.ano === 2033)?.vl_saldo || 0)}</div>
-                  <p className="text-xs text-muted-foreground">Modelo Final (IBS/CBS Full)</p>
+                  <div className="text-lg md:text-xl font-bold">{formatMoney(data.find(d => d.ano === 2033)?.vl_saldo || 0)}</div>
+                  <p className="text-[10px] md:text-xs text-muted-foreground">Modelo Final (IBS/CBS Full)</p>
                 </CardContent>
              </Card>
            </>
