@@ -31,8 +31,8 @@ services:
     build: ./frontend
     container_name: fb_apu01-web
     restart: always
-    # ports:
-    #   - "3000:80"
+    ports:
+      - "3000:80"
     expose:
       - "80"
     labels:

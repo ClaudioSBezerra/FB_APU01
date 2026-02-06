@@ -141,26 +141,38 @@ func processNextJob(db *sql.DB, workerID int) {
 		if err == nil && pendingCount > 0 {
 			fmt.Printf("Worker #%d: Skipping view refresh (Queue has %d jobs pending/processing)...\n", workerID, pendingCount)
 		} else {
-			fmt.Printf("Worker #%d: Queue empty (Last Job). Refreshing Materialized View (mv_mercadorias_agregada)...\n", workerID)
-			
+			fmt.Printf("Worker #%d: Queue empty (Last Job). Refreshing Materialized Views...\n", workerID)
+
 			// Use CONCURRENTLY to avoid locking reads
 			// We can run this in background OR blocking.
 			// Since it's the last job, blocking is fine and safer to ensure data consistency.
 			start := time.Now()
-			
-			// Try Concurrent first (Non-blocking for reads)
-			// Requires UNIQUE INDEX (Added in migration 034)
+
+			// 1. Refresh mv_mercadorias_agregada
 			_, err := db.Exec("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_mercadorias_agregada")
 			if err != nil {
-				fmt.Printf("Worker #%d: Concurrent refresh failed (might lack index or running in parallel), trying standard: %v\n", workerID, err)
+				fmt.Printf("Worker #%d: Concurrent refresh failed for mv_mercadorias_agregada, trying standard: %v\n", workerID, err)
 				_, err = db.Exec("REFRESH MATERIALIZED VIEW mv_mercadorias_agregada")
 			}
-
 			if err != nil {
-				fmt.Printf("Worker #%d: Error refreshing view: %v\n", workerID, err)
+				fmt.Printf("Worker #%d: Error refreshing mv_mercadorias_agregada: %v\n", workerID, err)
 			} else {
-				fmt.Printf("Worker #%d: View refreshed successfully in %v.\n", workerID, time.Since(start))
+				fmt.Printf("Worker #%d: mv_mercadorias_agregada refreshed successfully.\n", workerID)
 			}
+
+			// 2. Refresh mv_operacoes_simples (Simples Nacional)
+			_, err = db.Exec("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_operacoes_simples")
+			if err != nil {
+				fmt.Printf("Worker #%d: Concurrent refresh failed for mv_operacoes_simples, trying standard: %v\n", workerID, err)
+				_, err = db.Exec("REFRESH MATERIALIZED VIEW mv_operacoes_simples")
+			}
+			if err != nil {
+				fmt.Printf("Worker #%d: Error refreshing mv_operacoes_simples: %v\n", workerID, err)
+			} else {
+				fmt.Printf("Worker #%d: mv_operacoes_simples refreshed successfully.\n", workerID)
+			}
+
+			fmt.Printf("Worker #%d: All views refreshed in %v.\n", workerID, time.Since(start))
 		}
 	}
 }

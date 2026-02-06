@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from "@/components/ui/sonner";
 import ImportarEFD from './pages/ImportarEFD';
 import Mercadorias from './pages/Mercadorias';
+import OperacoesSimplesNacional from './pages/OperacoesSimplesNacional';
 import Dashboard from './pages/Dashboard';
 import TabelaAliquotas from './pages/TabelaAliquotas';
 import TabelaCFOP from './pages/TabelaCFOP';
@@ -91,6 +92,7 @@ function AppLayout() {
             {/* Simulador da RT */}
             <Route path="/importar-efd" element={<ImportarEFD />} />
             <Route path="/mercadorias" element={<Mercadorias />} />
+            <Route path="/operacoes/simples" element={<OperacoesSimplesNacional />} />
             <Route path="/dashboards" element={<Dashboard />} />
             
             {/* Configurações */}

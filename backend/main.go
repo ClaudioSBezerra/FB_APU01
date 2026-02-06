@@ -318,6 +318,7 @@ func main() {
 	http.HandleFunc("/api/reports/transporte", withAuth(handlers.GetTransporteReportHandler, ""))
 	http.HandleFunc("/api/reports/comunicacoes", withAuth(handlers.GetComunicacoesReportHandler, ""))
 	http.HandleFunc("/api/dashboard/projection", withAuth(handlers.GetDashboardProjectionHandler, ""))
+	http.HandleFunc("/api/dashboard/simples-nacional", withAuth(handlers.GetSimplesDashboardHandler, ""))
 
 	// Register Upload Handler
 	http.HandleFunc("/api/upload", withAuth(handlers.UploadHandler, ""))
