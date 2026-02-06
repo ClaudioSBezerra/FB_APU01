@@ -1,0 +1,141 @@
+name: Deploy to Production (Coolify + Hostinger)
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Backup antes do deploy
+  backup:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Backup Database
+        run: |
+          echo "🔄 Iniciando backup pré-deploy..."
+          echo "Este step pode ser expandido com script de backup"
+          echo "Data: $(date)"
+
+  # Build e Push da imagem
+  build-and-push:
+    needs: backup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.production
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+  # Deploy via Coolify webhook
+  deploy-to-coolify:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Coolify
+        run: |
+          echo "🚀 Iniciando deploy via Coolify..."
+          
+          # Notificar Coolify sobre nova imagem
+          curl -X POST \
+            "${{ secrets.COOLIFY_WEBHOOK_URL }}" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_DEPLOY_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "image": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest",
+              "action": "deploy",
+              "environment": "production",
+              "ref": "${{ github.ref }}",
+              "commit": "${{ github.sha }}",
+              "actor": "${{ github.actor }}",
+              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            }'
+          
+          echo "✅ Deploy iniciado no Coolify!"
+          echo "📊 Monitorando: ${{ secrets.COOLIFY_DASHBOARD_URL }}"
+
+      - name: Health Check
+        run: |
+          echo "⏳ Aguardando deploy (até 10 minutos)..."
+          
+          for i in {1..20}; do
+            echo "Tentativa $i/20 - Verificando saúde da aplicação..."
+            
+            if curl -f -m 30 "${{ secrets.PRODUCTION_URL }}/api/health" 2>/dev/null; then
+              echo "✅ Deploy concluído com sucesso!"
+              echo "🌐 Aplicação disponível em: ${{ secrets.PRODUCTION_URL }}"
+              exit 0
+            fi
+            
+            sleep 30
+          done
+          
+          echo "❌ Timeout: Deploy não concluído em 10 minutos"
+          echo "🔍 Verifique o dashboard do Coolify: ${{ secrets.COOLIFY_DASHBOARD_URL }}"
+          exit 1
+
+  # Deploy notification
+  notify:
+    needs: [backup, build-and-push, deploy-to-coolify]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Deploy Notification
+        run: |
+          if [ "${{ needs.deploy-to-coolify.result }}" == "success" ]; then
+            echo "🎉 DEPLOY SUCESSO!"
+            echo "Commit: ${{ github.sha }}"
+            echo "Branch: ${{ github.ref_name }}"
+            echo "Data: $(date)"
+            echo "URL: ${{ secrets.PRODUCTION_URL }}"
+          else
+            echo "❌ DEPLOY FALHOU!"
+            echo "Verifique os logs anteriores"
+          fi
