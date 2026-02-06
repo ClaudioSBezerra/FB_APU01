@@ -122,15 +122,26 @@ func RefreshViewsHandler(db *sql.DB) http.HandlerFunc {
 		// Refresh Mercadorias View
 		start := time.Now()
 
-		// Use standard REFRESH for now as CONCURRENTLY needs unique index and data populated
-		// And we want to be safe.
+		// Refresh mv_mercadorias_agregada
 		_, err := db.Exec("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_mercadorias_agregada")
 		if err != nil {
-			log.Printf("Concurrent refresh failed (might be first run or no index), trying standard: %v", err)
+			log.Printf("Concurrent refresh failed for mv_mercadorias_agregada, trying standard: %v", err)
 			_, err = db.Exec("REFRESH MATERIALIZED VIEW mv_mercadorias_agregada")
 			if err != nil {
-				log.Printf("Error refreshing views: %v", err)
-				http.Error(w, "Failed to refresh views: "+err.Error(), http.StatusInternalServerError)
+				log.Printf("Error refreshing mv_mercadorias_agregada: %v", err)
+				http.Error(w, "Failed to refresh mv_mercadorias_agregada: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		// Refresh mv_operacoes_simples (Simples Nacional)
+		_, err = db.Exec("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_operacoes_simples")
+		if err != nil {
+			log.Printf("Concurrent refresh failed for mv_operacoes_simples, trying standard: %v", err)
+			_, err = db.Exec("REFRESH MATERIALIZED VIEW mv_operacoes_simples")
+			if err != nil {
+				log.Printf("Error refreshing mv_operacoes_simples: %v", err)
+				http.Error(w, "Failed to refresh mv_operacoes_simples: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 		}
