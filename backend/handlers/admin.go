@@ -87,10 +87,20 @@ func ResetCompanyDataHandler(db *sql.DB) http.HandlerFunc {
 		// Trigger Refresh to clear dashboard data
 		go func() {
 			log.Printf("ResetCompanyData: Triggering view refresh for CompanyID %s...", req.CompanyID)
+
+			// Refresh mv_mercadorias_agregada
 			if _, err := db.Exec("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_mercadorias_agregada"); err != nil {
-				log.Printf("ResetCompanyData: Concurrent refresh failed, trying standard: %v", err)
+				log.Printf("ResetCompanyData: Concurrent refresh failed for mv_mercadorias_agregada, trying standard: %v", err)
 				db.Exec("REFRESH MATERIALIZED VIEW mv_mercadorias_agregada")
 			}
+
+			// Refresh mv_operacoes_simples (Simples Nacional)
+			if _, err := db.Exec("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_operacoes_simples"); err != nil {
+				log.Printf("ResetCompanyData: Concurrent refresh failed for mv_operacoes_simples, trying standard: %v", err)
+				db.Exec("REFRESH MATERIALIZED VIEW mv_operacoes_simples")
+			}
+
+			log.Printf("ResetCompanyData: View refresh completed for CompanyID %s", req.CompanyID)
 		}()
 
 		w.Header().Set("Content-Type", "application/json")
@@ -201,12 +211,21 @@ func ResetDatabaseHandler(db *sql.DB) http.HandlerFunc {
 
 		log.Printf("Database reset successful (TRUNCATE).")
 
-		// REFRESH VIEW: Ensure the view is empty after truncating data
-		log.Println("Admin: Refreshing Materialized View (mv_mercadorias_agregada) after reset...")
+		// REFRESH VIEWS: Ensure views are empty after truncating data
+		log.Println("Admin: Refreshing Materialized Views after reset...")
+
+		// Refresh mv_mercadorias_agregada
 		if _, err := db.Exec("REFRESH MATERIALIZED VIEW mv_mercadorias_agregada"); err != nil {
-			log.Printf("Error refreshing view after reset: %v", err)
+			log.Printf("Error refreshing mv_mercadorias_agregada after reset: %v", err)
 		} else {
-			log.Println("Admin: View refreshed successfully (Empty).")
+			log.Println("Admin: mv_mercadorias_agregada refreshed successfully (Empty).")
+		}
+
+		// Refresh mv_operacoes_simples (Simples Nacional)
+		if _, err := db.Exec("REFRESH MATERIALIZED VIEW mv_operacoes_simples"); err != nil {
+			log.Printf("Error refreshing mv_operacoes_simples after reset: %v", err)
+		} else {
+			log.Println("Admin: mv_operacoes_simples refreshed successfully (Empty).")
 		}
 
 		w.Header().Set("Content-Type", "application/json")
