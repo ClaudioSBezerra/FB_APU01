@@ -6,12 +6,12 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
+	"fb_apu01/services"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -610,7 +610,9 @@ func ForgotPasswordHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req ForgotPasswordRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request", http.StatusBadRequest)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode("Requisição inválida")
 			return
 		}
 
@@ -622,31 +624,169 @@ func ForgotPasswordHandler(db *sql.DB) http.HandlerFunc {
 			json.NewEncoder(w).Encode("E-mail não encontrado")
 			return
 		} else if err != nil {
-			http.Error(w, "Database error", http.StatusInternalServerError)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode("Erro no banco de dados")
 			return
 		}
 
 		// Generate token
 		tokenBytes := make([]byte, 32)
 		rand.Read(tokenBytes)
-		rand.Read(tokenBytes) // Read twice just to be safe or copy paste error? No, just once is fine.
 		token := hex.EncodeToString(tokenBytes)
 
 		expiresAt := time.Now().Add(1 * time.Hour)
 
 		_, err = db.Exec("INSERT INTO verification_tokens (user_id, token, type, expires_at) VALUES ($1, $2, 'password_reset', $3)", userID, token, expiresAt)
 		if err != nil {
-			http.Error(w, "Error creating token", http.StatusInternalServerError)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode("Erro ao criar token")
 			return
 		}
 
-		// Simulate Email Sending
-		fmt.Printf("\n=== MOCK EMAIL SERVICE ===\nTo: %s\nSubject: Password Reset\nLink: /reset-password?token=%s\n==========================\n", req.Email, token)
+		// Send real email using email service
+		err = services.SendPasswordResetEmail(req.Email, token)
+		if err != nil {
+			log.Printf("[ForgotPassword] Failed to send email: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode("Erro ao enviar e-mail de recuperação")
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{
-			"message":    "Link de recuperação gerado (verifique o console do servidor)",
-			"mock_token": token,
+			"message": "Se o e-mail estiver cadastrado, você receberá um link de recuperação em instantes",
+		})
+	}
+}
+
+// ResetPasswordRequest struct for password reset
+type ResetPasswordRequest struct {
+	Token           string `json:"token"`
+	Password        string `json:"password"`
+	ConfirmPassword string `json:"confirm_password"`
+}
+
+// ResetPasswordHandler handles password reset with token
+func ResetPasswordHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req ResetPasswordRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode("Requisição inválida")
+			return
+		}
+
+		// Validate password match
+		if req.Password != req.ConfirmPassword {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode("As senhas não coincidem")
+			return
+		}
+
+		// Validate password strength (min 8 characters)
+		if len(req.Password) < 8 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode("A senha deve ter no mínimo 8 caracteres")
+			return
+		}
+
+		// Get token info from database
+		var userID string
+		var expiresAt time.Time
+		var tokenType string
+
+		err := db.QueryRow(`
+			SELECT user_id, expires_at, type
+			FROM verification_tokens
+			WHERE token = $1 AND used = false
+		`, req.Token).Scan(&userID, &expiresAt, &tokenType)
+
+		if err == sql.ErrNoRows {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode("Token inválido ou já utilizado")
+			return
+		} else if err != nil {
+			log.Printf("[ResetPassword] Database error: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode("Erro no banco de dados")
+			return
+		}
+
+		// Check if token is for password reset
+		if tokenType != "password_reset" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode("Tipo de token inválido")
+			return
+		}
+
+		// Check if token has expired
+		if time.Now().After(expiresAt) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusGone)
+			json.NewEncoder(w).Encode("Token expirado. Solicite uma nova recuperação de senha")
+			return
+		}
+
+		// Hash new password
+		hash, err := HashPassword(req.Password)
+		if err != nil {
+			log.Printf("[ResetPassword] Error hashing password: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode("Erro ao processar senha")
+			return
+		}
+
+		// Start transaction
+		tx, err := db.Begin()
+		if err != nil {
+			log.Printf("[ResetPassword] Error starting transaction: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode("Erro no banco de dados")
+			return
+		}
+		defer tx.Rollback()
+
+		// Update user password
+		_, err = tx.Exec("UPDATE users SET password_hash = $1 WHERE id = $2", hash, userID)
+		if err != nil {
+			log.Printf("[ResetPassword] Error updating password: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode("Erro ao atualizar senha")
+			return
+		}
+
+		// Mark token as used
+		_, err = tx.Exec("UPDATE verification_tokens SET used = true WHERE token = $1", req.Token)
+		if err != nil {
+			log.Printf("[ResetPassword] Error marking token as used: %v", err)
+		}
+
+		// Commit transaction
+		if err := tx.Commit(); err != nil {
+			log.Printf("[ResetPassword] Error committing transaction: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode("Erro ao salvar alterações")
+			return
+		}
+
+		log.Printf("[ResetPassword] Password reset successfully for user %s", userID)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": "Senha redefinida com sucesso. Você já pode fazer login com sua nova senha.",
 		})
 	}
 }
