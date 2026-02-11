@@ -36,5 +36,10 @@ backend/server
 docker-compose.override.yml
 docker-compose.override.yml
 
+# Backups
+backups/
+*.dump
+*.bak
+
 # Temporary
 temp_lovable_analysis/
