@@ -1,0 +1,72 @@
+name: Deploy to STAGING (Azure)
+
+on:
+  push:
+    tags:
+      - 'v*-rc*'  # Apenas release candidates (ex: v5.2.0-rc1)
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  deploy-to-staging:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Deploy to Azure STAGING via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd ~/fbtax
+
+            echo "🚀 Deploying ${{ steps.version.outputs.VERSION }} to STAGING..."
+
+            # Atualizar imagens do GHCR
+            sudo docker compose pull
+
+            # Reiniciar serviços com zero downtime
+            sudo docker compose up -d
+
+            # Aguardar health check
+            echo "⏳ Aguardando sistema iniciar..."
+            for i in {1..20}; do
+              if curl -sf http://localhost/api/health > /dev/null 2>&1; then
+                echo "✅ Deploy STAGING concluído com sucesso!"
+                HEALTH=$(curl -s http://localhost/api/health)
+                echo "Health check response: $HEALTH"
+                exit 0
+              fi
+              echo "Tentativa $i/20..."
+              sleep 5
+            done
+
+            echo "❌ Timeout no health check - Deploy falhou"
+            echo "📋 Últimos logs da API:"
+            sudo docker compose logs api --tail 50
+            exit 1
+
+      - name: Notify Success
+        if: success()
+        run: |
+          echo "🎉 STAGING Deploy Successful"
+          echo "Versão: ${{ steps.version.outputs.VERSION }}"
+          echo "URL: http://${{ secrets.STAGING_HOST }}"
+          echo "Dashboard: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Notify Failure
+        if: failure()
+        run: |
+          echo "❌ STAGING Deploy Failed"
+          echo "Versão: ${{ steps.version.outputs.VERSION }}"
+          echo "Verifique os logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
