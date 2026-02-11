@@ -238,10 +238,13 @@ func ResetDatabaseHandler(db *sql.DB) http.HandlerFunc {
 
 // CreateUserRequest struct
 type CreateUserRequest struct {
-	FullName string `json:"full_name"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Role     string `json:"role"`
+	FullName      string `json:"full_name"`
+	Email         string `json:"email"`
+	Password      string `json:"password"`
+	Role          string `json:"role"`
+	EnvironmentID string `json:"environment_id"` // Optional: link to existing environment
+	GroupID       string `json:"group_id"`        // Optional: link to existing group
+	CompanyID     string `json:"company_id"`      // Optional: link to existing company
 }
 
 // CreateUserHandler creates a new user directly (Admin only)
@@ -285,54 +288,93 @@ func CreateUserHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Auto-provision environment for the new user (similar to RegisterHandler but simplified)
-		// We can reuse the logic or just create a default company.
-		// For admin creation, we might skip company creation or create a default "Personal Company".
-		// Let's create a default structure to ensure consistency.
-		
-		// 1. Get or Create Environment (Admin's environment or new? Let's create a new Environment for the user)
-		// Actually, RegisterHandler creates a new Environment per user.
-		var envID string
-		err = db.QueryRow("INSERT INTO environments (name, description) VALUES ($1, 'Ambiente Padrão') RETURNING id", "Ambiente de "+req.FullName).Scan(&envID)
-		if err == nil {
-			// 2. Create Group
-			var groupID string
-			db.QueryRow("INSERT INTO enterprise_groups (environment_id, name, description) VALUES ($1, 'Grupo Padrão', 'Grupo Inicial') RETURNING id", envID).Scan(&groupID)
-			
-			// 3. Link User
-			db.Exec("INSERT INTO user_environments (user_id, environment_id, role) VALUES ($1, $2, 'admin')", userID, envID)
-
-			// 4. Create Company
-			if groupID != "" {
-				db.Exec("INSERT INTO companies (group_id, name, trade_name, owner_id) VALUES ($1, $2, $2, $3)", groupID, "Empresa de "+req.FullName, userID)
+		if req.EnvironmentID != "" {
+			// Link to existing hierarchy
+			_, err = db.Exec("INSERT INTO user_environments (user_id, environment_id, role) VALUES ($1, $2, 'user')", userID, req.EnvironmentID)
+			if err != nil {
+				log.Printf("Error linking user to environment: %v", err)
 			}
 
-			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(map[string]string{"message": "User created successfully", "id": userID})
+			// If company_id provided, set owner_id
+			if req.CompanyID != "" {
+				_, err = db.Exec("UPDATE companies SET owner_id = $1 WHERE id = $2 AND owner_id IS NULL", userID, req.CompanyID)
+				if err != nil {
+					log.Printf("Error setting company owner: %v", err)
+				}
+			}
+		} else {
+			// Auto-provision new hierarchy (original behavior)
+			var envID string
+			err = db.QueryRow("INSERT INTO environments (name, description) VALUES ($1, 'Ambiente Padrão') RETURNING id", "Ambiente de "+req.FullName).Scan(&envID)
+			if err == nil {
+				var groupID string
+				db.QueryRow("INSERT INTO enterprise_groups (environment_id, name, description) VALUES ($1, 'Grupo Padrão', 'Grupo Inicial') RETURNING id", envID).Scan(&groupID)
+				db.Exec("INSERT INTO user_environments (user_id, environment_id, role) VALUES ($1, $2, 'admin')", userID, envID)
+				if groupID != "" {
+					db.Exec("INSERT INTO companies (group_id, name, trade_name, owner_id) VALUES ($1, $2, $2, $3)", groupID, "Empresa de "+req.FullName, userID)
+				}
+			}
 		}
+
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]string{"message": "User created successfully", "id": userID})
 	}
 }
 
-// ListUsersHandler returns all users (Admin only)
+// AdminUser extends User with hierarchy info for admin listing
+type AdminUser struct {
+	ID              string    `json:"id"`
+	Email           string    `json:"email"`
+	FullName        string    `json:"full_name"`
+	IsVerified      bool      `json:"is_verified"`
+	TrialEndsAt     time.Time `json:"trial_ends_at"`
+	Role            string    `json:"role"`
+	CreatedAt       string    `json:"created_at"`
+	EnvironmentID   *string   `json:"environment_id"`
+	EnvironmentName *string   `json:"environment_name"`
+	GroupID         *string   `json:"group_id"`
+	GroupName       *string   `json:"group_name"`
+	CompanyID       *string   `json:"company_id"`
+	CompanyName     *string   `json:"company_name"`
+}
+
+// ListUsersHandler returns all users with hierarchy info (Admin only)
 func ListUsersHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rows, err := db.Query(`
-			SELECT id, email, full_name, is_verified, trial_ends_at, role, created_at 
-			FROM users ORDER BY created_at DESC
+			SELECT u.id, u.email, u.full_name, u.is_verified, u.trial_ends_at, u.role, u.created_at,
+			       e.id, e.name,
+			       eg.id, eg.name,
+			       c.id, c.name
+			FROM users u
+			LEFT JOIN user_environments ue ON u.id = ue.user_id
+			LEFT JOIN environments e ON ue.environment_id = e.id
+			LEFT JOIN enterprise_groups eg ON eg.environment_id = e.id
+			LEFT JOIN companies c ON c.group_id = eg.id AND (c.owner_id = u.id OR c.owner_id IS NULL)
+			ORDER BY u.created_at DESC
 		`)
 		if err != nil {
+			log.Printf("ListUsers error: %v", err)
 			http.Error(w, "Database error", http.StatusInternalServerError)
 			return
 		}
 		defer rows.Close()
 
-		var users []User
+		var users []AdminUser
 		for rows.Next() {
-			var u User
-			if err := rows.Scan(&u.ID, &u.Email, &u.FullName, &u.IsVerified, &u.TrialEndsAt, &u.Role, &u.CreatedAt); err != nil {
+			var u AdminUser
+			if err := rows.Scan(&u.ID, &u.Email, &u.FullName, &u.IsVerified, &u.TrialEndsAt, &u.Role, &u.CreatedAt,
+				&u.EnvironmentID, &u.EnvironmentName,
+				&u.GroupID, &u.GroupName,
+				&u.CompanyID, &u.CompanyName); err != nil {
+				log.Printf("ListUsers scan error: %v", err)
 				continue
 			}
 			users = append(users, u)
+		}
+
+		if users == nil {
+			users = []AdminUser{}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -403,6 +445,85 @@ func PromoteUserHandler(db *sql.DB) http.HandlerFunc {
 
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"message": "User updated successfully"})
+	}
+}
+
+// ReassignUserRequest struct
+type ReassignUserRequest struct {
+	UserID        string `json:"user_id"`
+	EnvironmentID string `json:"environment_id"`
+	GroupID       string `json:"group_id"`  // Optional
+	CompanyID     string `json:"company_id"` // Optional
+}
+
+// ReassignUserHandler re-links a user to a different hierarchy (Admin only)
+func ReassignUserHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req ReassignUserRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+
+		if req.UserID == "" || req.EnvironmentID == "" {
+			http.Error(w, "user_id and environment_id are required", http.StatusBadRequest)
+			return
+		}
+
+		tx, err := db.Begin()
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		defer tx.Rollback()
+
+		// Remove old company ownership (clear owner_id where this user is owner)
+		_, err = tx.Exec(`
+			UPDATE companies SET owner_id = NULL
+			WHERE owner_id = $1
+		`, req.UserID)
+		if err != nil {
+			log.Printf("ReassignUser: Error clearing old company owner: %v", err)
+		}
+
+		// Remove old environment link
+		_, err = tx.Exec("DELETE FROM user_environments WHERE user_id = $1", req.UserID)
+		if err != nil {
+			log.Printf("ReassignUser: Error removing old env link: %v", err)
+			http.Error(w, "Failed to remove old environment link", http.StatusInternalServerError)
+			return
+		}
+
+		// Insert new environment link
+		_, err = tx.Exec("INSERT INTO user_environments (user_id, environment_id, role) VALUES ($1, $2, 'user')", req.UserID, req.EnvironmentID)
+		if err != nil {
+			log.Printf("ReassignUser: Error inserting new env link: %v", err)
+			http.Error(w, "Failed to link to new environment", http.StatusInternalServerError)
+			return
+		}
+
+		// If company_id provided, set owner_id
+		if req.CompanyID != "" {
+			_, err = tx.Exec("UPDATE companies SET owner_id = $1 WHERE id = $2", req.UserID, req.CompanyID)
+			if err != nil {
+				log.Printf("ReassignUser: Error setting new company owner: %v", err)
+			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			http.Error(w, "Failed to commit changes", http.StatusInternalServerError)
+			return
+		}
+
+		log.Printf("ReassignUser: User %s reassigned to environment %s, company %s", req.UserID, req.EnvironmentID, req.CompanyID)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"message": "User reassigned successfully"})
 	}
 }
 

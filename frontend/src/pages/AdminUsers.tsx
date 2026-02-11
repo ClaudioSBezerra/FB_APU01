@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Table,
@@ -17,14 +17,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
-import { Check, X, Trash2, Shield, Calendar, UserCheck } from "lucide-react";
+import { Check, Trash2, UserCheck, Building2, ArrowRightLeft } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface User {
@@ -35,6 +35,106 @@ interface User {
   trial_ends_at: string;
   role: string;
   created_at: string;
+  environment_id: string | null;
+  environment_name: string | null;
+  group_id: string | null;
+  group_name: string | null;
+  company_id: string | null;
+  company_name: string | null;
+}
+
+interface HierarchyItem {
+  id: string;
+  name: string;
+}
+
+function HierarchyCascadeSelects({
+  token,
+  envId,
+  groupId,
+  companyId,
+  onEnvChange,
+  onGroupChange,
+  onCompanyChange,
+}: {
+  token: string;
+  envId: string;
+  groupId: string;
+  companyId: string;
+  onEnvChange: (id: string) => void;
+  onGroupChange: (id: string) => void;
+  onCompanyChange: (id: string) => void;
+}) {
+  const [environments, setEnvironments] = useState<HierarchyItem[]>([]);
+  const [groups, setGroups] = useState<HierarchyItem[]>([]);
+  const [companies, setCompanies] = useState<HierarchyItem[]>([]);
+
+  useEffect(() => {
+    fetch('/api/config/environments', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => setEnvironments(data || []))
+      .catch(() => setEnvironments([]));
+  }, [token]);
+
+  useEffect(() => {
+    if (!envId) { setGroups([]); return; }
+    fetch(`/api/config/groups?environment_id=${envId}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => setGroups(data || []))
+      .catch(() => setGroups([]));
+  }, [envId, token]);
+
+  useEffect(() => {
+    if (!groupId) { setCompanies([]); return; }
+    fetch(`/api/config/companies?group_id=${groupId}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => setCompanies(data || []))
+      .catch(() => setCompanies([]));
+  }, [groupId, token]);
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label className="text-right">Ambiente</Label>
+        <Select value={envId} onValueChange={(val) => { onEnvChange(val); onGroupChange(""); onCompanyChange(""); }}>
+          <SelectTrigger className="col-span-3">
+            <SelectValue placeholder="Selecione o ambiente..." />
+          </SelectTrigger>
+          <SelectContent>
+            {environments.map(e => (
+              <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label className="text-right">Grupo</Label>
+        <Select value={groupId} onValueChange={(val) => { onGroupChange(val); onCompanyChange(""); }} disabled={!envId}>
+          <SelectTrigger className="col-span-3">
+            <SelectValue placeholder={envId ? "Selecione o grupo..." : "Selecione um ambiente primeiro"} />
+          </SelectTrigger>
+          <SelectContent>
+            {groups.map(g => (
+              <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label className="text-right">Empresa</Label>
+        <Select value={companyId} onValueChange={onCompanyChange} disabled={!groupId}>
+          <SelectTrigger className="col-span-3">
+            <SelectValue placeholder={groupId ? "Selecione a empresa..." : "Selecione um grupo primeiro"} />
+          </SelectTrigger>
+          <SelectContent>
+            {companies.map(c => (
+              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
 }
 
 export default function AdminUsers() {
@@ -43,14 +143,22 @@ export default function AdminUsers() {
   const [promoteDialogOpen, setPromoteDialogOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  
+
   // State for Promote/Edit
   const [newRole, setNewRole] = useState<string>("user");
   const [extendDays, setExtendDays] = useState<number>(0);
   const [isOfficial, setIsOfficial] = useState<boolean>(false);
+  const [showReassign, setShowReassign] = useState(false);
+  const [reassignEnvId, setReassignEnvId] = useState("");
+  const [reassignGroupId, setReassignGroupId] = useState("");
+  const [reassignCompanyId, setReassignCompanyId] = useState("");
 
   // State for Create
   const [newUser, setNewUser] = useState({ fullName: "", email: "", password: "", role: "user" });
+  const [hierarchyMode, setHierarchyMode] = useState<"new" | "existing">("new");
+  const [createEnvId, setCreateEnvId] = useState("");
+  const [createGroupId, setCreateGroupId] = useState("");
+  const [createCompanyId, setCreateCompanyId] = useState("");
 
   const { data: users, isLoading } = useQuery<User[]>({
     queryKey: ['admin-users'],
@@ -64,7 +172,6 @@ export default function AdminUsers() {
           const json = JSON.parse(text);
           throw new Error(json.message || `Erro: ${response.status} ${response.statusText}`);
         } catch {
-          // Se não for JSON (ex: HTML do Nginx 502/404), lança erro genérico com status
           throw new Error(`Erro de Servidor (${response.status}): A API não respondeu corretamente.`);
         }
       }
@@ -75,18 +182,24 @@ export default function AdminUsers() {
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof newUser) => {
+      const body: Record<string, string> = {
+        full_name: data.fullName,
+        email: data.email,
+        password: data.password,
+        role: data.role,
+      };
+      if (hierarchyMode === "existing" && createEnvId) {
+        body.environment_id = createEnvId;
+        if (createGroupId) body.group_id = createGroupId;
+        if (createCompanyId) body.company_id = createCompanyId;
+      }
       const response = await fetch(`/api/admin/users/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ 
-          full_name: data.fullName,
-          email: data.email,
-          password: data.password,
-          role: data.role
-        })
+        body: JSON.stringify(body)
       });
       if (!response.ok) {
         const text = await response.text();
@@ -104,6 +217,10 @@ export default function AdminUsers() {
       toast.success("Usuário criado com sucesso");
       setCreateDialogOpen(false);
       setNewUser({ fullName: "", email: "", password: "", role: "user" });
+      setHierarchyMode("new");
+      setCreateEnvId("");
+      setCreateGroupId("");
+      setCreateCompanyId("");
     },
     onError: (error: Error) => toast.error(error.message || "Erro ao criar usuário")
   });
@@ -129,6 +246,27 @@ export default function AdminUsers() {
     onError: () => toast.error("Erro ao atualizar usuário")
   });
 
+  const reassignMutation = useMutation({
+    mutationFn: async (data: { user_id: string, environment_id: string, group_id: string, company_id: string }) => {
+      const response = await fetch(`/api/admin/users/reassign`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(data)
+      });
+      if (!response.ok) throw new Error('Failed to reassign user');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      toast.success("Hierarquia alterada com sucesso");
+      setShowReassign(false);
+    },
+    onError: () => toast.error("Erro ao alterar hierarquia")
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (userId: string) => {
       const response = await fetch(`/api/admin/users/delete?id=${userId}`, {
@@ -150,6 +288,10 @@ export default function AdminUsers() {
       toast.error("Preencha todos os campos obrigatórios");
       return;
     }
+    if (hierarchyMode === "existing" && !createEnvId) {
+      toast.error("Selecione um ambiente para vincular");
+      return;
+    }
     createMutation.mutate(newUser);
   };
 
@@ -158,6 +300,10 @@ export default function AdminUsers() {
     setNewRole(user.role);
     setExtendDays(0);
     setIsOfficial(false);
+    setShowReassign(false);
+    setReassignEnvId("");
+    setReassignGroupId("");
+    setReassignCompanyId("");
     setPromoteDialogOpen(true);
   };
 
@@ -168,6 +314,17 @@ export default function AdminUsers() {
         role: newRole,
         extendDays: extendDays,
         isOfficial: isOfficial
+      });
+    }
+  };
+
+  const handleReassign = () => {
+    if (selectedUser && reassignEnvId) {
+      reassignMutation.mutate({
+        user_id: selectedUser.id,
+        environment_id: reassignEnvId,
+        group_id: reassignGroupId,
+        company_id: reassignCompanyId,
       });
     }
   };
@@ -189,7 +346,7 @@ export default function AdminUsers() {
         </Button>
       </div>
 
-      <div className="rounded-md border">
+      <div className="rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -197,6 +354,9 @@ export default function AdminUsers() {
               <TableHead>Email</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Role</TableHead>
+              <TableHead>Ambiente</TableHead>
+              <TableHead>Grupo</TableHead>
+              <TableHead>Empresa</TableHead>
               <TableHead>Trial Vence Em</TableHead>
               <TableHead>Criado Em</TableHead>
               <TableHead className="text-right">Ações</TableHead>
@@ -219,6 +379,15 @@ export default function AdminUsers() {
                     {user.role}
                   </Badge>
                 </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {user.environment_name || <span className="text-xs italic">—</span>}
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {user.group_name || <span className="text-xs italic">—</span>}
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {user.company_name || <span className="text-xs italic">—</span>}
+                </TableCell>
                 <TableCell>
                   {new Date(user.trial_ends_at).toLocaleDateString()}
                   {new Date(user.trial_ends_at) < new Date() && (
@@ -227,10 +396,10 @@ export default function AdminUsers() {
                 </TableCell>
                 <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
                 <TableCell className="text-right space-x-2">
-                  <Button variant="ghost" size="icon" onClick={() => handleOpenPromote(user)}>
+                  <Button variant="ghost" size="icon" onClick={() => handleOpenPromote(user)} title="Editar usuário">
                     <UserCheck className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600" onClick={() => handleDelete(user.id)}>
+                  <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600" onClick={() => handleDelete(user.id)} title="Excluir usuário">
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </TableCell>
@@ -240,8 +409,9 @@ export default function AdminUsers() {
         </Table>
       </div>
 
+      {/* Create User Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Novo Usuário</DialogTitle>
             <DialogDescription>
@@ -290,6 +460,33 @@ export default function AdminUsers() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Hierarchy Section */}
+            <div className="border-t pt-4 mt-2">
+              <Label className="text-sm font-semibold mb-3 block">Vincular a Hierarquia</Label>
+              <RadioGroup value={hierarchyMode} onValueChange={(val) => setHierarchyMode(val as "new" | "existing")} className="flex gap-4 mb-4">
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="new" id="mode-new" />
+                  <Label htmlFor="mode-new" className="cursor-pointer">Criar novo ambiente</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="existing" id="mode-existing" />
+                  <Label htmlFor="mode-existing" className="cursor-pointer">Vincular a existente</Label>
+                </div>
+              </RadioGroup>
+
+              {hierarchyMode === "existing" && token && (
+                <HierarchyCascadeSelects
+                  token={token}
+                  envId={createEnvId}
+                  groupId={createGroupId}
+                  companyId={createCompanyId}
+                  onEnvChange={setCreateEnvId}
+                  onGroupChange={setCreateGroupId}
+                  onCompanyChange={setCreateCompanyId}
+                />
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancelar</Button>
@@ -300,8 +497,9 @@ export default function AdminUsers() {
         </DialogContent>
       </Dialog>
 
+      {/* Edit User Dialog */}
       <Dialog open={promoteDialogOpen} onOpenChange={setPromoteDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Editar Usuário</DialogTitle>
             <DialogDescription>
@@ -310,9 +508,7 @@ export default function AdminUsers() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="role" className="text-right">
-                Role
-              </Label>
+              <Label htmlFor="role" className="text-right">Role</Label>
               <Select value={newRole} onValueChange={setNewRole}>
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Selecione..." />
@@ -324,9 +520,7 @@ export default function AdminUsers() {
               </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="extendDays" className="text-right">
-                Estender (dias)
-              </Label>
+              <Label htmlFor="extendDays" className="text-right">Estender (dias)</Label>
               <Input
                 id="extendDays"
                 type="number"
@@ -337,22 +531,56 @@ export default function AdminUsers() {
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="isOfficial" className="text-right">
-                Cliente Oficial
-              </Label>
+              <Label htmlFor="isOfficial" className="text-right">Cliente Oficial</Label>
               <div className="col-span-3 flex items-center space-x-2">
-                <Checkbox 
-                  id="isOfficial" 
+                <Checkbox
+                  id="isOfficial"
                   checked={isOfficial}
                   onCheckedChange={(checked) => setIsOfficial(checked as boolean)}
                 />
-                <label
-                  htmlFor="isOfficial"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
+                <label htmlFor="isOfficial" className="text-sm font-medium leading-none">
                   Definir como cliente permanente (Até 2099)
                 </label>
               </div>
+            </div>
+
+            {/* Hierarchy Section */}
+            <div className="border-t pt-4 mt-2">
+              <div className="flex items-center justify-between mb-3">
+                <Label className="text-sm font-semibold">Hierarquia Atual</Label>
+                <Button variant="outline" size="sm" onClick={() => setShowReassign(!showReassign)}>
+                  <ArrowRightLeft className="mr-2 h-3 w-3" />
+                  {showReassign ? "Cancelar" : "Alterar Hierarquia"}
+                </Button>
+              </div>
+              <div className="text-sm text-muted-foreground space-y-1 mb-3">
+                <div><Building2 className="inline h-3 w-3 mr-1" /> Ambiente: <strong>{selectedUser?.environment_name || "—"}</strong></div>
+                <div className="ml-4">Grupo: <strong>{selectedUser?.group_name || "—"}</strong></div>
+                <div className="ml-8">Empresa: <strong>{selectedUser?.company_name || "—"}</strong></div>
+              </div>
+
+              {showReassign && token && (
+                <div className="border rounded-md p-3 bg-muted/30">
+                  <Label className="text-sm font-medium mb-3 block">Nova Hierarquia</Label>
+                  <HierarchyCascadeSelects
+                    token={token}
+                    envId={reassignEnvId}
+                    groupId={reassignGroupId}
+                    companyId={reassignCompanyId}
+                    onEnvChange={setReassignEnvId}
+                    onGroupChange={setReassignGroupId}
+                    onCompanyChange={setReassignCompanyId}
+                  />
+                  <Button
+                    className="mt-3 w-full"
+                    size="sm"
+                    onClick={handleReassign}
+                    disabled={!reassignEnvId || reassignMutation.isPending}
+                  >
+                    {reassignMutation.isPending ? "Salvando..." : "Confirmar Nova Hierarquia"}
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
