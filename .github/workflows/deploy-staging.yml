@@ -86,16 +86,19 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.STAGING_SSH_KEY }}" > ~/.ssh/staging_key
+          chmod 600 ~/.ssh/staging_key
+          ssh-keyscan -H ${{ secrets.STAGING_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
       - name: Deploy to Azure STAGING via SSH
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.STAGING_HOST }}
-          username: ${{ secrets.STAGING_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
-          script: |
+        run: |
+          ssh -i ~/.ssh/staging_key -o StrictHostKeyChecking=no ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} << 'DEPLOY_SCRIPT'
             cd ~/fbtax
 
-            echo "🚀 Deploying ${{ steps.version.outputs.VERSION }} to STAGING..."
+            echo "🚀 Deploying to STAGING..."
 
             # Atualizar imagens do GHCR
             sudo docker compose pull
@@ -108,8 +111,7 @@ jobs:
             for i in {1..20}; do
               if curl -sf http://localhost/api/health > /dev/null 2>&1; then
                 echo "✅ Deploy STAGING concluído com sucesso!"
-                HEALTH=$(curl -s http://localhost/api/health)
-                echo "Health check response: $HEALTH"
+                curl -s http://localhost/api/health
                 exit 0
               fi
               echo "Tentativa $i/20..."
@@ -117,9 +119,9 @@ jobs:
             done
 
             echo "❌ Timeout no health check - Deploy falhou"
-            echo "📋 Últimos logs da API:"
             sudo docker compose logs api --tail 50
             exit 1
+          DEPLOY_SCRIPT
 
       - name: Notify Success
         if: success()
