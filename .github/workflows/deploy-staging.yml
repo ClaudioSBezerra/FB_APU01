@@ -10,7 +10,72 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # Build e Push das imagens para GHCR
+  build-images:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (API)
+        id: meta-api
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta-api.outputs.tags }}
+          labels: ${{ steps.meta-api.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Extract metadata (Web)
+        id: meta-web
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - name: Build and push Web image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta-web.outputs.tags }}
+          labels: ${{ steps.meta-web.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+  # Deploy no Azure STAGING
   deploy-to-staging:
+    needs: build-images
     runs-on: ubuntu-latest
 
     steps:
@@ -35,7 +100,7 @@ jobs:
             # Atualizar imagens do GHCR
             sudo docker compose pull
 
-            # Reiniciar serviços com zero downtime
+            # Reiniciar serviços
             sudo docker compose up -d
 
             # Aguardar health check
@@ -62,7 +127,6 @@ jobs:
           echo "🎉 STAGING Deploy Successful"
           echo "Versão: ${{ steps.version.outputs.VERSION }}"
           echo "URL: http://${{ secrets.STAGING_HOST }}"
-          echo "Dashboard: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
       - name: Notify Failure
         if: failure()
