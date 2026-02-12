@@ -68,9 +68,9 @@ type InsightResponse struct {
 func getApuracaoResumo(db *sql.DB, companyID, periodo string) (*ApuracaoResumo, error) {
 	resumo := &ApuracaoResumo{Periodo: periodo}
 
-	// Get company info
+	// Get company info (cnpj may not exist in all schemas)
 	err := db.QueryRow(`
-		SELECT COALESCE(c.name, ''), COALESCE(c.cnpj, '')
+		SELECT COALESCE(c.name, ''), COALESCE(c.trade_name, '')
 		FROM companies c WHERE c.id = $1
 	`, companyID).Scan(&resumo.CompanyName, &resumo.CNPJ)
 	if err != nil && err != sql.ErrNoRows {
