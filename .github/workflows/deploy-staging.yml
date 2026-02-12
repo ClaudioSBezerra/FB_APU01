@@ -83,33 +83,7 @@ jobs:
 
       - name: Deploy to Azure STAGING via SSH
         run: |
-          ssh -i ~/.ssh/staging_key -o StrictHostKeyChecking=no ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} << 'DEPLOY_SCRIPT'
-            cd ~/fbtax
-
-            echo "🚀 Deploying to STAGING..."
-
-            # Atualizar imagens do GHCR
-            sudo docker compose pull
-
-            # Reiniciar serviços com containers recriados
-            sudo docker compose up -d --force-recreate
-
-            # Aguardar health check
-            echo "⏳ Aguardando sistema iniciar..."
-            for i in {1..20}; do
-              if curl -sf http://localhost/api/health > /dev/null 2>&1; then
-                echo "✅ Deploy STAGING concluído com sucesso!"
-                curl -s http://localhost/api/health
-                exit 0
-              fi
-              echo "Tentativa $i/20..."
-              sleep 5
-            done
-
-            echo "❌ Timeout no health check - Deploy falhou"
-            sudo docker compose logs api --tail 50
-            exit 1
-          DEPLOY_SCRIPT
+          ssh -i ~/.ssh/staging_key -o StrictHostKeyChecking=no ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} 'cd ~/fbtax && sudo docker compose pull && sudo docker compose up -d --force-recreate && echo "Aguardando health check..." && for i in $(seq 1 20); do if curl -sf http://localhost/api/health > /dev/null 2>&1; then echo "Deploy OK!"; curl -s http://localhost/api/health; exit 0; fi; echo "Tentativa $i/20..."; sleep 5; done; echo "Deploy falhou!"; sudo docker compose logs api --tail 50; exit 1'
 
       - name: Notify Success
         if: success()
