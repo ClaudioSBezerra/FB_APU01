@@ -39,15 +39,47 @@ Este documento detalha os passos macro (Épicos) para levar o **FB_APU01** do am
 
 ---
 
-## 🔮 Épico 5: Migração do Sistema Completo (Lovable -> Go/React)
-**Objetivo:** Migrar as funcionalidades avançadas desenvolvidas no Lovable para nossa infraestrutura proprietária.
+## FASE 2 - Fundacao Multi-Tenant e Motor de Apuracao IBS/CBS
 
-- [ ] **Análise do Código Lovable**: Mapear componentes e fluxos.
-- [ ] **Migração do Frontend**:
-  - [ ] Dashboards analíticos.
-  - [ ] Telas de cadastro complexas.
-  - [ ] Relatórios fiscais.
-- [ ] **Expansão do Backend (Go)**:
-  - [ ] Novos endpoints para suportar features do Lovable.
-  - [ ] Otimização de queries para grandes volumes de dados.
-- [ ] **Integração**: Conectar novo Frontend ao Backend Go existente.
+> Documentacao completa em `_bmad-output/planning-artifacts/`
+
+### Epico 6: Multi-Tenancy Nativo
+
+**Objetivo:** Implementar isolamento de dados robusto com RLS no PostgreSQL, TenantContext automatico e planos comerciais por tenant.
+
+- [ ] **Tenant Context + JWT Expandido**: Middleware automatico com tenant_id no JWT
+- [ ] **Row-Level Security (RLS)**: Policies PostgreSQL para todas as tabelas de dados
+- [ ] **Desnormalizacao environment_id**: Coluna direta nas tabelas para RLS performatico
+- [ ] **Refatoracao de Handlers**: Migrar handlers para WithTenant() e TenantContext
+- [ ] **Planos Comerciais**: Controle de limites e features por tenant (trial/starter/pro/enterprise)
+- [ ] **Audit Log**: Registro de acesso cross-tenant e operacoes sensiveis
+
+**Documentacao:**
+
+- [PRD Multi-Tenancy](../_bmad-output/planning-artifacts/prd-multi-tenancy.md)
+- [Architecture Decision Record](../_bmad-output/planning-artifacts/architecture-multi-tenancy.md)
+- [Epic Breakdown (Stories)](../_bmad-output/planning-artifacts/epics-multi-tenancy.md)
+
+### Epico 7: Captura de Documentos Fiscais
+
+**Objetivo:** Sistema de captura automatizada de XMLs fiscais (NF-e, NFC-e, NFS-e, CT-e) de multiplas fontes.
+
+- [ ] **Canonical Model**: Modelo unificado para 4 tipos de documentos fiscais
+- [ ] **Connectors**: File system, Database APIs (Oracle, PostgreSQL, SAP), Blob storage
+- [ ] **Normalizacao NFS-e**: Tratamento dos schemas municipais heterogeneos
+
+### Epico 8: Motor de Apuracao IBS/CBS
+
+**Objetivo:** Implementar motor de regras para apuracao dos novos tributos da Reforma Tributaria.
+
+- [ ] **Rule Engine**: Motor de regras desacoplado do CRUD
+- [ ] **Conciliacao de Pagamentos**: NF-e/CT-e -> Pagamento -> Credito IBS/CBS
+- [ ] **Validacao de Creditos**: Elegibilidade, risk scoring, workflow de aprovacao
+
+### Epico 9: Migracao do Sistema Lovable
+
+**Objetivo:** Migrar funcionalidades avancadas do Lovable para infraestrutura proprietaria.
+
+- [ ] **Analise do Codigo Lovable**: Mapear componentes e fluxos
+- [ ] **Migracao do Frontend**: Dashboards, cadastros, relatorios fiscais
+- [ ] **Expansao do Backend (Go)**: Novos endpoints e otimizacao de queries
