@@ -320,6 +320,10 @@ func main() {
 	http.HandleFunc("/api/dashboard/projection", withAuth(handlers.GetDashboardProjectionHandler, ""))
 	http.HandleFunc("/api/dashboard/simples-nacional", withAuth(handlers.GetSimplesDashboardHandler, ""))
 
+	// AI-Powered Report Endpoints
+	http.HandleFunc("/api/reports/executive-summary", withAuth(handlers.GetExecutiveSummaryHandler, ""))
+	http.HandleFunc("/api/insights/daily", withAuth(handlers.GetDailyInsightHandler, ""))
+
 	// Register Upload Handler
 	http.HandleFunc("/api/upload", withAuth(handlers.UploadHandler, ""))
 

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { formatCurrency } from '@/lib/utils'; // Assuming this exists, otherwise I'll define it locally
+import { InsightCard } from '@/components/InsightCard';
 
 // Helper for currency if not available
 const formatMoney = (value: number) => {
@@ -78,6 +79,8 @@ export default function Dashboard() {
           Projeção de impacto tributário (2027-2033) baseada nas operações consolidadas.
         </p>
       </div>
+
+      <InsightCard />
 
       <div className="flex items-center gap-4">
         {/* Simple Month Selector (In a real app, fetch distinct months) */}

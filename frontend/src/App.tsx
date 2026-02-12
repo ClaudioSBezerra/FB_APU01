@@ -5,6 +5,7 @@ import ImportarEFD from './pages/ImportarEFD';
 import Mercadorias from './pages/Mercadorias';
 import OperacoesSimplesNacional from './pages/OperacoesSimplesNacional';
 import Dashboard from './pages/Dashboard';
+import ExecutiveSummary from './pages/ExecutiveSummary';
 import TabelaAliquotas from './pages/TabelaAliquotas';
 import TabelaCFOP from './pages/TabelaCFOP';
 import TabelaFornSimples from './pages/TabelaFornSimples';
@@ -95,6 +96,7 @@ function AppLayout() {
             <Route path="/mercadorias" element={<Mercadorias />} />
             <Route path="/operacoes/simples" element={<OperacoesSimplesNacional />} />
             <Route path="/dashboards" element={<Dashboard />} />
+            <Route path="/relatorios/resumo-executivo" element={<ExecutiveSummary />} />
             
             {/* Configurações */}
             <Route path="/config/aliquotas" element={<TabelaAliquotas />} />

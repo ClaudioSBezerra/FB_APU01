@@ -14,7 +14,8 @@ import {
   ChevronRight,
   Database,
   LogOut,
-  Store
+  Store,
+  Sparkles
 } from "lucide-react"
 import {
   Sidebar,
@@ -61,6 +62,7 @@ const menuItems = [
       { title: "Operações Comerciais", url: "/mercadorias?tab=comercial", icon: ShoppingCart },
       { title: "Operações Simples Nacional", url: "/operacoes/simples", icon: Store },
       { title: "Dashboard Reforma", url: "/dashboards", icon: LayoutDashboard },
+      { title: "Resumo Executivo IA", url: "/relatorios/resumo-executivo", icon: Sparkles },
     ]
   },
   {
