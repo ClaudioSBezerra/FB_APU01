@@ -122,13 +122,37 @@ func onDBConnected() {
 	if err != nil {
 		log.Printf("Error finding migration files: %v", err)
 	} else {
-		// Ensure schema_migrations table exists
-		_, err = database.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
-			filename VARCHAR(255) PRIMARY KEY,
-			executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		)`)
-		if err != nil {
-			log.Printf("Warning: Failed to ensure schema_migrations table exists: %v", err)
+		// Ensure schema_migrations table exists with correct column name
+		var tableExists bool
+		_ = database.QueryRow(`SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='schema_migrations')`).Scan(&tableExists)
+
+		if !tableExists {
+			_, err = database.Exec(`CREATE TABLE schema_migrations (
+				filename VARCHAR(255) PRIMARY KEY,
+				executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+			)`)
+			if err != nil {
+				log.Printf("Warning: Failed to create schema_migrations table: %v", err)
+			}
+		} else {
+			// Table exists — ensure it has a 'filename' column (legacy DBs may use 'version' or other names)
+			var hasFilename bool
+			_ = database.QueryRow(`SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='schema_migrations' AND column_name='filename')`).Scan(&hasFilename)
+			if !hasFilename {
+				// Find the first varchar/text column and rename it to 'filename'
+				var oldCol string
+				_ = database.QueryRow(`SELECT column_name FROM information_schema.columns WHERE table_name='schema_migrations' AND data_type IN ('character varying','text') ORDER BY ordinal_position LIMIT 1`).Scan(&oldCol)
+				if oldCol != "" {
+					log.Printf("Renaming schema_migrations column '%s' → 'filename'", oldCol)
+					database.Exec(fmt.Sprintf(`ALTER TABLE schema_migrations RENAME COLUMN %s TO filename`, oldCol))
+				}
+				// Ensure executed_at exists
+				var hasExec bool
+				_ = database.QueryRow(`SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='schema_migrations' AND column_name='executed_at')`).Scan(&hasExec)
+				if !hasExec {
+					database.Exec(`ALTER TABLE schema_migrations ADD COLUMN executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`)
+				}
+			}
 		}
 
 		if len(files) == 0 {
