@@ -31,14 +31,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (API)
-        id: meta-api
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest
+      - name: Extract version from tag
+        id: tag-version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Build and push API image
         uses: docker/build-push-action@v5
@@ -46,20 +41,12 @@ jobs:
           context: .
           file: ./backend/Dockerfile
           push: true
-          tags: ${{ steps.meta-api.outputs.tags }}
-          labels: ${{ steps.meta-api.outputs.labels }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api:${{ steps.tag-version.outputs.VERSION }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
-
-      - name: Extract metadata (Web)
-        id: meta-web
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest
 
       - name: Build and push Web image
         uses: docker/build-push-action@v5
@@ -67,8 +54,9 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile
           push: true
-          tags: ${{ steps.meta-web.outputs.tags }}
-          labels: ${{ steps.meta-web.outputs.labels }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web:${{ steps.tag-version.outputs.VERSION }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
@@ -103,8 +91,8 @@ jobs:
             # Atualizar imagens do GHCR
             sudo docker compose pull
 
-            # Reiniciar serviços
-            sudo docker compose up -d
+            # Reiniciar serviços com containers recriados
+            sudo docker compose up -d --force-recreate
 
             # Aguardar health check
             echo "⏳ Aguardando sistema iniciar..."
