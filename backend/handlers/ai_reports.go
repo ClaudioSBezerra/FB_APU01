@@ -281,8 +281,41 @@ func GetExecutiveSummaryHandler(db *sql.DB) http.HandlerFunc {
 			periodo = fmt.Sprintf("%02d/%04d", now.Month(), now.Year())
 		}
 
+		// Check if we already have a saved report for this company/period (to save tokens)
+		var savedNarrativa string
+		var savedModel string
+		var resumo *ApuracaoResumo
+
+		errCache := db.QueryRow(`
+			SELECT resumo, 'cached' as model
+			FROM ai_reports
+			WHERE company_id = $1 AND periodo = $2
+			ORDER BY created_at DESC
+			LIMIT 1
+		`, companyID, periodo).Scan(&savedNarrativa, &savedModel)
+
+		// If found saved report, aggregate data and return cached version
+		if errCache == nil && savedNarrativa != "" {
+			resumo, err = getApuracaoResumo(db, companyID, periodo)
+			if err != nil {
+				http.Error(w, "Error aggregating data: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			response := ExecutiveSummaryResponse{
+				Narrativa: savedNarrativa,
+				Dados:     resumo,
+				Periodo:   periodo,
+				Model:     savedModel,
+				Cached:    true,
+			}
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		// No saved report found - generate new one
 		// Aggregate data
-		resumo, err := getApuracaoResumo(db, companyID, periodo)
+		resumo, err = getApuracaoResumo(db, companyID, periodo)
 		if err != nil {
 			http.Error(w, "Error aggregating data: "+err.Error(), http.StatusInternalServerError)
 			return

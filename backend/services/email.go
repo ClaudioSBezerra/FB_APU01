@@ -199,49 +199,38 @@ func SendAIReportEmail(recipients []string, companyName, periodo, narrativaMarkd
 	// Use APP_URL env var for dashboard link
 	appURL := os.Getenv("APP_URL")
 	if appURL == "" {
-		appURL = "https://fbtax.cloud"
+		appURL = "http://localhost:3000"
 	}
 
 	// Convert markdown to simple HTML for email
-	// This is a simple conversion - for production, consider using a proper markdown library
 	narrativaHTML := convertMarkdownToHTML(narrativaMarkdown)
 
-	message := fmt.Sprintf("From: %s\r\nBCC: %s\r\nSubject: FBTax Cloud - =?UTF-8?B?UmVzdW1vIEV4ZWN1dGl2byBJQSAtIA==?= %s - %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n",
-		`<!DOCTYPE html>
+	// Send individual emails to each recipient (same pattern as password reset)
+	for _, email := range recipients {
+		message := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: FBTax Cloud - Resumo Executivo - %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n"+
+			`<!DOCTYPE html>
 <html>
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<style>
-		body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 700px; margin: 0 auto; background-color: #f8f9fa; }
-		.container { background-color: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-		.header { background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); color: white; padding: 30px; border-radius: 8px 8px 0 0; text-align: center; }
-		.logo { font-size: 26px; font-weight: bold; margin-bottom: 10px; }
-		.subtitle { font-size: 14px; opacity: 0.9; }
-		.content { padding: 30px 20px; }
-		h1 { color: #2c3e50; margin-bottom: 20px; font-size: 24px; }
-		h2 { color: #495057; margin-top: 25px; margin-bottom: 15px; font-size: 20px; border-bottom: 2px solid #667eea; padding-bottom: 8px; }
-		h3 { color: #6c757d; margin-top: 20px; margin-bottom: 10px; font-size: 16px; }
-		p { margin: 0 0 15px 0; color: #495057; line-height: 1.8; }
-		ul, ol { margin: 10px 0; padding-left: 25px; color: #495057; }
-		li { margin: 8px 0; line-height: 1.6; }
-		strong { color: #2c3e50; font-weight: 600; }
-		.info-box { background-color: #e7f3ff; border-left: 4px solid #2196f3; padding: 15px; margin: 20px 0; border-radius: 4px; }
-		.alert-box { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px; }
-		.success-box { background-color: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0; border-radius: 4px; }
-		.footer { background: #f8f9fa; padding: 25px; border-radius: 0 0 8px 8px; color: #6c757d; font-size: 13px; text-align: center; border-top: 1px solid #dee2e6; }
-		.button { display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); color: white; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0; }
-		.button:hover { opacity: 0.9; }
-		.badge { display: inline-block; background-color: #667eea; color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
-		.divider { height: 1px; background-color: #dee2e6; margin: 30px 0; }
-		.code-block { background-color: #f8f9fa; padding: 15px; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 13px; overflow-x: auto; margin: 15px 0; }
+		body { font-family: Arial, sans-serif; line-height: 1.6; color: #333333; max-width: 600px; margin: 0 auto; }
+		.container { background-color: #f4f4f8; padding: 40px; border-radius: 8px; }
+		.header { background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); color: white; padding: 20px; border-radius: 8px; text-align: center; }
+		.logo { font-size: 24px; font-weight: bold; }
+		.content { background: white; padding: 30px; border-radius: 8px; margin-top: 20px; }
+		h2 { color: #333; margin-bottom: 20px; }
+		p { margin: 0 0 15px 0; color: #666; line-height: 1.8; }
+		.info-box { background-color: #e7f3ff; border-left: 4px solid #2196f3; padding: 15px; margin: 20px 0; }
+		.button { display: inline-block; padding: 12px 24px; background: #2c3e50; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 20px 0; }
+		.footer { background: #f8f9fa; padding: 20px; border-radius: 8px; color: #666; font-size: 12px; margin-top: 20px; }
 	</style>
 </head>
 <body>
 	<div class="container">
 		<div class="header">
 			<div class="logo">FBTax Cloud</div>
-			<div class="subtitle">Relatorio Executivo com Inteligencia Artificial</div>
+			<h2 style="color: white; margin-top: 10px;">Resumo Executivo - %s</h2>
 		</div>
 		<div class="content">
 			<div class="info-box">
@@ -249,49 +238,38 @@ func SendAIReportEmail(recipients []string, companyName, periodo, narrativaMarkd
 				<strong>Periodo:</strong> %s<br>
 				<strong>Gerado em:</strong> %s
 			</div>
-
-			<h2 style="margin-top: 30px;">Resumo Executivo IA</h2>
 			%s
-
-			<div class="divider"></div>
-
-			<h3>Acesse o FBTax Cloud</h3>
-			<p>Para ver mais detalhes, graficos interativos e outros relatorios, acesse o sistema:</p>
-			<div style="text-align: center;">
-				<a href="%s" class="button">Acessar Painel</a>
-			</div>
-
-			<div class="alert-box" style="margin-top: 30px;">
-				<strong>Observacao:</strong> Este relatorio foi gerado automaticamente pelo sistema de IA (Claude) apos a importacao dos arquivos SPED. Os dados sao baseados nas informacoes fiscais disponiveis no periodo.
+			<div style="text-align: center; margin: 30px 0;">
+				<a href="%s" class="button">Acessar Painel Completo</a>
 			</div>
 		</div>
 		<div class="footer">
-			<p>&copy; 2026 FBTax Cloud - Sistema de Apuracao Fiscal com IA</p>
-			<p style="margin: 5px 0 0 0; font-size: 11px;">Este e-mail foi enviado automaticamente. Nao responda.</p>
+			<p>&copy; 2026 FBTax Cloud - Todos os direitos reservados</p>
 		</div>
 	</div>
 </body>
 </html>
-`, config.From, strings.Join(recipients, ","), companyName, periodo,
-		companyName, periodo, getTimeBrasil(), narrativaHTML, appURL)
+`, config.From, email, periodo, periodo, companyName, periodo, getTimeBrasil(), narrativaHTML, appURL)
 
-	log.Printf("[Email Service] Sending AI report email to %d recipients via %s:%d", len(recipients), config.Host, config.Port)
+		log.Printf("[Email Service] Sending AI report email to %s via %s:%d", email, config.Host, config.Port)
 
-	var err error
-	if config.Port == 465 {
-		err = sendMailSSL(config, recipients, []byte(message))
-	} else {
-		addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
-		auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
-		err = smtp.SendMail(addr, auth, config.Username, recipients, []byte(message))
+		var err error
+		if config.Port == 465 {
+			err = sendMailSSL(config, []string{email}, []byte(message))
+		} else {
+			addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
+			auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
+			err = smtp.SendMail(addr, auth, config.Username, []string{email}, []byte(message))
+		}
+
+		if err != nil {
+			log.Printf("[Email Service] Failed to send AI report email to %s: %v", email, err)
+			return fmt.Errorf("falha ao enviar e-mail de relatorio IA: %w", err)
+		}
+
+		log.Printf("[Email Service] AI report email sent successfully to %s", email)
 	}
 
-	if err != nil {
-		log.Printf("[Email Service] Failed to send AI report email: %v", err)
-		return fmt.Errorf("falha ao enviar e-mail de relatorio IA: %w", err)
-	}
-
-	log.Printf("[Email Service] AI report email sent successfully to %d recipients", len(recipients))
 	return nil
 }
 
