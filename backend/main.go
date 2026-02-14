@@ -348,6 +348,10 @@ func main() {
 	http.HandleFunc("/api/reports/executive-summary", withAuth(handlers.GetExecutiveSummaryHandler, ""))
 	http.HandleFunc("/api/insights/daily", withAuth(handlers.GetDailyInsightHandler, ""))
 
+	// Saved AI Reports
+	http.HandleFunc("/api/reports", withAuth(handlers.ListSavedAIReportsHandler, ""))
+	http.HandleFunc("/api/reports/", withAuth(handlers.GetSavedAIReportHandler, ""))
+
 	// Register Upload Handler
 	http.HandleFunc("/api/upload", withAuth(handlers.UploadHandler, ""))
 
@@ -466,6 +470,26 @@ func main() {
 			}
 		}
 	}, ""))
+
+	// Managers Endpoints (Gestores para relatorios IA)
+	http.HandleFunc("/api/managers", withAuth(handlers.ListManagersHandler, ""))
+	http.HandleFunc("/api/managers/create", withAuth(handlers.CreateManagerHandler, ""))
+	http.HandleFunc("/api/managers/", func(w http.ResponseWriter, r *http.Request) {
+		database := getDB()
+		if database == nil {
+			http.Error(w, "Database initializing...", http.StatusServiceUnavailable)
+			return
+		}
+		// Route to update or delete based on HTTP method
+		switch r.Method {
+		case http.MethodPut, http.MethodPatch:
+			handlers.AuthMiddleware(handlers.UpdateManagerHandler(database), "")(w, r)
+		case http.MethodDelete:
+			handlers.AuthMiddleware(handlers.DeleteManagerHandler(database), "")(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 
 	fmt.Printf("FB_APU01 Fiscal Engine (Go) starting on port %s...\n", port)
 

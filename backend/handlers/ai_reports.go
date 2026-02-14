@@ -485,3 +485,114 @@ func formatBRL(value float64) string {
 	}
 	return result
 }
+
+// SavedAIReport represents a saved AI-generated report from database
+type SavedAIReport struct {
+	ID                   string    `json:"id"`
+	CompanyID            string    `json:"company_id"`
+	JobID                *string   `json:"job_id,omitempty"`
+	Periodo              string    `json:"periodo"`
+	Titulo               string    `json:"titulo"`
+	Resumo               string    `json:"resumo"`
+	GeradoAutomaticamente bool      `json:"gerado_automaticamente"`
+	CreatedAt            time.Time `json:"created_at"`
+}
+
+// ListSavedAIReportsHandler returns all saved AI reports for a company
+func ListSavedAIReportsHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+
+		companyID, err := GetEffectiveCompanyID(db, userID, r.Header.Get("X-Company-ID"))
+		if err != nil {
+			http.Error(w, "Error getting company: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		rows, err := db.Query(`
+			SELECT id, company_id, job_id, periodo, titulo, resumo, gerado_automaticamente, created_at
+			FROM ai_reports
+			WHERE company_id = $1
+			ORDER BY created_at DESC
+			LIMIT 50
+		`, companyID)
+		if err != nil {
+			http.Error(w, "Error querying AI reports: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		var reports []SavedAIReport
+		for rows.Next() {
+			var r SavedAIReport
+			if err := rows.Scan(&r.ID, &r.CompanyID, &r.JobID, &r.Periodo, &r.Titulo, &r.Resumo, &r.GeradoAutomaticamente, &r.CreatedAt); err != nil {
+				http.Error(w, "Error scanning AI report: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			reports = append(reports, r)
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"reports": reports,
+			"count":   len(reports),
+		})
+	}
+}
+
+// GetSavedAIReportHandler returns a single saved AI report by ID
+func GetSavedAIReportHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+
+		companyID, err := GetEffectiveCompanyID(db, userID, r.Header.Get("X-Company-ID"))
+		if err != nil {
+			http.Error(w, "Error getting company: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Extract report ID from URL path
+		path := r.URL.Path
+		reportID := ""
+		if len(path) > len("/api/reports/") {
+			reportID = path[len("/api/reports/"):]
+		}
+		if reportID == "" {
+			http.Error(w, "Invalid report ID", http.StatusBadRequest)
+			return
+		}
+
+		// Get report
+		var report SavedAIReport
+		err = db.QueryRow(`
+			SELECT id, company_id, job_id, periodo, titulo, resumo, gerado_automaticamente, created_at
+			FROM ai_reports
+			WHERE id = $1 AND company_id = $2
+		`, reportID, companyID).Scan(&report.ID, &report.CompanyID, &report.JobID, &report.Periodo, &report.Titulo, &report.Resumo, &report.GeradoAutomaticamente, &report.CreatedAt)
+		if err == sql.ErrNoRows {
+			http.Error(w, "Report not found", http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			http.Error(w, "Error getting AI report: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		json.NewEncoder(w).Encode(report)
+	}
+}

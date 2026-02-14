@@ -173,6 +173,19 @@ func processNextJob(db *sql.DB, workerID int) {
 			}
 
 			fmt.Printf("Worker #%d: All views refreshed in %v.\n", workerID, time.Since(start))
+
+			// Trigger AI Report Generation for last job
+			// Get job metadata for AI report
+			var companyID, mesAno string
+			err = db.QueryRow("SELECT company_id, mes_ano FROM import_jobs WHERE id = $1", id).Scan(&companyID, &mesAno)
+			if err == nil && companyID != "" && mesAno != "" {
+				fmt.Printf("Worker #%d: Triggering AI report generation for company %s, period %s\n", workerID, companyID, mesAno)
+				if err := TriggerAIReportGeneration(db, companyID, mesAno, id); err != nil {
+					fmt.Printf("Worker #%d: AI report generation warning: %v\n", workerID, err)
+				}
+			} else if err != nil {
+				fmt.Printf("Worker #%d: Could not get job metadata for AI report: %v\n", workerID, err)
+			}
 		}
 	}
 }
@@ -635,8 +648,15 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 				// Sanitize CNPJ (remove ., /, -) to fit VARCHAR(14)
 				filialCNPJ = strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(parts[7], ".", ""), "/", ""), "-", "")
 				count0000++
+
+				// Extract mes_ano (periodo) from dt_ini (format: DDMMYYYY -> MM/YYYY)
+				var mesAno string
+				if len(dtIni) == 8 {
+					mesAno = dtIni[2:4] + "/" + dtIni[4:8] // MM/YYYY
+				}
+
 				// Update job metadata immediately (outside tx for visibility)
-				db.Exec("UPDATE import_jobs SET company_name=$1, cnpj=$2, dt_ini=$3, dt_fin=$4 WHERE id=$5", company, filialCNPJ, parseDate(dtIni), parseDate(dtFin), jobID)
+				db.Exec("UPDATE import_jobs SET company_name=$1, cnpj=$2, dt_ini=$3, dt_fin=$4, mes_ano=$5 WHERE id=$6", company, filialCNPJ, parseDate(dtIni), parseDate(dtFin), mesAno, jobID)
 
 				if len(dtIni) == 8 {
 					year, _ := strconv.Atoi(dtIni[4:8])

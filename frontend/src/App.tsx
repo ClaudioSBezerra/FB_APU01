@@ -10,6 +10,7 @@ import TabelaAliquotas from './pages/TabelaAliquotas';
 import TabelaCFOP from './pages/TabelaCFOP';
 import TabelaFornSimples from './pages/TabelaFornSimples';
 import GestaoAmbiente from './pages/GestaoAmbiente';
+import Managers from './pages/Managers';
 import AdminUsers from './pages/AdminUsers';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -102,6 +103,7 @@ function AppLayout() {
             <Route path="/config/aliquotas" element={<TabelaAliquotas />} />
             <Route path="/config/cfop" element={<TabelaCFOP />} />
             <Route path="/config/forn-simples" element={<TabelaFornSimples />} />
+            <Route path="/config/gestores" element={<Managers />} />
             
             {/* Admin Routes */}
             <Route path="/config/usuarios" element={

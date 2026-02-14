@@ -50,6 +50,7 @@ const menuItems = [
       { title: "Tabela CFOP", url: "/config/cfop", icon: Table },
       { title: "Simples Nacional", url: "/config/forn-simples", icon: Users },
       { title: "Gestão de Usuários", url: "/config/usuarios", icon: Users, adminOnly: true },
+      { title: "Gestores de Relatórios", url: "/config/gestores", icon: Users },
       { title: "Gestão de Ambiente", url: "/config/ambiente", icon: Building },
     ]
   },
