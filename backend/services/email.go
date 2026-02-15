@@ -205,10 +205,26 @@ func SendAIReportEmail(recipients []string, companyName, periodo, narrativaMarkd
 	// Convert markdown to simple HTML for email
 	narrativaHTML := convertMarkdownToHTML(narrativaMarkdown)
 
+	// Keep markdown for plain text version (strip HTML tags)
+	narrativaPlain := stripHTMLTags(narrativaHTML)
+
 	// Send individual emails to each recipient (same pattern as password reset)
 	for _, email := range recipients {
-		message := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: FBTax Cloud - Resumo Executivo - %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n"+
-			`<!DOCTYPE html>
+		// Generate unique boundary for multipart
+		boundary := fmt.Sprintf("boundary_%d", time.Now().Unix())
+
+		// Build multipart message (HTML + Plain Text for better corporate email acceptance)
+		message := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: FBTax Cloud - Resumo Executivo - %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", config.From, email, periodo, boundary)
+
+		// Plain text version (for corporate spam filters and text-only clients)
+		message += fmt.Sprintf("--%s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n", boundary)
+		message += fmt.Sprintf("FBTax Cloud - Resumo Executivo\n\nEmpresa: %s\nPeriodo: %s\nGerado em: %s\n\n%s\n\nAcesse o painel completo: %s\n\n---\n(c) 2026 FBTax Cloud - Todos os direitos reservados\n",
+			companyName, periodo, getTimeBrasil(), narrativaPlain, appURL)
+		message += fmt.Sprintf("\r\n--%s\r\n", boundary)
+
+		// HTML version (for rich display)
+		message += "Content-Type: text/html; charset=UTF-8\r\n\r\n"
+		message += fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
 	<meta charset="UTF-8">
@@ -216,7 +232,7 @@ func SendAIReportEmail(recipients []string, companyName, periodo, narrativaMarkd
 	<style>
 		body { font-family: Arial, sans-serif; line-height: 1.6; color: #333333; max-width: 600px; margin: 0 auto; }
 		.container { background-color: #f4f4f8; padding: 40px; border-radius: 8px; }
-		.header { background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); color: white; padding: 20px; border-radius: 8px; text-align: center; }
+		.header { background: #4a5568; color: white; padding: 20px; border-radius: 8px; text-align: center; }
 		.logo { font-size: 24px; font-weight: bold; }
 		.content { background: white; padding: 30px; border-radius: 8px; margin-top: 20px; }
 		h2 { color: #333; margin-bottom: 20px; }
@@ -248,8 +264,8 @@ func SendAIReportEmail(recipients []string, companyName, periodo, narrativaMarkd
 		</div>
 	</div>
 </body>
-</html>
-`, config.From, email, periodo, periodo, companyName, periodo, getTimeBrasil(), narrativaHTML, appURL)
+</html>`, periodo, companyName, periodo, getTimeBrasil(), narrativaHTML, appURL)
+		message += fmt.Sprintf("\r\n--%s--\r\n", boundary)
 
 		log.Printf("[Email Service] Sending AI report email to %s via %s:%d", email, config.Host, config.Port)
 
@@ -274,6 +290,32 @@ func SendAIReportEmail(recipients []string, companyName, periodo, narrativaMarkd
 }
 
 // convertMarkdownToHTML converts basic markdown to HTML for email rendering
+// stripHTMLTags removes HTML tags for plain text email version
+func stripHTMLTags(html string) string {
+	// Simple HTML tag removal for plain text version
+	result := html
+	result = strings.ReplaceAll(result, "<p>", "")
+	result = strings.ReplaceAll(result, "</p>", "\n")
+	result = strings.ReplaceAll(result, "<br>", "\n")
+	result = strings.ReplaceAll(result, "<br/>", "\n")
+	result = strings.ReplaceAll(result, "<br />", "\n")
+	result = strings.ReplaceAll(result, "<h2>", "\n\n")
+	result = strings.ReplaceAll(result, "</h2>", "\n")
+	result = strings.ReplaceAll(result, "<h3>", "\n")
+	result = strings.ReplaceAll(result, "</h3>", "\n")
+	result = strings.ReplaceAll(result, "<strong>", "")
+	result = strings.ReplaceAll(result, "</strong>", "")
+	result = strings.ReplaceAll(result, "<em>", "")
+	result = strings.ReplaceAll(result, "</em>", "")
+	result = strings.ReplaceAll(result, "<ul>", "\n")
+	result = strings.ReplaceAll(result, "</ul>", "\n")
+	result = strings.ReplaceAll(result, "<ol>", "\n")
+	result = strings.ReplaceAll(result, "</ol>", "\n")
+	result = strings.ReplaceAll(result, "<li>", "  - ")
+	result = strings.ReplaceAll(result, "</li>", "\n")
+	return result
+}
+
 func convertMarkdownToHTML(markdown string) string {
 	// Simple markdown to HTML conversion
 	// For production, consider using a proper markdown library like github.com/gomarkdown/markdown
