@@ -345,7 +345,20 @@ func GetExecutiveSummaryHandler(db *sql.DB) http.HandlerFunc {
 		aiResp, err := aiClient.Generate(executiveSummarySystem, dataPrompt, services.ModelFlash, 2048)
 		if err != nil {
 			fmt.Printf("AI generation error (falling back): %v\n", err)
-			response.Narrativa = buildFallbackNarrative(resumo)
+			// Re-check cache — worker may have saved a report while we were waiting
+			var workerNarrativa string
+			errRecheck := db.QueryRow(`
+				SELECT resumo FROM ai_reports
+				WHERE company_id = $1 AND periodo = $2
+				ORDER BY created_at DESC LIMIT 1
+			`, companyID, periodo).Scan(&workerNarrativa)
+			if errRecheck == nil && workerNarrativa != "" {
+				response.Narrativa = workerNarrativa
+				response.Model = "cached"
+				response.Cached = true
+			} else {
+				response.Narrativa = buildFallbackNarrative(resumo)
+			}
 			json.NewEncoder(w).Encode(response)
 			return
 		}
@@ -448,7 +461,7 @@ func buildFallbackNarrative(r *ApuracaoResumo) string {
 		sb.WriteString(fmt.Sprintf("**Comparativo com %s:** %s de %.1f%% no faturamento.\n\n", r.PeriodoAnterior, direcao, math.Abs(varFat)))
 	}
 
-	sb.WriteString("*Relatorio gerado sem IA (ZAI_API_KEY nao configurada). Configure a chave para relatorios com narrativa inteligente.*")
+	sb.WriteString("*Relatorio gerado com dados fiscais. A narrativa com IA sera incluida automaticamente quando disponivel.*")
 	return sb.String()
 }
 
