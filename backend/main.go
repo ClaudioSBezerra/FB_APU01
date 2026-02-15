@@ -135,35 +135,41 @@ func onDBConnected() {
 				log.Printf("Warning: Failed to create schema_migrations table: %v", err)
 			}
 		} else {
-			// Table exists — ensure it has a 'filename' column (legacy DBs may use 'version' or other names)
+			// Table exists — ensure 'filename' column exists with correct type
 			var hasFilename bool
 			_ = database.QueryRow(`SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='schema_migrations' AND column_name='filename')`).Scan(&hasFilename)
 			if !hasFilename {
-				// Find the first varchar/text column and rename it to 'filename'
+				// Find the first column and rename it to 'filename'
 				var oldCol string
-				_ = database.QueryRow(`SELECT column_name FROM information_schema.columns WHERE table_name='schema_migrations' AND data_type IN ('character varying','text','integer') ORDER BY ordinal_position LIMIT 1`).Scan(&oldCol)
+				_ = database.QueryRow(`SELECT column_name FROM information_schema.columns WHERE table_name='schema_migrations' ORDER BY ordinal_position LIMIT 1`).Scan(&oldCol)
 				if oldCol != "" {
-					log.Printf("Attempting to rename schema_migrations column '%s' → 'filename'", oldCol)
+					log.Printf("Renaming schema_migrations column '%s' → 'filename'", oldCol)
 					_, renameErr := database.Exec(fmt.Sprintf(`ALTER TABLE schema_migrations RENAME COLUMN %s TO filename`, oldCol))
 					if renameErr != nil {
-						log.Printf("ERROR: Failed to rename column: %v", renameErr)
-						log.Printf("CRITICAL: Please manually fix schema_migrations table structure")
-						log.Printf("Run: ALTER TABLE schema_migrations RENAME COLUMN %s TO filename;", oldCol)
-						// Skip migrations to avoid errors
-						log.Println("Skipping migrations due to schema_migrations structure issue")
-						return
+						log.Printf("ERROR: Failed to rename column: %v. Recreating table.", renameErr)
 					}
-					log.Printf("Successfully renamed column '%s' → 'filename'", oldCol)
 				}
+			}
+
+			// Ensure 'filename' column is VARCHAR (legacy DBs may have integer type)
+			var colType string
+			_ = database.QueryRow(`SELECT data_type FROM information_schema.columns WHERE table_name='schema_migrations' AND column_name='filename'`).Scan(&colType)
+			if colType != "" && colType != "character varying" && colType != "text" {
+				log.Printf("schema_migrations.filename is type '%s', converting to VARCHAR(255)", colType)
+				// Drop and recreate — old integer data is not useful
+				_, _ = database.Exec(`DROP TABLE schema_migrations`)
+				_, _ = database.Exec(`CREATE TABLE schema_migrations (
+					filename VARCHAR(255) PRIMARY KEY,
+					executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+				)`)
+				log.Println("schema_migrations table recreated with correct schema")
+			} else {
 				// Ensure executed_at exists
 				var hasExec bool
 				_ = database.QueryRow(`SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='schema_migrations' AND column_name='executed_at')`).Scan(&hasExec)
 				if !hasExec {
 					log.Println("Adding executed_at column to schema_migrations")
-					_, execErr := database.Exec(`ALTER TABLE schema_migrations ADD COLUMN executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`)
-					if execErr != nil {
-						log.Printf("Warning: Failed to add executed_at column: %v", execErr)
-					}
+					_, _ = database.Exec(`ALTER TABLE schema_migrations ADD COLUMN executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`)
 				}
 			}
 		}
