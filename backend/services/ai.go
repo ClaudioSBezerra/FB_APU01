@@ -10,42 +10,43 @@ import (
 	"time"
 )
 
-// Claude API Models
+// Z.AI GLM Models
 const (
-	ModelHaiku  = "claude-haiku-4-5-20251001"
-	ModelSonnet = "claude-sonnet-4-5-20250929"
+	ModelFlash = "glm-4.7-flash" // Free tier - fast and cost-effective
+	ModelAir   = "glm-4.5-air"   // Mid-tier - higher quality
 )
 
-// AIClient wraps communication with the Anthropic Claude API.
+// AIClient wraps communication with the Z.AI GLM API (OpenAI-compatible).
 type AIClient struct {
 	apiKey     string
 	httpClient *http.Client
 	baseURL    string
 }
 
-// Claude API request/response types
-type claudeRequest struct {
-	Model     string           `json:"model"`
-	MaxTokens int              `json:"max_tokens"`
-	Messages  []claudeMessage  `json:"messages"`
-	System    string           `json:"system,omitempty"`
+// OpenAI-compatible request/response types (used by Z.AI)
+type chatRequest struct {
+	Model     string        `json:"model"`
+	MaxTokens int           `json:"max_tokens"`
+	Messages  []chatMessage `json:"messages"`
 }
 
-type claudeMessage struct {
+type chatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-type claudeResponse struct {
-	Content []struct {
-		Text string `json:"text"`
-	} `json:"content"`
+type chatResponse struct {
+	Choices []struct {
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+	} `json:"choices"`
 	Usage struct {
-		InputTokens  int `json:"input_tokens"`
-		OutputTokens int `json:"output_tokens"`
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
 	} `json:"usage"`
 	Error *struct {
-		Type    string `json:"type"`
+		Code    string `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
 }
@@ -60,39 +61,44 @@ type AIResponse struct {
 
 // NewAIClient creates an AIClient from environment config.
 func NewAIClient() *AIClient {
-	apiKey := os.Getenv("ANTHROPIC_API_KEY")
+	apiKey := os.Getenv("ZAI_API_KEY")
 	if apiKey == "" {
 		return nil
 	}
 	return &AIClient{
 		apiKey: apiKey,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 60 * time.Second,
 		},
-		baseURL: "https://api.anthropic.com/v1/messages",
+		baseURL: "https://api.z.ai/api/paas/v4/chat/completions",
 	}
 }
 
-// Generate sends a prompt to Claude and returns the narrative text.
+// Generate sends a prompt to Z.AI GLM and returns the narrative text.
 // Uses retry with exponential backoff (max 3 attempts).
 func (c *AIClient) Generate(system, userPrompt, model string, maxTokens int) (*AIResponse, error) {
 	if c == nil {
-		return nil, fmt.Errorf("AI client not configured (ANTHROPIC_API_KEY not set)")
+		return nil, fmt.Errorf("AI client not configured (ZAI_API_KEY not set)")
 	}
 	if model == "" {
-		model = ModelHaiku
+		model = ModelFlash
 	}
 	if maxTokens == 0 {
 		maxTokens = 2048
 	}
 
-	reqBody := claudeRequest{
+	// OpenAI-compatible format: system prompt goes as a message with role "system"
+	messages := []chatMessage{
+		{Role: "user", Content: userPrompt},
+	}
+	if system != "" {
+		messages = append([]chatMessage{{Role: "system", Content: system}}, messages...)
+	}
+
+	reqBody := chatRequest{
 		Model:     model,
 		MaxTokens: maxTokens,
-		System:    system,
-		Messages: []claudeMessage{
-			{Role: "user", Content: userPrompt},
-		},
+		Messages:  messages,
 	}
 
 	var lastErr error
@@ -110,7 +116,7 @@ func (c *AIClient) Generate(system, userPrompt, model string, maxTokens int) (*A
 	return nil, fmt.Errorf("AI API failed after 3 attempts: %w", lastErr)
 }
 
-func (c *AIClient) doRequest(reqBody claudeRequest) (*AIResponse, error) {
+func (c *AIClient) doRequest(reqBody chatRequest) (*AIResponse, error) {
 	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
@@ -121,8 +127,7 @@ func (c *AIClient) doRequest(reqBody claudeRequest) (*AIResponse, error) {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", c.apiKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -139,23 +144,23 @@ func (c *AIClient) doRequest(reqBody claudeRequest) (*AIResponse, error) {
 		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(respBody))
 	}
 
-	var claudeResp claudeResponse
-	if err := json.Unmarshal(respBody, &claudeResp); err != nil {
+	var chatResp chatResponse
+	if err := json.Unmarshal(respBody, &chatResp); err != nil {
 		return nil, fmt.Errorf("unmarshal response: %w", err)
 	}
 
-	if claudeResp.Error != nil {
-		return nil, fmt.Errorf("API error: %s - %s", claudeResp.Error.Type, claudeResp.Error.Message)
+	if chatResp.Error != nil {
+		return nil, fmt.Errorf("API error: %s - %s", chatResp.Error.Code, chatResp.Error.Message)
 	}
 
-	if len(claudeResp.Content) == 0 {
+	if len(chatResp.Choices) == 0 || chatResp.Choices[0].Message.Content == "" {
 		return nil, fmt.Errorf("empty response from API")
 	}
 
 	return &AIResponse{
-		Text:         claudeResp.Content[0].Text,
-		InputTokens:  claudeResp.Usage.InputTokens,
-		OutputTokens: claudeResp.Usage.OutputTokens,
+		Text:         chatResp.Choices[0].Message.Content,
+		InputTokens:  chatResp.Usage.PromptTokens,
+		OutputTokens: chatResp.Usage.CompletionTokens,
 		Model:        reqBody.Model,
 	}, nil
 }

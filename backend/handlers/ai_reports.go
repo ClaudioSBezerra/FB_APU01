@@ -342,7 +342,7 @@ func GetExecutiveSummaryHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		dataPrompt := buildExecutiveSummaryPrompt(resumo)
-		aiResp, err := aiClient.Generate(executiveSummarySystem, dataPrompt, services.ModelHaiku, 2048)
+		aiResp, err := aiClient.Generate(executiveSummarySystem, dataPrompt, services.ModelFlash, 2048)
 		if err != nil {
 			fmt.Printf("AI generation error (falling back): %v\n", err)
 			response.Narrativa = buildFallbackNarrative(resumo)
@@ -404,7 +404,7 @@ func GetDailyInsightHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		dataPrompt := buildExecutiveSummaryPrompt(resumo)
-		aiResp, err := aiClient.Generate(insightSystem, dataPrompt, services.ModelHaiku, 256)
+		aiResp, err := aiClient.Generate(insightSystem, dataPrompt, services.ModelFlash, 256)
 		if err != nil {
 			fmt.Printf("AI insight error (falling back): %v\n", err)
 			json.NewEncoder(w).Encode(buildFallbackInsight(resumo))
@@ -448,7 +448,7 @@ func buildFallbackNarrative(r *ApuracaoResumo) string {
 		sb.WriteString(fmt.Sprintf("**Comparativo com %s:** %s de %.1f%% no faturamento.\n\n", r.PeriodoAnterior, direcao, math.Abs(varFat)))
 	}
 
-	sb.WriteString("*Relatorio gerado sem IA (ANTHROPIC_API_KEY nao configurada). Configure a chave para relatorios com narrativa inteligente.*")
+	sb.WriteString("*Relatorio gerado sem IA (ZAI_API_KEY nao configurada). Configure a chave para relatorios com narrativa inteligente.*")
 	return sb.String()
 }
 

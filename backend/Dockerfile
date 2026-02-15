@@ -25,4 +25,4 @@ COPY --from=builder /app/server .
 COPY --from=builder /app/migrations ./migrations
 EXPOSE 8081
 CMD ["./server"]
-# Force Rebuild v4.9.0 - Tax Reform Update
+# Force Rebuild v5.5.0 - Z.AI Migration

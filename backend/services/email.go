@@ -125,7 +125,7 @@ func SendPasswordResetEmail(email, resetToken string) error {
 	<style>
 		body { font-family: Arial, sans-serif; line-height: 1.6; color: #333333; max-width: 600px; margin: 0 auto; }
 		.container { background-color: #f4f4f8; padding: 40px; border-radius: 8px; }
-		.header { background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); color: white; padding: 20px; border-radius: 8px; text-align: center; }
+		.header { background: #4a5568; color: white; padding: 20px; border-radius: 8px; text-align: center; }
 		.logo { font-size: 24px; font-weight: bold; }
 		.content { background: white; padding: 30px; border-radius: 8px; }
 		h1 { color: #333; margin-bottom: 20px; }
@@ -383,12 +383,13 @@ func convertMarkdownToHTML(markdown string) string {
 			continue
 		}
 
-		// Bold text
-		line = strings.ReplaceAll(line, "**", "<strong>")
-		// Italic text
-		line = strings.ReplaceAll(line, "_", "<em>")
-		line = strings.ReplaceAll(line, "<em><em>", "")
-		line = strings.ReplaceAll(line, "</em></em>", "")
+		// Bold text: alternate **open** and **close** tags
+		for strings.Contains(line, "**") {
+			line = strings.Replace(line, "**", "<strong>", 1)
+			if strings.Contains(line, "**") {
+				line = strings.Replace(line, "**", "</strong>", 1)
+			}
+		}
 
 		// Regular paragraph
 		if trimmed != "" {

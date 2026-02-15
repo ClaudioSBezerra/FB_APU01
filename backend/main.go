@@ -1,6 +1,6 @@
 package main
 
-// Force rebuild: 2026-02-06 23:45 - Version 5.1.0
+// Force rebuild: 2026-02-15 - Version 5.5.0 - Z.AI Migration
 import (
 	"database/sql"
 	"encoding/json"
@@ -22,8 +22,8 @@ import (
 
 // Version information for backend deployment validation
 const (
-	BackendVersion = "5.1.0"
-	FeatureSet     = "Async DB Init, User Management (Admin), Company Switcher, Port Fix (8081), Vendor Fix, Auto-Provisioning Login, Concurrent View Refresh, Tax Reform Projection Dashboard, Simples Nacional Dashboard"
+	BackendVersion = "5.5.0"
+	FeatureSet     = "Z.AI GLM Integration, AI Executive Reports, Multipart Email, Tax Reform Projection, Simples Nacional Dashboard"
 )
 
 func GetVersionInfo() string {

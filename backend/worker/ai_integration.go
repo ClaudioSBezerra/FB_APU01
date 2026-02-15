@@ -71,11 +71,11 @@ func TriggerAIReportGeneration(db *sql.DB, companyID, periodo, jobID string) err
 	//3. Generate AI narrative
 	aiClient := services.NewAIClient()
 	if aiClient == nil || !aiClient.IsAvailable() {
-		return fmt.Errorf("AI client not available (ANTHROPIC_API_KEY not set)")
+		return fmt.Errorf("AI client not available (ZAI_API_KEY not set)")
 	}
 
 	dataPrompt := buildExecutiveSummaryPromptForAI(resumo)
-	aiResp, err := aiClient.Generate(executiveSummarySystem, dataPrompt, services.ModelHaiku, 2048)
+	aiResp, err := aiClient.Generate(executiveSummarySystem, dataPrompt, services.ModelFlash, 2048)
 	if err != nil {
 		return fmt.Errorf("AI generation failed: %w", err)
 	}
