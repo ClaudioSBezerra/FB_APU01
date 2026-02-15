@@ -13,13 +13,13 @@ CREATE TABLE IF NOT EXISTS managers (
 );
 
 -- Index for fast lookups by company
-CREATE INDEX idx_managers_company_id ON managers(company_id);
+CREATE INDEX IF NOT EXISTS idx_managers_company_id ON managers(company_id);
 
 -- Index for email uniqueness within company (same email can be used in different companies)
-CREATE UNIQUE INDEX idx_managers_company_email ON managers(company_id, email) WHERE ativo = true;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_managers_company_email ON managers(company_id, email) WHERE ativo = true;
 
 -- Index for active managers filter
-CREATE INDEX idx_managers_ativo ON managers(ativo);
+CREATE INDEX IF NOT EXISTS idx_managers_ativo ON managers(ativo);
 
 -- Updated_at trigger
 CREATE OR REPLACE FUNCTION update_managers_updated_at()
@@ -30,6 +30,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_managers_updated_at ON managers;
 CREATE TRIGGER trigger_managers_updated_at
     BEFORE UPDATE ON managers
     FOR EACH ROW

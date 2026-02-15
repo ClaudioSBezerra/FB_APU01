@@ -15,13 +15,13 @@ CREATE TABLE IF NOT EXISTS ai_reports (
 );
 
 -- Index for fast lookups by company
-CREATE INDEX idx_ai_reports_company_id ON ai_reports(company_id);
+CREATE INDEX IF NOT EXISTS idx_ai_reports_company_id ON ai_reports(company_id);
 
 -- Index for filtering by company and period (most common query)
-CREATE INDEX idx_ai_reports_company_period ON ai_reports(company_id, periodo);
+CREATE INDEX IF NOT EXISTS idx_ai_reports_company_period ON ai_reports(company_id, periodo);
 
 -- Index for filtering by automatic/manual
-CREATE INDEX idx_ai_reports_automatic ON ai_reports(gerado_automaticamente);
+CREATE INDEX IF NOT EXISTS idx_ai_reports_automatic ON ai_reports(gerado_automaticamente);
 
 -- Updated_at trigger
 CREATE OR REPLACE FUNCTION update_ai_reports_updated_at()
@@ -32,6 +32,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_ai_reports_updated_at ON ai_reports;
 CREATE TRIGGER trigger_ai_reports_updated_at
     BEFORE UPDATE ON ai_reports
     FOR EACH ROW

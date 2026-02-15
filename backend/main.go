@@ -199,13 +199,17 @@ func onDBConnected() {
 			_, err = database.Exec(string(migration))
 			if err != nil {
 				log.Printf("Migration %s warning: %v", file, err)
+				// Still record it — "already exists" errors mean the migration was applied before
+				if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "duplicate") {
+					_, _ = database.Exec("INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING", baseName)
+				}
 			} else {
 				fmt.Printf("Migration %s executed successfully.\n", file)
-				// Record successful migration
-				_, insertErr := database.Exec("INSERT INTO schema_migrations (filename) VALUES ($1)", baseName)
-				if insertErr != nil {
-					log.Printf("Warning: Could not record migration %s: %v", baseName, insertErr)
-				}
+			}
+			// Record successful or partially-successful migration
+			_, insertErr := database.Exec("INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING", baseName)
+			if insertErr != nil {
+				log.Printf("Warning: Could not record migration %s: %v", baseName, insertErr)
 			}
 		}
 	}
