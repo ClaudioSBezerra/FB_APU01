@@ -68,16 +68,26 @@ func TriggerAIReportGeneration(db *sql.DB, companyID, periodo, jobID string) err
 		return nil
 	}
 
-	//3. Generate AI narrative
-	aiClient := services.NewAIClient()
-	if aiClient == nil || !aiClient.IsAvailable() {
-		return fmt.Errorf("AI client not available (ZAI_API_KEY not set)")
-	}
+	//3. Generate AI narrative (with fallback if AI unavailable)
+	var narrative string
+	var modelUsed string
 
-	dataPrompt := buildExecutiveSummaryPromptForAI(resumo)
-	aiResp, err := aiClient.Generate(executiveSummarySystem, dataPrompt, services.ModelFlash, 2048)
-	if err != nil {
-		return fmt.Errorf("AI generation failed: %w", err)
+	aiClient := services.NewAIClient()
+	if aiClient != nil && aiClient.IsAvailable() {
+		dataPrompt := buildExecutiveSummaryPromptForAI(resumo)
+		aiResp, err := aiClient.Generate(executiveSummarySystem, dataPrompt, services.ModelFlash, 2048)
+		if err != nil {
+			fmt.Printf("[AI Report] AI generation failed, using fallback: %v\n", err)
+			narrative = buildFallbackNarrative(resumo)
+			modelUsed = "fallback"
+		} else {
+			narrative = aiResp.Text
+			modelUsed = aiResp.Model
+		}
+	} else {
+		fmt.Println("[AI Report] AI client not available, using fallback narrative")
+		narrative = buildFallbackNarrative(resumo)
+		modelUsed = "fallback"
 	}
 
 	//4. Save report to database
@@ -89,11 +99,11 @@ func TriggerAIReportGeneration(db *sql.DB, companyID, periodo, jobID string) err
 		INSERT INTO ai_reports (company_id, job_id, periodo, titulo, resumo, dados_brutos, gerado_automaticamente)
 		VALUES ($1, $2, $3, $4, $5, $6, true)
 		RETURNING id
-	`, companyID, jobID, periodo, titulo, aiResp.Text, dadosBrutosJSON).Scan(&reportID)
+	`, companyID, jobID, periodo, titulo, narrative, dadosBrutosJSON).Scan(&reportID)
 	if err != nil {
 		return fmt.Errorf("error saving AI report: %w", err)
 	}
-	fmt.Printf("[AI Report] Report saved to database: %s\n", reportID)
+	fmt.Printf("[AI Report] Report saved to database: %s (model: %s)\n", reportID, modelUsed)
 
 	//5. Get all active managers
 	managers, err := getActiveManagersForAIReport(db, companyID)
@@ -108,7 +118,7 @@ func TriggerAIReportGeneration(db *sql.DB, companyID, periodo, jobID string) err
 	}
 
 	//7. Send email
-	err = services.SendAIReportEmail(recipients, resumo.CompanyName, periodo, aiResp.Text, dadosBrutosJSON)
+	err = services.SendAIReportEmail(recipients, resumo.CompanyName, periodo, narrative, dadosBrutosJSON)
 	if err != nil {
 		return fmt.Errorf("error sending AI report email: %w", err)
 	}
@@ -251,6 +261,30 @@ REGRAS:
 - NÃO invente dados. Use APENAS os números fornecidos.
 - Se não houver dados suficientes, diga "Dados insuficientes para esta análise".
 - Mantenha o relatório entre 200-400 palavras.`
+
+// buildFallbackNarrative generates a basic report when AI is unavailable
+func buildFallbackNarrative(r *AIResumo) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("## Resumo Executivo - %s | %s\n\n", r.CompanyName, r.Periodo))
+	sb.WriteString(fmt.Sprintf("**Faturamento Bruto (Saidas):** R$ %.2f\n\n", r.FaturamentoBruto))
+	sb.WriteString(fmt.Sprintf("**Total de Entradas:** R$ %.2f\n\n", r.TotalEntradas))
+	sb.WriteString("### ICMS do Periodo\n\n")
+	sb.WriteString(fmt.Sprintf("- **ICMS Debito (Saidas):** R$ %.2f\n", r.IcmsSaida))
+	sb.WriteString(fmt.Sprintf("- **ICMS Credito (Entradas):** R$ %.2f\n", r.IcmsEntrada))
+	sb.WriteString(fmt.Sprintf("- **ICMS a Recolher:** R$ %.2f\n\n", r.IcmsAPagar))
+
+	if len(r.Operacoes) > 0 {
+		sb.WriteString("### Detalhamento por Operacao\n\n")
+		for _, op := range r.Operacoes {
+			sb.WriteString(fmt.Sprintf("- %s (%s): R$ %.2f | ICMS: R$ %.2f\n", op.TipoOperacao, op.Tipo, op.Valor, op.Icms))
+		}
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString(fmt.Sprintf("*Total de registros processados: %d*\n\n", r.TotalNFes))
+	sb.WriteString("*Relatorio gerado automaticamente pelo FBTax Cloud. Narrativa com IA sera incluida quando disponivel.*")
+	return sb.String()
+}
 
 // getActiveManagersForAIReport returns active managers for AI report emailing
 func getActiveManagersForAIReport(db *sql.DB, companyID string) ([]AIManager, error) {

@@ -124,6 +124,6 @@ ALTER TABLE import_jobs ADD COLUMN IF NOT EXISTS dt_ini DATE;
 ALTER TABLE import_jobs ADD COLUMN IF NOT EXISTS dt_fin DATE;
 
 
-CREATE INDEX idx_c500_job_id ON reg_c500(job_id);
-CREATE INDEX idx_c600_job_id ON reg_c600(job_id);
-CREATE INDEX idx_d100_job_id ON reg_d100(job_id);
+CREATE INDEX IF NOT EXISTS idx_c500_job_id ON reg_c500(job_id);
+CREATE INDEX IF NOT EXISTS idx_c600_job_id ON reg_c600(job_id);
+CREATE INDEX IF NOT EXISTS idx_d100_job_id ON reg_d100(job_id);
