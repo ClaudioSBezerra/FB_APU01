@@ -141,16 +141,29 @@ func onDBConnected() {
 			if !hasFilename {
 				// Find the first varchar/text column and rename it to 'filename'
 				var oldCol string
-				_ = database.QueryRow(`SELECT column_name FROM information_schema.columns WHERE table_name='schema_migrations' AND data_type IN ('character varying','text') ORDER BY ordinal_position LIMIT 1`).Scan(&oldCol)
+				_ = database.QueryRow(`SELECT column_name FROM information_schema.columns WHERE table_name='schema_migrations' AND data_type IN ('character varying','text','integer') ORDER BY ordinal_position LIMIT 1`).Scan(&oldCol)
 				if oldCol != "" {
-					log.Printf("Renaming schema_migrations column '%s' → 'filename'", oldCol)
-					database.Exec(fmt.Sprintf(`ALTER TABLE schema_migrations RENAME COLUMN %s TO filename`, oldCol))
+					log.Printf("Attempting to rename schema_migrations column '%s' → 'filename'", oldCol)
+					_, renameErr := database.Exec(fmt.Sprintf(`ALTER TABLE schema_migrations RENAME COLUMN %s TO filename`, oldCol))
+					if renameErr != nil {
+						log.Printf("ERROR: Failed to rename column: %v", renameErr)
+						log.Printf("CRITICAL: Please manually fix schema_migrations table structure")
+						log.Printf("Run: ALTER TABLE schema_migrations RENAME COLUMN %s TO filename;", oldCol)
+						// Skip migrations to avoid errors
+						log.Println("Skipping migrations due to schema_migrations structure issue")
+						return
+					}
+					log.Printf("Successfully renamed column '%s' → 'filename'", oldCol)
 				}
 				// Ensure executed_at exists
 				var hasExec bool
 				_ = database.QueryRow(`SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='schema_migrations' AND column_name='executed_at')`).Scan(&hasExec)
 				if !hasExec {
-					database.Exec(`ALTER TABLE schema_migrations ADD COLUMN executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`)
+					log.Println("Adding executed_at column to schema_migrations")
+					_, execErr := database.Exec(`ALTER TABLE schema_migrations ADD COLUMN executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`)
+					if execErr != nil {
+						log.Printf("Warning: Failed to add executed_at column: %v", execErr)
+					}
 				}
 			}
 		}
@@ -163,7 +176,11 @@ func onDBConnected() {
 			var alreadyExecuted bool
 			// Check if migration was already executed
 			errCheck := database.QueryRow("SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE filename=$1)", baseName).Scan(&alreadyExecuted)
-			if errCheck == nil && alreadyExecuted {
+			if errCheck != nil {
+				log.Printf("Warning: Could not check migration status for %s: %v", baseName, errCheck)
+				continue
+			}
+			if alreadyExecuted {
 				continue
 			}
 
@@ -179,7 +196,10 @@ func onDBConnected() {
 			} else {
 				fmt.Printf("Migration %s executed successfully.\n", file)
 				// Record successful migration
-				_, _ = database.Exec("INSERT INTO schema_migrations (filename) VALUES ($1)", baseName)
+				_, insertErr := database.Exec("INSERT INTO schema_migrations (filename) VALUES ($1)", baseName)
+				if insertErr != nil {
+					log.Printf("Warning: Could not record migration %s: %v", baseName, insertErr)
+				}
 			}
 		}
 	}
