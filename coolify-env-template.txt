@@ -1,5 +1,6 @@
 # Coolify Production Environment Variables Template
 # FB_APU01 - Sistema de Reforma Tributária
+# VERSÃO: 5.5.0
 
 # ========================================
 # APPLICATION SETTINGS
@@ -26,6 +27,21 @@ REDIS_HOST=your-redis-host
 REDIS_PORT=6379
 REDIS_PASSWORD=your_redis_password
 REDIS_ADDR=${REDIS_HOST}:${REDIS_PORT}
+
+# ========================================
+# SMTP - EMAIL (Hostinger)
+# ========================================
+SMTP_HOST=smtp.hostinger.com
+SMTP_PORT=465
+SMTP_USER=contato@fortesbezerra.com.br
+SMTP_PASSWORD=your_smtp_password_here
+SMTP_FROM=FBTax Cloud <contato@fortesbezerra.com.br>
+APP_URL=https://fbtax.cloud
+
+# ========================================
+# Z.AI GLM API - Relatorios Executivos com IA
+# ========================================
+ZAI_API_KEY=your_zai_api_key_here
 
 # ========================================
 # SECURITY

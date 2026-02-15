@@ -7,13 +7,14 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
 // Z.AI GLM Models
 const (
-	ModelFlash = "glm-4.7-flash" // Free tier - fast and cost-effective
-	ModelAir   = "glm-4.5-air"   // Mid-tier - higher quality
+	ModelFlash         = "glm-4.7-flash" // Free tier - primary
+	ModelFlashFallback = "glm-4.5-flash" // Free tier - fallback for rate limits
 )
 
 // AIClient wraps communication with the Z.AI GLM API (OpenAI-compatible).
@@ -38,7 +39,8 @@ type chatMessage struct {
 type chatResponse struct {
 	Choices []struct {
 		Message struct {
-			Content string `json:"content"`
+			Content          string `json:"content"`
+			ReasoningContent string `json:"reasoning_content"`
 		} `json:"message"`
 	} `json:"choices"`
 	Usage struct {
@@ -108,8 +110,17 @@ func (c *AIClient) Generate(system, userPrompt, model string, maxTokens int) (*A
 			return resp, nil
 		}
 		lastErr = err
+
+		// On rate limit (429), switch to fallback model immediately
+		if strings.Contains(err.Error(), "429") && reqBody.Model == ModelFlash {
+			fmt.Printf("[AI] Rate limited on %s, switching to fallback %s\n", ModelFlash, ModelFlashFallback)
+			reqBody.Model = ModelFlashFallback
+			time.Sleep(2 * time.Second)
+			continue
+		}
+
 		if attempt < 3 {
-			backoff := time.Duration(attempt*attempt) * time.Second
+			backoff := time.Duration(attempt*2) * time.Second
 			time.Sleep(backoff)
 		}
 	}
@@ -153,12 +164,21 @@ func (c *AIClient) doRequest(reqBody chatRequest) (*AIResponse, error) {
 		return nil, fmt.Errorf("API error: %s - %s", chatResp.Error.Code, chatResp.Error.Message)
 	}
 
-	if len(chatResp.Choices) == 0 || chatResp.Choices[0].Message.Content == "" {
+	if len(chatResp.Choices) == 0 {
+		return nil, fmt.Errorf("empty response from API")
+	}
+
+	// GLM models may return text in reasoning_content instead of content
+	text := chatResp.Choices[0].Message.Content
+	if text == "" {
+		text = chatResp.Choices[0].Message.ReasoningContent
+	}
+	if text == "" {
 		return nil, fmt.Errorf("empty response from API")
 	}
 
 	return &AIResponse{
-		Text:         chatResp.Choices[0].Message.Content,
+		Text:         text,
 		InputTokens:  chatResp.Usage.PromptTokens,
 		OutputTokens: chatResp.Usage.CompletionTokens,
 		Model:        reqBody.Model,

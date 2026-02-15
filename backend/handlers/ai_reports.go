@@ -519,6 +519,52 @@ func formatBRL(value float64) string {
 	return result
 }
 
+// GetAvailablePeriodsHandler returns periods that have imported fiscal data for the company.
+func GetAvailablePeriodsHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+
+		companyID, err := GetEffectiveCompanyID(db, userID, r.Header.Get("X-Company-ID"))
+		if err != nil {
+			http.Error(w, "Error getting company: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		rows, err := db.Query(`
+			SELECT DISTINCT mes_ano
+			FROM import_jobs
+			WHERE company_id = $1 AND status = 'completed' AND mes_ano IS NOT NULL AND mes_ano != ''
+			ORDER BY mes_ano DESC
+		`, companyID)
+		if err != nil {
+			http.Error(w, "Error querying periods: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		var periods []string
+		for rows.Next() {
+			var p string
+			if err := rows.Scan(&p); err == nil {
+				periods = append(periods, p)
+			}
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"periods": periods,
+			"latest":  func() string { if len(periods) > 0 { return periods[0] }; return "" }(),
+		})
+	}
+}
+
 // SavedAIReport represents a saved AI-generated report from database
 type SavedAIReport struct {
 	ID                   string    `json:"id"`

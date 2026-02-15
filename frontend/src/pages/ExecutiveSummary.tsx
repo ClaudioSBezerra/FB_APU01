@@ -111,12 +111,39 @@ export default function ExecutiveSummary() {
   const { token, companyId } = useAuth();
   const [data, setData] = useState<SummaryData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState(() => {
-    const now = new Date();
-    return `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
-  });
+  const [selectedPeriod, setSelectedPeriod] = useState('');
+  const [availablePeriods, setAvailablePeriods] = useState<string[]>([]);
 
   const monthOptions = getMonthOptions();
+
+  // Fetch available periods and default to the most recent one with data
+  useEffect(() => {
+    const fetchPeriods = async () => {
+      try {
+        const headers: Record<string, string> = {
+          Authorization: `Bearer ${token || localStorage.getItem('token')}`,
+        };
+        if (companyId) {
+          headers['X-Company-ID'] = companyId;
+        }
+        const response = await fetch('/api/reports/available-periods', { headers });
+        if (response.ok) {
+          const result = await response.json();
+          setAvailablePeriods(result.periods || []);
+          if (result.latest) {
+            setSelectedPeriod(result.latest);
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching available periods:', error);
+      }
+      // Fallback to current month if no periods available
+      const now = new Date();
+      setSelectedPeriod(`${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`);
+    };
+    fetchPeriods();
+  }, [token, companyId]);
 
   const fetchSummary = async (periodo: string) => {
     setLoading(true);
@@ -142,7 +169,9 @@ export default function ExecutiveSummary() {
   };
 
   useEffect(() => {
-    fetchSummary(selectedPeriod);
+    if (selectedPeriod) {
+      fetchSummary(selectedPeriod);
+    }
   }, [selectedPeriod, companyId]);
 
   const handlePeriodChange = (value: string) => {
@@ -174,7 +203,7 @@ export default function ExecutiveSummary() {
           <SelectContent>
             {monthOptions.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
+                {opt.label}{availablePeriods.includes(opt.value) ? ' *' : ''}
               </SelectItem>
             ))}
           </SelectContent>
