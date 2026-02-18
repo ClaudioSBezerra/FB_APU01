@@ -442,8 +442,77 @@ func GetExecutiveSummaryHandler(db *sql.DB) http.HandlerFunc {
 
 		response.Narrativa = aiResp.Text
 		response.Model = aiResp.Model
+
+		// If force regeneration, save report and send email to managers
+		if forceRegen && response.Narrativa != "" {
+			go func() {
+				// Save to ai_reports
+				dadosBrutos := buildDadosBrutosJSON(resumo)
+				titulo := fmt.Sprintf("%s | %s (regenerado)", resumo.CompanyName, resumo.Periodo)
+				_, errSave := db.Exec(`
+					INSERT INTO ai_reports (company_id, periodo, titulo, resumo, dados_brutos, gerado_automaticamente)
+					VALUES ($1, $2, $3, $4, $5, false)
+				`, companyID, periodo, titulo, response.Narrativa, dadosBrutos)
+				if errSave != nil {
+					fmt.Printf("[Regenerate] Error saving report: %v\n", errSave)
+				}
+
+				// Send email to active managers
+				var managers []struct{ Email string }
+				rows, errMgr := db.Query(`SELECT email FROM managers WHERE company_id = $1 AND ativo = true`, companyID)
+				if errMgr == nil {
+					defer rows.Close()
+					for rows.Next() {
+						var m struct{ Email string }
+						if rows.Scan(&m.Email) == nil {
+							managers = append(managers, m)
+						}
+					}
+				}
+				if len(managers) > 0 {
+					recipients := make([]string, len(managers))
+					for i, m := range managers {
+						recipients[i] = m.Email
+					}
+					taxData := services.TaxComparisonData{
+						IcmsAPagar:   resumo.IcmsAPagar,
+						IbsProjetado: resumo.IbsProjetado,
+						CbsProjetado: resumo.CbsProjetado,
+					}
+					errEmail := services.SendAIReportEmail(recipients, resumo.CompanyName, periodo, response.Narrativa, dadosBrutos, taxData)
+					if errEmail != nil {
+						fmt.Printf("[Regenerate] Error sending email: %v\n", errEmail)
+					} else {
+						fmt.Printf("[Regenerate] Email sent to %d managers\n", len(recipients))
+					}
+				}
+			}()
+		}
+
 		json.NewEncoder(w).Encode(response)
 	}
+}
+
+// buildDadosBrutosJSON converts ApuracaoResumo to JSON string for storage
+func buildDadosBrutosJSON(r *ApuracaoResumo) string {
+	data := map[string]any{
+		"empresa":        r.CompanyName,
+		"cnpj":           r.CNPJ,
+		"periodo":        r.Periodo,
+		"faturamento":    r.FaturamentoBruto,
+		"total_entradas": r.TotalEntradas,
+		"total_saidas":   r.TotalSaidas,
+		"icms_entrada":   r.IcmsEntrada,
+		"icms_saida":     r.IcmsSaida,
+		"icms_a_pagar":   r.IcmsAPagar,
+		"ibs_projetado":  r.IbsProjetado,
+		"cbs_projetado":  r.CbsProjetado,
+		"ibs_cbs_total":  r.IbsProjetado + r.CbsProjetado,
+		"total_nfes":     r.TotalNFes,
+		"operacoes":      r.Operacoes,
+	}
+	jsonBytes, _ := json.Marshal(data)
+	return string(jsonBytes)
 }
 
 // GetDailyInsightHandler generates a short AI-powered insight for the dashboard.
