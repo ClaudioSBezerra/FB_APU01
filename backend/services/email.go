@@ -4,12 +4,20 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"math"
 	"net/smtp"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// TaxComparisonData holds tax values for the email chart and table
+type TaxComparisonData struct {
+	IcmsAPagar   float64
+	IbsProjetado float64
+	CbsProjetado float64
+}
 
 // EmailConfig holds SMTP configuration
 type EmailConfig struct {
@@ -183,7 +191,7 @@ func SendPasswordResetEmail(email, resetToken string) error {
 }
 
 // SendAIReportEmail sends AI-generated executive summary to company managers
-func SendAIReportEmail(recipients []string, companyName, periodo, narrativaMarkdown, dadosBrutosJSON string) error {
+func SendAIReportEmail(recipients []string, companyName, periodo, narrativaMarkdown, dadosBrutosJSON string, taxData TaxComparisonData) error {
 	config := GetEmailConfig()
 
 	if config.Password == "" {
@@ -208,6 +216,21 @@ func SendAIReportEmail(recipients []string, companyName, periodo, narrativaMarkd
 	// Keep markdown for plain text version (strip HTML tags)
 	narrativaPlain := stripHTMLTags(narrativaHTML)
 
+	// Generate tax comparison chart and table
+	taxChartSVG := generateTaxComparisonSVG(taxData)
+	taxTableHTML := generateTaxTableHTML(taxData)
+
+	// Plain text tax table
+	taxTablePlain := fmt.Sprintf("\nComparativo de Impostos - Reforma Tributaria:\n"+
+		"  ICMS a Recolher:    R$ %s (imposto atual)\n"+
+		"  IBS Projetado:      R$ %s (novo imposto)\n"+
+		"  CBS Projetado:      R$ %s (novo imposto)\n"+
+		"  Total IBS + CBS:    R$ %s\n",
+		formatEmailBRL(taxData.IcmsAPagar),
+		formatEmailBRL(taxData.IbsProjetado),
+		formatEmailBRL(taxData.CbsProjetado),
+		formatEmailBRL(taxData.IbsProjetado+taxData.CbsProjetado))
+
 	// Send individual emails to each recipient (same pattern as password reset)
 	for _, email := range recipients {
 		// Generate unique boundary for multipart
@@ -218,8 +241,8 @@ func SendAIReportEmail(recipients []string, companyName, periodo, narrativaMarkd
 
 		// Plain text version (for corporate spam filters and text-only clients)
 		message += fmt.Sprintf("--%s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n", boundary)
-		message += fmt.Sprintf("FBTax Cloud - Resumo Executivo\n\nEmpresa: %s\nPeriodo: %s\nGerado em: %s\n\n%s\n\nAcesse o painel completo: %s\n\n---\n(c) 2026 FBTax Cloud - Todos os direitos reservados\n",
-			companyName, periodo, getTimeBrasil(), narrativaPlain, appURL)
+		message += fmt.Sprintf("FBTax Cloud - Resumo Executivo\n\nEmpresa: %s\nPeriodo: %s\nGerado em: %s\n\n%s\n%s\nAcesse o painel completo: %s\n\n---\n(c) 2026 FBTax Cloud - Todos os direitos reservados\n",
+			companyName, periodo, getTimeBrasil(), narrativaPlain, taxTablePlain, appURL)
 		message += fmt.Sprintf("\r\n--%s\r\n", boundary)
 
 		// HTML version (for rich display)
@@ -236,8 +259,15 @@ func SendAIReportEmail(recipients []string, companyName, periodo, narrativaMarkd
 		.logo { font-size: 24px; font-weight: bold; }
 		.content { background: white; padding: 30px; border-radius: 8px; margin-top: 20px; }
 		h2 { color: #333; margin-bottom: 20px; }
+		h3 { color: #4a5568; margin: 25px 0 15px 0; }
 		p { margin: 0 0 15px 0; color: #666; line-height: 1.8; }
 		.info-box { background-color: #e7f3ff; border-left: 4px solid #2196f3; padding: 15px; margin: 20px 0; }
+		.tax-section { background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 25px 0; }
+		.tax-table { width: 100%%; border-collapse: collapse; margin: 15px 0; }
+		.tax-table th { background: #4a5568; color: white; padding: 10px 12px; text-align: left; font-size: 13px; }
+		.tax-table td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
+		.tax-table tr:last-child td { border-bottom: none; font-weight: bold; background: #edf2f7; }
+		.chart-container { text-align: center; margin: 20px 0; }
 		.button { display: inline-block; padding: 12px 24px; background: #2c3e50; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 20px 0; }
 		.footer { background: #f8f9fa; padding: 20px; border-radius: 8px; color: #666; font-size: 12px; margin-top: 20px; }
 	</style>
@@ -255,6 +285,13 @@ func SendAIReportEmail(recipients []string, companyName, periodo, narrativaMarkd
 				<strong>Gerado em:</strong> %s
 			</div>
 			%s
+			<div class="tax-section">
+				<h3 style="margin-top: 0;">Comparativo de Impostos - Reforma Tributaria</h3>
+				<div class="chart-container">
+					%s
+				</div>
+				%s
+			</div>
 			<div style="text-align: center; margin: 30px 0;">
 				<a href="%s" class="button">Acessar Painel Completo</a>
 			</div>
@@ -264,7 +301,7 @@ func SendAIReportEmail(recipients []string, companyName, periodo, narrativaMarkd
 		</div>
 	</div>
 </body>
-</html>`, periodo, companyName, periodo, getTimeBrasil(), narrativaHTML, appURL)
+</html>`, periodo, companyName, periodo, getTimeBrasil(), narrativaHTML, taxChartSVG, taxTableHTML, appURL)
 		message += fmt.Sprintf("\r\n--%s--\r\n", boundary)
 
 		log.Printf("[Email Service] Sending AI report email to %s via %s:%d", email, config.Host, config.Port)
@@ -313,18 +350,35 @@ func stripHTMLTags(html string) string {
 	result = strings.ReplaceAll(result, "</ol>", "\n")
 	result = strings.ReplaceAll(result, "<li>", "  - ")
 	result = strings.ReplaceAll(result, "</li>", "\n")
+	// Table tags
+	result = strings.ReplaceAll(result, "<thead>", "")
+	result = strings.ReplaceAll(result, "</thead>", "")
+	result = strings.ReplaceAll(result, "<tbody>", "")
+	result = strings.ReplaceAll(result, "</tbody>", "")
+	result = strings.ReplaceAll(result, "<tr>", "")
+	result = strings.ReplaceAll(result, "</tr>", "\n")
+	result = strings.ReplaceAll(result, "</td>", " | ")
+	result = strings.ReplaceAll(result, "</th>", " | ")
+	// Remove remaining HTML tags with style attributes
+	for strings.Contains(result, "<") {
+		start := strings.Index(result, "<")
+		end := strings.Index(result[start:], ">")
+		if end == -1 {
+			break
+		}
+		result = result[:start] + result[start+end+1:]
+	}
 	return result
 }
 
 func convertMarkdownToHTML(markdown string) string {
-	// Simple markdown to HTML conversion
-	// For production, consider using a proper markdown library like github.com/gomarkdown/markdown
 	html := markdown
 	lines := strings.Split(html, "\n")
 
 	var result strings.Builder
 	inList := false
 	inCodeBlock := false
+	inTable := false
 
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -343,6 +397,59 @@ func convertMarkdownToHTML(markdown string) string {
 		if inCodeBlock {
 			result.WriteString(line + "<br>")
 			continue
+		}
+
+		// Markdown tables: detect lines starting and ending with |
+		if strings.HasPrefix(trimmed, "|") && strings.HasSuffix(trimmed, "|") {
+			// Skip separator lines (|---|---|)
+			isSeparator := true
+			cells := strings.Split(trimmed, "|")
+			for _, cell := range cells {
+				cell = strings.TrimSpace(cell)
+				if cell != "" && !isTableSeparator(cell) {
+					isSeparator = false
+					break
+				}
+			}
+
+			if !inTable {
+				if inList {
+					result.WriteString("</ul>")
+					inList = false
+				}
+				result.WriteString(`<table style="width: 100%; border-collapse: collapse; margin: 15px 0;">`)
+				inTable = true
+
+				// First row is header
+				cells := parseTableRow(trimmed)
+				result.WriteString("<thead><tr>")
+				for _, cell := range cells {
+					cell = applyInlineBold(cell)
+					result.WriteString(fmt.Sprintf(`<th style="background: #4a5568; color: white; padding: 8px 12px; text-align: left; font-size: 13px;">%s</th>`, cell))
+				}
+				result.WriteString("</tr></thead><tbody>")
+				continue
+			}
+
+			if isSeparator {
+				continue
+			}
+
+			// Data row
+			cells = parseTableRow(trimmed)
+			result.WriteString("<tr>")
+			for _, cell := range cells {
+				cell = applyInlineBold(cell)
+				result.WriteString(fmt.Sprintf(`<td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px;">%s</td>`, cell))
+			}
+			result.WriteString("</tr>")
+			continue
+		}
+
+		// Close table if we were in one
+		if inTable {
+			result.WriteString("</tbody></table>")
+			inTable = false
 		}
 
 		// Headers
@@ -376,6 +483,20 @@ func convertMarkdownToHTML(markdown string) string {
 			continue
 		}
 
+		// Numbered lists
+		if len(trimmed) > 2 && trimmed[0] >= '0' && trimmed[0] <= '9' && strings.Contains(trimmed[:3], ".") {
+			dotIdx := strings.Index(trimmed, ".")
+			if dotIdx > 0 && dotIdx < 3 {
+				if !inList {
+					result.WriteString("<ol>")
+					inList = true
+				}
+				text := strings.TrimSpace(trimmed[dotIdx+1:])
+				result.WriteString(fmt.Sprintf("<li>%s</li>", text))
+				continue
+			}
+		}
+
 		// Close list if needed
 		if inList && trimmed == "" {
 			result.WriteString("</ul>")
@@ -384,12 +505,7 @@ func convertMarkdownToHTML(markdown string) string {
 		}
 
 		// Bold text: alternate **open** and **close** tags
-		for strings.Contains(line, "**") {
-			line = strings.Replace(line, "**", "<strong>", 1)
-			if strings.Contains(line, "**") {
-				line = strings.Replace(line, "**", "</strong>", 1)
-			}
-		}
+		line = applyInlineBold(line)
 
 		// Regular paragraph
 		if trimmed != "" {
@@ -406,11 +522,190 @@ func convertMarkdownToHTML(markdown string) string {
 		}
 	}
 
+	if inTable {
+		result.WriteString("</tbody></table>")
+	}
 	if inList {
 		result.WriteString("</ul>")
 	}
 
 	return result.String()
+}
+
+// isTableSeparator checks if a cell is a markdown table separator (----, :---:, etc.)
+func isTableSeparator(cell string) bool {
+	cell = strings.TrimSpace(cell)
+	for _, c := range cell {
+		if c != '-' && c != ':' {
+			return false
+		}
+	}
+	return len(cell) > 0
+}
+
+// parseTableRow extracts cell contents from a markdown table row
+func parseTableRow(row string) []string {
+	row = strings.TrimSpace(row)
+	row = strings.TrimPrefix(row, "|")
+	row = strings.TrimSuffix(row, "|")
+	parts := strings.Split(row, "|")
+	cells := make([]string, 0, len(parts))
+	for _, p := range parts {
+		cells = append(cells, strings.TrimSpace(p))
+	}
+	return cells
+}
+
+// applyInlineBold converts **text** to <strong>text</strong>
+func applyInlineBold(text string) string {
+	for strings.Contains(text, "**") {
+		text = strings.Replace(text, "**", "<strong>", 1)
+		if strings.Contains(text, "**") {
+			text = strings.Replace(text, "**", "</strong>", 1)
+		}
+	}
+	return text
+}
+
+// generateTaxComparisonSVG creates an inline SVG bar chart comparing ICMS vs IBS vs CBS
+func generateTaxComparisonSVG(data TaxComparisonData) string {
+	maxVal := data.IcmsAPagar
+	if data.IbsProjetado > maxVal {
+		maxVal = data.IbsProjetado
+	}
+	if data.CbsProjetado > maxVal {
+		maxVal = data.CbsProjetado
+	}
+	ibsCbsTotal := data.IbsProjetado + data.CbsProjetado
+	if ibsCbsTotal > maxVal {
+		maxVal = ibsCbsTotal
+	}
+	if maxVal == 0 {
+		maxVal = 1 // avoid division by zero
+	}
+
+	maxBarWidth := 380.0
+	barHeight := 30.0
+	barSpacing := 50.0
+
+	icmsWidth := (data.IcmsAPagar / maxVal) * maxBarWidth
+	ibsWidth := (data.IbsProjetado / maxVal) * maxBarWidth
+	cbsWidth := (data.CbsProjetado / maxVal) * maxBarWidth
+	totalWidth := (ibsCbsTotal / maxVal) * maxBarWidth
+
+	// Ensure minimum visible bar width when value > 0
+	if data.IcmsAPagar > 0 && icmsWidth < 5 {
+		icmsWidth = 5
+	}
+	if data.IbsProjetado > 0 && ibsWidth < 5 {
+		ibsWidth = 5
+	}
+	if data.CbsProjetado > 0 && cbsWidth < 5 {
+		cbsWidth = 5
+	}
+	if ibsCbsTotal > 0 && totalWidth < 5 {
+		totalWidth = 5
+	}
+
+	svgHeight := 4*barSpacing + 30
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 %.0f" style="max-width: 520px; width: 100%%;">`, svgHeight))
+
+	// ICMS bar
+	y := 15.0
+	sb.WriteString(fmt.Sprintf(`<text x="0" y="%.0f" font-family="Arial" font-size="12" fill="#4a5568" font-weight="bold">ICMS</text>`, y))
+	y += 5
+	sb.WriteString(fmt.Sprintf(`<rect x="120" y="%.0f" width="%.1f" height="%.0f" rx="4" fill="#3B82F6"/>`, y, icmsWidth, barHeight))
+	sb.WriteString(fmt.Sprintf(`<text x="%.0f" y="%.0f" font-family="Arial" font-size="11" fill="#333">R$ %s</text>`, 125+icmsWidth, y+20, formatEmailBRL(data.IcmsAPagar)))
+
+	// IBS bar
+	y += barSpacing
+	sb.WriteString(fmt.Sprintf(`<text x="0" y="%.0f" font-family="Arial" font-size="12" fill="#4a5568" font-weight="bold">IBS</text>`, y))
+	y += 5
+	sb.WriteString(fmt.Sprintf(`<rect x="120" y="%.0f" width="%.1f" height="%.0f" rx="4" fill="#10B981"/>`, y, ibsWidth, barHeight))
+	sb.WriteString(fmt.Sprintf(`<text x="%.0f" y="%.0f" font-family="Arial" font-size="11" fill="#333">R$ %s</text>`, 125+ibsWidth, y+20, formatEmailBRL(data.IbsProjetado)))
+
+	// CBS bar
+	y += barSpacing
+	sb.WriteString(fmt.Sprintf(`<text x="0" y="%.0f" font-family="Arial" font-size="12" fill="#4a5568" font-weight="bold">CBS</text>`, y))
+	y += 5
+	sb.WriteString(fmt.Sprintf(`<rect x="120" y="%.0f" width="%.1f" height="%.0f" rx="4" fill="#F59E0B"/>`, y, cbsWidth, barHeight))
+	sb.WriteString(fmt.Sprintf(`<text x="%.0f" y="%.0f" font-family="Arial" font-size="11" fill="#333">R$ %s</text>`, 125+cbsWidth, y+20, formatEmailBRL(data.CbsProjetado)))
+
+	// Total IBS+CBS bar
+	y += barSpacing
+	sb.WriteString(fmt.Sprintf(`<text x="0" y="%.0f" font-family="Arial" font-size="12" fill="#4a5568" font-weight="bold">IBS+CBS</text>`, y))
+	y += 5
+	sb.WriteString(fmt.Sprintf(`<rect x="120" y="%.0f" width="%.1f" height="%.0f" rx="4" fill="#8B5CF6"/>`, y, totalWidth, barHeight))
+	sb.WriteString(fmt.Sprintf(`<text x="%.0f" y="%.0f" font-family="Arial" font-size="11" fill="#333" font-weight="bold">R$ %s</text>`, 125+totalWidth, y+20, formatEmailBRL(ibsCbsTotal)))
+
+	sb.WriteString(`</svg>`)
+	return sb.String()
+}
+
+// generateTaxTableHTML creates an HTML table comparing current vs projected taxes
+func generateTaxTableHTML(data TaxComparisonData) string {
+	ibsCbsTotal := data.IbsProjetado + data.CbsProjetado
+	return fmt.Sprintf(`<table class="tax-table">
+	<thead>
+		<tr>
+			<th>Imposto</th>
+			<th>Valor</th>
+			<th>Tipo</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td>ICMS a Recolher</td>
+			<td>R$ %s</td>
+			<td>Imposto atual</td>
+		</tr>
+		<tr>
+			<td>IBS Projetado</td>
+			<td>R$ %s</td>
+			<td style="color: #10B981;">Novo (Reforma Tributaria)</td>
+		</tr>
+		<tr>
+			<td>CBS Projetado</td>
+			<td>R$ %s</td>
+			<td style="color: #F59E0B;">Novo (Reforma Tributaria)</td>
+		</tr>
+		<tr>
+			<td>Total IBS + CBS</td>
+			<td>R$ %s</td>
+			<td>Substituira ICMS + PIS/COFINS</td>
+		</tr>
+	</tbody>
+</table>`, formatEmailBRL(data.IcmsAPagar), formatEmailBRL(data.IbsProjetado), formatEmailBRL(data.CbsProjetado), formatEmailBRL(ibsCbsTotal))
+}
+
+// formatEmailBRL formats a float as Brazilian currency (without R$ prefix)
+func formatEmailBRL(value float64) string {
+	if value == 0 {
+		return "0,00"
+	}
+	negative := value < 0
+	if negative {
+		value = -value
+	}
+	intPart := int64(value)
+	decPart := int64(math.Round((value - float64(intPart)) * 100))
+
+	intStr := fmt.Sprintf("%d", intPart)
+	var parts []string
+	for i := len(intStr); i > 0; i -= 3 {
+		start := i - 3
+		if start < 0 {
+			start = 0
+		}
+		parts = append([]string{intStr[start:i]}, parts...)
+	}
+	result := strings.Join(parts, ".") + fmt.Sprintf(",%02d", decPart)
+	if negative {
+		return "-" + result
+	}
+	return result
 }
 
 // getTimeBrasil returns current time in Brazil timezone formatted

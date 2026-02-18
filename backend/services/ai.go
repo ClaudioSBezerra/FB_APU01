@@ -86,7 +86,7 @@ func (c *AIClient) Generate(system, userPrompt, model string, maxTokens int) (*A
 		model = ModelFlash
 	}
 	if maxTokens == 0 {
-		maxTokens = 2048
+		maxTokens = 4096
 	}
 
 	// OpenAI-compatible format: system prompt goes as a message with role "system"
@@ -177,12 +177,87 @@ func (c *AIClient) doRequest(reqBody chatRequest) (*AIResponse, error) {
 		return nil, fmt.Errorf("empty response from API")
 	}
 
+	// GLM flash models include chain-of-thought in reasoning_content.
+	// Extract only the final Markdown report (starts with "## ").
+	text = extractMarkdownReport(text)
+
 	return &AIResponse{
 		Text:         text,
 		InputTokens:  chatResp.Usage.PromptTokens,
 		OutputTokens: chatResp.Usage.CompletionTokens,
 		Model:        reqBody.Model,
 	}, nil
+}
+
+// extractMarkdownReport extracts the final Markdown report from GLM reasoning output.
+// GLM flash models always include chain-of-thought in reasoning_content.
+// Strategy: find the last "## Resumo" header and extract everything from there.
+// If not found, try to find the largest contiguous block of Portuguese text.
+func extractMarkdownReport(text string) string {
+	lines := strings.Split(text, "\n")
+
+	// Strategy 1: Find the LAST "## Resumo" line (possibly indented)
+	reportStart := -1
+	for i := len(lines) - 1; i >= 0; i-- {
+		trimmed := strings.TrimSpace(lines[i])
+		if strings.HasPrefix(trimmed, "## Resumo") {
+			reportStart = i
+			break
+		}
+	}
+
+	if reportStart >= 0 {
+		return cleanExtractedLines(lines[reportStart:])
+	}
+
+	// Strategy 2: Find last block starting with any "## " header
+	for i := len(lines) - 1; i >= 0; i-- {
+		trimmed := strings.TrimSpace(lines[i])
+		if strings.HasPrefix(trimmed, "## ") && !strings.Contains(trimmed, "Analyze") && !strings.Contains(trimmed, "Review") {
+			return cleanExtractedLines(lines[i:])
+		}
+	}
+
+	// Strategy 3: Look for "Final" section markers typical of GLM reasoning
+	// e.g., "5. **Final" or "**Final Output**" or "**Resultado Final**"
+	for i := len(lines) - 1; i >= 0; i-- {
+		lower := strings.ToLower(strings.TrimSpace(lines[i]))
+		if strings.Contains(lower, "final output") || strings.Contains(lower, "resultado final") ||
+			strings.Contains(lower, "relatório final") || strings.Contains(lower, "relatorio final") {
+			// The report content starts on the NEXT line (or a few lines after)
+			for j := i + 1; j < len(lines); j++ {
+				trimmed := strings.TrimSpace(lines[j])
+				if strings.HasPrefix(trimmed, "## ") || strings.HasPrefix(trimmed, "# ") {
+					return cleanExtractedLines(lines[j:])
+				}
+			}
+		}
+	}
+
+	return text
+}
+
+// cleanExtractedLines removes indentation from extracted report lines
+func cleanExtractedLines(lines []string) string {
+	var sb strings.Builder
+	for _, line := range lines {
+		// Remove leading indentation (up to 8 spaces from chain-of-thought nesting)
+		cleaned := line
+		spaces := 0
+		for _, c := range cleaned {
+			if c == ' ' {
+				spaces++
+			} else {
+				break
+			}
+		}
+		if spaces > 0 && spaces <= 8 {
+			cleaned = cleaned[spaces:]
+		}
+		sb.WriteString(cleaned)
+		sb.WriteString("\n")
+	}
+	return strings.TrimSpace(sb.String())
 }
 
 // IsAvailable checks if the AI client is configured.

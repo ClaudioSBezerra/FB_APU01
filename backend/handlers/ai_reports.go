@@ -26,6 +26,8 @@ type ApuracaoResumo struct {
 	IcmsEntrada       float64 `json:"icms_entrada"`
 	IcmsSaida         float64 `json:"icms_saida"`
 	IcmsAPagar        float64 `json:"icms_a_pagar"`
+	IbsProjetado      float64 `json:"ibs_projetado"`
+	CbsProjetado      float64 `json:"cbs_projetado"`
 	TotalNFes         int     `json:"total_nfes"`
 	// Previous period (for comparison)
 	PeriodoAnterior       string  `json:"periodo_anterior"`
@@ -163,6 +165,27 @@ func getApuracaoResumo(db *sql.DB, companyID, periodo string) (*ApuracaoResumo, 
 		FROM import_jobs WHERE company_id = $1 AND status = 'completed'
 	`, companyID).Scan(&resumo.TotalJobs, &resumo.UltimaImportacao)
 
+	// Aggregate IBS/CBS projections from all aggregated tables
+	db.QueryRow(`
+		SELECT COALESCE(SUM(ibs), 0), COALESCE(SUM(cbs), 0) FROM (
+			SELECT SUM(vl_ibs_projetado) as ibs, SUM(vl_cbs_projetado) as cbs
+			FROM operacoes_comerciais oc JOIN import_jobs j ON j.id = oc.job_id
+			WHERE j.company_id = $1 AND oc.mes_ano = $2
+			UNION ALL
+			SELECT SUM(vl_ibs_projetado), SUM(vl_cbs_projetado)
+			FROM energia_agregado ea JOIN import_jobs j ON j.id = ea.job_id
+			WHERE j.company_id = $1 AND ea.mes_ano = $2
+			UNION ALL
+			SELECT SUM(vl_ibs_projetado), SUM(vl_cbs_projetado)
+			FROM frete_agregado fa JOIN import_jobs j ON j.id = fa.job_id
+			WHERE j.company_id = $1 AND fa.mes_ano = $2
+			UNION ALL
+			SELECT SUM(vl_ibs_projetado), SUM(vl_cbs_projetado)
+			FROM comunicacoes_agregado ca JOIN import_jobs j ON j.id = ca.job_id
+			WHERE j.company_id = $1 AND ca.mes_ano = $2
+		) combined
+	`, companyID, periodo).Scan(&resumo.IbsProjetado, &resumo.CbsProjetado)
+
 	return resumo, nil
 }
 
@@ -185,6 +208,7 @@ func calcPreviousPeriod(periodo string) string {
 
 func buildExecutiveSummaryPrompt(resumo *ApuracaoResumo) string {
 	var sb strings.Builder
+	sb.WriteString("IMPORTANTE: Responda EXCLUSIVAMENTE em português brasileiro (pt-BR). NÃO escreva em inglês.\n\n")
 	sb.WriteString(fmt.Sprintf("Empresa: %s (CNPJ: %s)\n", resumo.CompanyName, resumo.CNPJ))
 	sb.WriteString(fmt.Sprintf("Periodo de apuracao: %s\n\n", resumo.Periodo))
 	sb.WriteString("DADOS DO PERIODO ATUAL:\n")
@@ -193,6 +217,11 @@ func buildExecutiveSummaryPrompt(resumo *ApuracaoResumo) string {
 	sb.WriteString(fmt.Sprintf("- ICMS sobre saidas (debito): R$ %.2f\n", resumo.IcmsSaida))
 	sb.WriteString(fmt.Sprintf("- ICMS sobre entradas (credito): R$ %.2f\n", resumo.IcmsEntrada))
 	sb.WriteString(fmt.Sprintf("- ICMS a recolher (debito - credito): R$ %.2f\n", resumo.IcmsAPagar))
+
+	sb.WriteString("\nNOVOS IMPOSTOS - REFORMA TRIBUTARIA (Projecao):\n")
+	sb.WriteString(fmt.Sprintf("- IBS projetado (Imposto sobre Bens e Servicos): R$ %.2f\n", resumo.IbsProjetado))
+	sb.WriteString(fmt.Sprintf("- CBS projetado (Contribuicao sobre Bens e Servicos): R$ %.2f\n", resumo.CbsProjetado))
+	sb.WriteString(fmt.Sprintf("- Total IBS + CBS: R$ %.2f\n", resumo.IbsProjetado+resumo.CbsProjetado))
 
 	if resumo.FaturamentoAnterior > 0 {
 		varFat := ((resumo.FaturamentoBruto - resumo.FaturamentoAnterior) / resumo.FaturamentoAnterior) * 100
@@ -219,23 +248,33 @@ func buildExecutiveSummaryPrompt(resumo *ApuracaoResumo) string {
 	return sb.String()
 }
 
-const executiveSummarySystem = `Voce e um assistente fiscal especializado em tributacao brasileira.
-Gere um RESUMO EXECUTIVO MENSAL de apuracao fiscal para ser lido por um CEO ou Controller que nao e especialista em tributos.
+const executiveSummarySystem = `Voce e um assistente fiscal especializado em tributacao brasileira e na Reforma Tributaria.
+
+INSTRUCAO CRITICA: Responda DIRETAMENTE com o relatorio em Markdown. NAO inclua raciocinio, analise previa, passos numerados ou pensamento interno. Comece sua resposta IMEDIATAMENTE com "## Resumo Executivo".
+
+Gere um RESUMO EXECUTIVO MENSAL de apuracao fiscal para um CEO ou Controller.
 
 REGRAS:
-- Escreva em portugues brasileiro (pt-BR)
-- Use tom profissional e direto, sem jargao excessivo
-- Formate valores monetarios como R$ XX.XXX,00 (separador de milhar com ponto, decimal com virgula)
-- Use Markdown para formatacao (headers ##, **negrito**, listas)
+- Escreva EXCLUSIVAMENTE em portugues brasileiro (pt-BR). NUNCA use ingles.
+- Tom profissional e direto
+- Valores monetarios: R$ XX.XXX,00 (milhar com ponto, decimal com virgula)
+- Formatacao Markdown (## headers, **negrito**, listas)
 - Inclua obrigatoriamente:
-  1. Situacao geral (1-2 frases de abertura)
-  2. Impostos a recolher com valores
-  3. Comparativo com periodo anterior (se disponivel) com variacao percentual
-  4. Destaques: o que subiu, o que caiu e por que
-  5. Recomendacoes praticas (2-3 itens)
+  1. Situacao geral (1-2 frases)
+  2. Impostos a recolher
+  3. Tabela comparativa em Markdown:
+     | Imposto | Valor | Observacao |
+     |---------|-------|------------|
+     | ICMS a Recolher | R$ X | Imposto atual |
+     | IBS Projetado | R$ X | Novo imposto (Reforma Tributaria) |
+     | CBS Projetado | R$ X | Novo imposto (Reforma Tributaria) |
+     | Total IBS + CBS | R$ X | Substituira ICMS + PIS/COFINS |
+  4. Comparativo com periodo anterior (se disponivel) com variacao percentual
+  5. Destaques relevantes
+  6. Recomendacoes praticas (2-3 itens)
 - NAO invente dados. Use APENAS os numeros fornecidos.
-- Se nao houver dados suficientes, diga "Dados insuficientes para esta analise".
-- Mantenha o relatorio entre 200-400 palavras.`
+- Mantenha entre 300-500 palavras.
+- Comece DIRETO com "## Resumo Executivo" sem nenhum texto antes.`
 
 const insightSystem = `Voce e um assistente fiscal que gera insights curtos para um dashboard.
 Gere EXATAMENTE UMA frase (maximo 2 frases) com um insight relevante sobre a situacao fiscal.
@@ -342,7 +381,7 @@ func GetExecutiveSummaryHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		dataPrompt := buildExecutiveSummaryPrompt(resumo)
-		aiResp, err := aiClient.Generate(executiveSummarySystem, dataPrompt, services.ModelFlash, 2048)
+		aiResp, err := aiClient.Generate(executiveSummarySystem, dataPrompt, services.ModelFlash, 4096)
 		if err != nil {
 			fmt.Printf("AI generation error (falling back): %v\n", err)
 			// Re-check cache — worker may have saved a report while we were waiting
@@ -451,6 +490,13 @@ func buildFallbackNarrative(r *ApuracaoResumo) string {
 	sb.WriteString(fmt.Sprintf("**Faturamento bruto:** R$ %s\n\n", formatBRL(r.FaturamentoBruto)))
 	sb.WriteString(fmt.Sprintf("**ICMS a recolher:** R$ %s (debito R$ %s - credito R$ %s)\n\n",
 		formatBRL(r.IcmsAPagar), formatBRL(r.IcmsSaida), formatBRL(r.IcmsEntrada)))
+
+	sb.WriteString("### Novos Impostos - Reforma Tributaria (Projecao)\n\n")
+	sb.WriteString("| Imposto | Valor |\n")
+	sb.WriteString("|---------|-------|\n")
+	sb.WriteString(fmt.Sprintf("| IBS Projetado | R$ %s |\n", formatBRL(r.IbsProjetado)))
+	sb.WriteString(fmt.Sprintf("| CBS Projetado | R$ %s |\n", formatBRL(r.CbsProjetado)))
+	sb.WriteString(fmt.Sprintf("| **Total IBS + CBS** | **R$ %s** |\n\n", formatBRL(r.IbsProjetado+r.CbsProjetado)))
 
 	if r.FaturamentoAnterior > 0 {
 		varFat := ((r.FaturamentoBruto - r.FaturamentoAnterior) / r.FaturamentoAnterior) * 100
