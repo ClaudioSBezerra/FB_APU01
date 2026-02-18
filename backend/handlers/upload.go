@@ -216,10 +216,14 @@ func UploadHandler(db *sql.DB) http.HandlerFunc {
 		}
 		// ---------------------------------------------
 
-		// Insert job into database
+		// Insert job into database (with expected_lines from frontend for progress tracking)
 		var jobID string
-		query := `INSERT INTO import_jobs (filename, status, message, company_id) VALUES ($1, $2, $3, $4) RETURNING id`
-		err = db.QueryRow(query, safeFilename, "pending", "File received and saved", companyID).Scan(&jobID)
+		expLines := 0
+		if expectedLines != "" && expectedLines != "unknown" && expectedLines != "not_found" {
+			expLines, _ = strconv.Atoi(expectedLines)
+		}
+		query := `INSERT INTO import_jobs (filename, status, message, company_id, expected_lines) VALUES ($1, $2, $3, $4, $5) RETURNING id`
+		err = db.QueryRow(query, safeFilename, "pending", "File received and saved", companyID, expLines).Scan(&jobID)
 		if err != nil {
 			// Try to cleanup file if DB fails
 			os.Remove(savePath)

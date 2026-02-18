@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -20,11 +19,22 @@ import (
 )
 
 func StartWorker(db *sql.DB) {
-	// Worker Pool Size: 2 concurrent workers (Optimized for 2 vCPU VPS)
-	// Prevents CPU starvation and 504 Gateway Timeouts
-	const WorkerPoolSize = 2
+	// Worker Pool Size: 3 concurrent workers
+	// I/O-bound (DB writes), safe for 2 vCPU since workers spend ~70% waiting on PostgreSQL
+	const WorkerPoolSize = 3
 
 	fmt.Printf("Starting Background Worker Pool (%d workers)...\n", WorkerPoolSize)
+
+	// AUTO-MIGRATE: Ensure last_line_processed column exists
+	// Check first to avoid ALTER TABLE lock contention with active transactions
+	var colExists bool
+	err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='import_jobs' AND column_name='last_line_processed')`).Scan(&colExists)
+	if err == nil && !colExists {
+		_, err = db.Exec(`ALTER TABLE import_jobs ADD COLUMN IF NOT EXISTS last_line_processed INT DEFAULT 0`)
+		if err != nil {
+			fmt.Printf("Worker: Warning adding checkpoint column: %v\n", err)
+		}
+	}
 
 	// CRASH RECOVERY: Reset any 'processing' jobs to 'pending' on startup
 	// This ensures that if the server crashed, interrupted jobs are resumed automatically
@@ -190,31 +200,6 @@ func processNextJob(db *sql.DB, workerID int) {
 	}
 }
 
-func countLines(filename string) (int, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return 0, err
-	}
-	defer file.Close()
-
-	buf := make([]byte, 32*1024)
-	count := 0
-	lineSep := []byte{'\n'}
-
-	for {
-		c, err := file.Read(buf)
-		count += bytes.Count(buf[:c], lineSep)
-
-		switch {
-		case err == io.EOF:
-			return count, nil
-
-		case err != nil:
-			return count, err
-		}
-	}
-}
-
 // validateFileIntegrity checks if the file has a valid SPED header and footer
 func validateFileIntegrity(path string) error {
 	f, err := os.Open(path)
@@ -308,16 +293,9 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 		return "", fmt.Errorf("database connection lost before start: %v", err)
 	}
 
-	// Auto-Migrate: Ensure last_line_processed column exists
-	// This allows us to resume processing if it crashes
-	_, err := db.Exec(`ALTER TABLE import_jobs ADD COLUMN IF NOT EXISTS last_line_processed INT DEFAULT 0`)
-	if err != nil {
-		fmt.Printf("Worker: Warning checking checkpoint column: %v\n", err)
-	}
-
 	// CHECKPOINT: Check if we are resuming a job
 	var lastLineProcessed int
-	err = db.QueryRow("SELECT COALESCE(last_line_processed, 0) FROM import_jobs WHERE id = $1", jobID).Scan(&lastLineProcessed)
+	err := db.QueryRow("SELECT COALESCE(last_line_processed, 0) FROM import_jobs WHERE id = $1", jobID).Scan(&lastLineProcessed)
 	if err == nil && lastLineProcessed > 0 {
 		fmt.Printf("Worker: RESUMING job %s from line %d\n", jobID, lastLineProcessed)
 	} else {
@@ -382,13 +360,16 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 		fmt.Printf("Worker: File Size: %d bytes (%.2f MB)\n", fileInfo.Size(), float64(fileInfo.Size())/1024/1024)
 	}
 
-	// Count total lines for progress tracking
-	totalLines, err := countLines(path)
-	if err != nil {
-		fmt.Printf("Worker: Warning counting lines: %v\n", err)
-		totalLines = 0
+	// Estimate total lines from expected_lines (set by frontend) or file size
+	var totalLines int
+	var expectedLines int
+	if err := db.QueryRow("SELECT COALESCE(expected_lines, 0) FROM import_jobs WHERE id = $1", jobID).Scan(&expectedLines); err == nil && expectedLines > 0 {
+		totalLines = expectedLines
+	} else if fileInfo != nil {
+		// Estimate: ~150 bytes per filtered SPED line
+		totalLines = int(fileInfo.Size() / 150)
 	}
-	fmt.Printf("Worker: Total lines to process: %d\n", totalLines)
+	fmt.Printf("Worker: Estimated lines to process: %d\n", totalLines)
 
 	// Warning check for empty CFOP table
 	var cfopCount int
@@ -399,9 +380,9 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 	}
 
 	// BATCH PROCESSING SETUP
-	// Instead of one huge transaction, we commit every BatchSize lines.
-	// Reduced to 1000 to prevent DB locks and allow smoother HTTP handling
-	const BatchSize = 1000
+	// Commit every BatchSize lines to prevent long-held locks
+	// 5000 balances throughput (fewer Prepare cycles) vs responsiveness
+	const BatchSize = 5000
 	var tx *sql.Tx
 	var stmtPart, stmtC100, stmtC190, stmtC500, stmtC600, stmtD100, stmtD500 *sql.Stmt
 
@@ -566,13 +547,14 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 
 		lineCount++
 
-		// Progress Update & Checkpoint
-		if lineCount%1000 == 0 || lineCount%BatchSize == 0 {
-			// Console Log for Real-time tracking with RAM usage
-			var m runtime.MemStats
-			runtime.ReadMemStats(&m)
-			fmt.Printf("Worker: Line %d / %d (%.1f%%) | RAM: %d MB | Reg: %s\n",
-				lineCount, totalLines, float64(lineCount)/float64(totalLines)*100, m.Alloc/1024/1024, reg)
+		// Progress Update (every BatchSize lines, no ReadMemStats to avoid GC pauses)
+		if lineCount%BatchSize == 0 {
+			if totalLines > 0 {
+				fmt.Printf("Worker: Line %d / %d (%.1f%%) | Reg: %s\n",
+					lineCount, totalLines, float64(lineCount)/float64(totalLines)*100, reg)
+			} else {
+				fmt.Printf("Worker: Line %d | Reg: %s\n", lineCount, reg)
+			}
 		}
 
 		// Check for 9999 OR D990 (End of File)
@@ -614,9 +596,8 @@ func processFile(db *sql.DB, jobID, filename string) (string, error) {
 				fmt.Printf("Worker: Warning updating checkpoint: %v\n", err)
 			}
 
-			// THROTTLE: Sleep 200ms to allow HTTP requests to be processed (Prevents 504 Timeout on 2 vCPU)
-			// Increased from 50ms to 200ms because 504 errors were still occurring during heavy parsing
-			time.Sleep(200 * time.Millisecond)
+			// THROTTLE: Brief yield to allow HTTP requests to be processed
+			time.Sleep(50 * time.Millisecond)
 
 			if err := startBatch(); err != nil {
 				return "", fmt.Errorf("failed to restart batch at line %d: %v", lineCount, err)

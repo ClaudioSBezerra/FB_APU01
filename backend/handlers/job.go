@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -60,9 +62,13 @@ func GetJobParticipantsHandler(db *sql.DB) http.HandlerFunc {
 		}
 		jobID := pathParts[3]
 
+		// Use context with timeout to prevent query from hanging during heavy imports
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
 		// Verify Job Ownership
 		var exists bool
-		err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM import_jobs WHERE id = $1 AND company_id = $2)", jobID, companyID).Scan(&exists)
+		err = db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM import_jobs WHERE id = $1 AND company_id = $2)", jobID, companyID).Scan(&exists)
 		if err != nil {
 			http.Error(w, "Database error checking ownership: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -72,10 +78,10 @@ func GetJobParticipantsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		rows, err := db.Query(`
-			SELECT id, cod_part, nome, cnpj, cpf, ie 
-			FROM participants 
-			WHERE job_id = $1 
+		rows, err := db.QueryContext(ctx, `
+			SELECT id, cod_part, nome, cnpj, cpf, ie
+			FROM participants
+			WHERE job_id = $1
 			ORDER BY nome ASC
 		`, jobID)
 		if err != nil {
@@ -121,11 +127,15 @@ func ListJobsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		rows, err := db.Query(`
-			SELECT id, filename, status, message, created_at, updated_at 
-			FROM import_jobs 
+		// Use context with timeout to prevent query from hanging during heavy imports
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		rows, err := db.QueryContext(ctx, `
+			SELECT id, filename, status, message, created_at, updated_at
+			FROM import_jobs
 			WHERE company_id = $1
-			ORDER BY created_at DESC 
+			ORDER BY created_at DESC
 			LIMIT 100
 		`, companyID)
 		if err != nil {
@@ -181,10 +191,14 @@ func GetJobStatusHandler(db *sql.DB) http.HandlerFunc {
 		}
 		jobID := pathParts[3]
 
+		// Use context with timeout to prevent query from hanging during heavy imports
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
 		var job JobStatusResponse
 		query := `SELECT id, filename, status, message, created_at, updated_at FROM import_jobs WHERE id = $1 AND company_id = $2`
 
-		err = db.QueryRow(query, jobID, companyID).Scan(&job.ID, &job.Filename, &job.Status, &job.Message, &job.CreatedAt, &job.UpdatedAt)
+		err = db.QueryRowContext(ctx, query, jobID, companyID).Scan(&job.ID, &job.Filename, &job.Status, &job.Message, &job.CreatedAt, &job.UpdatedAt)
 		if err == sql.ErrNoRows {
 			http.Error(w, "Job not found", http.StatusNotFound)
 			return
