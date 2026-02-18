@@ -145,7 +145,7 @@ export default function ExecutiveSummary() {
     fetchPeriods();
   }, [token, companyId]);
 
-  const fetchSummary = async (periodo: string) => {
+  const fetchSummary = async (periodo: string, force = false) => {
     setLoading(true);
     try {
       const headers: Record<string, string> = {
@@ -154,7 +154,8 @@ export default function ExecutiveSummary() {
       if (companyId) {
         headers['X-Company-ID'] = companyId;
       }
-      const response = await fetch(`/api/reports/executive-summary?periodo=${periodo}`, { headers });
+      const forceParam = force ? '&force=true' : '';
+      const response = await fetch(`/api/reports/executive-summary?periodo=${periodo}${forceParam}`, { headers });
       if (response.ok) {
         const result = await response.json();
         setData(result);
@@ -214,9 +215,23 @@ export default function ExecutiveSummary() {
           size="icon"
           onClick={() => fetchSummary(selectedPeriod)}
           disabled={loading}
+          title="Atualizar"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
         </Button>
+
+        {data?.cached && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchSummary(selectedPeriod, true)}
+            disabled={loading}
+            className="text-xs gap-1"
+          >
+            <Sparkles className="h-3 w-3" />
+            Regenerar
+          </Button>
+        )}
 
         {data?.model && (
           <span className="text-[10px] text-muted-foreground">

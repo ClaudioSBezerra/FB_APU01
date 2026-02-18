@@ -165,26 +165,58 @@ func getApuracaoResumo(db *sql.DB, companyID, periodo string) (*ApuracaoResumo, 
 		FROM import_jobs WHERE company_id = $1 AND status = 'completed'
 	`, companyID).Scan(&resumo.TotalJobs, &resumo.UltimaImportacao)
 
-	// Aggregate IBS/CBS projections from all aggregated tables
-	db.QueryRow(`
-		SELECT COALESCE(SUM(ibs), 0), COALESCE(SUM(cbs), 0) FROM (
-			SELECT SUM(vl_ibs_projetado) as ibs, SUM(vl_cbs_projetado) as cbs
-			FROM operacoes_comerciais oc JOIN import_jobs j ON j.id = oc.job_id
-			WHERE j.company_id = $1 AND oc.mes_ano = $2
-			UNION ALL
-			SELECT SUM(vl_ibs_projetado), SUM(vl_cbs_projetado)
-			FROM energia_agregado ea JOIN import_jobs j ON j.id = ea.job_id
-			WHERE j.company_id = $1 AND ea.mes_ano = $2
-			UNION ALL
-			SELECT SUM(vl_ibs_projetado), SUM(vl_cbs_projetado)
-			FROM frete_agregado fa JOIN import_jobs j ON j.id = fa.job_id
-			WHERE j.company_id = $1 AND fa.mes_ano = $2
-			UNION ALL
-			SELECT SUM(vl_ibs_projetado), SUM(vl_cbs_projetado)
-			FROM comunicacoes_agregado ca JOIN import_jobs j ON j.id = ca.job_id
-			WHERE j.company_id = $1 AND ca.mes_ano = $2
-		) combined
-	`, companyID, periodo).Scan(&resumo.IbsProjetado, &resumo.CbsProjetado)
+	// Calculate IBS/CBS projections using same logic as Dashboard (year 2033 = full reform)
+	// Uses mv_mercadorias_agregada with NET calculation (Debit - Credit), excludes CFOP T and O
+	ibsCbsRows, err := db.Query(`
+		SELECT
+			tipo,
+			COALESCE(SUM(CASE WHEN tipo_cfop NOT IN ('T', 'O') THEN valor_contabil ELSE 0 END), 0) as taxable_valor,
+			COALESCE(SUM(CASE WHEN tipo_cfop NOT IN ('T', 'O') THEN vl_icms_origem ELSE 0 END), 0) as taxable_icms
+		FROM mv_mercadorias_agregada
+		WHERE company_id = $1 AND mes_ano = $2
+		GROUP BY tipo
+	`, companyID, periodo)
+	if err == nil {
+		defer ibsCbsRows.Close()
+		// Use 2033 rates (full reform implementation)
+		var percIBSUF, percIBSMun, percCBS, percReducICMS float64
+		rateErr := db.QueryRow(`SELECT perc_ibs_uf, perc_ibs_mun, perc_cbs, perc_reduc_icms FROM tabela_aliquotas WHERE ano = 2033`).
+			Scan(&percIBSUF, &percIBSMun, &percCBS, &percReducICMS)
+		if rateErr != nil {
+			// Default 2033 rates
+			percIBSUF = 26.0
+			percIBSMun = 5.0
+			percCBS = 8.80
+			percReducICMS = 100.0
+		}
+		ibsRate := (percIBSUF + percIBSMun) / 100.0
+		cbsRate := percCBS / 100.0
+		var ibsDebit, ibsCredit, cbsDebit, cbsCredit float64
+		for ibsCbsRows.Next() {
+			var tipo string
+			var valTax, icmsTax float64
+			if err := ibsCbsRows.Scan(&tipo, &valTax, &icmsTax); err != nil {
+				continue
+			}
+			icmsProj := icmsTax * (1.0 - (percReducICMS / 100.0))
+			base := valTax - icmsProj
+			if tipo == "SAIDA" {
+				ibsDebit = base * ibsRate
+				cbsDebit = base * cbsRate
+			} else {
+				ibsCredit = base * ibsRate
+				cbsCredit = base * cbsRate
+			}
+		}
+		resumo.IbsProjetado = ibsDebit - ibsCredit
+		resumo.CbsProjetado = cbsDebit - cbsCredit
+		if resumo.IbsProjetado < 0 {
+			resumo.IbsProjetado = 0
+		}
+		if resumo.CbsProjetado < 0 {
+			resumo.CbsProjetado = 0
+		}
+	}
 
 	return resumo, nil
 }
@@ -218,10 +250,11 @@ func buildExecutiveSummaryPrompt(resumo *ApuracaoResumo) string {
 	sb.WriteString(fmt.Sprintf("- ICMS sobre entradas (credito): R$ %.2f\n", resumo.IcmsEntrada))
 	sb.WriteString(fmt.Sprintf("- ICMS a recolher (debito - credito): R$ %.2f\n", resumo.IcmsAPagar))
 
-	sb.WriteString("\nNOVOS IMPOSTOS - REFORMA TRIBUTARIA (Projecao):\n")
-	sb.WriteString(fmt.Sprintf("- IBS projetado (Imposto sobre Bens e Servicos): R$ %.2f\n", resumo.IbsProjetado))
-	sb.WriteString(fmt.Sprintf("- CBS projetado (Contribuicao sobre Bens e Servicos): R$ %.2f\n", resumo.CbsProjetado))
-	sb.WriteString(fmt.Sprintf("- Total IBS + CBS: R$ %.2f\n", resumo.IbsProjetado+resumo.CbsProjetado))
+	sb.WriteString("\nNOVOS IMPOSTOS - REFORMA TRIBUTARIA (Projecao 2033 - Implementacao Completa):\n")
+	sb.WriteString("NOTA: Valores calculados como SALDO A PAGAR (debito saidas - credito entradas), mesma logica do painel operacional.\n")
+	sb.WriteString(fmt.Sprintf("- IBS projetado a pagar (Imposto sobre Bens e Servicos): R$ %.2f\n", resumo.IbsProjetado))
+	sb.WriteString(fmt.Sprintf("- CBS projetado a pagar (Contribuicao sobre Bens e Servicos): R$ %.2f\n", resumo.CbsProjetado))
+	sb.WriteString(fmt.Sprintf("- Total IBS + CBS a pagar: R$ %.2f\n", resumo.IbsProjetado+resumo.CbsProjetado))
 
 	if resumo.FaturamentoAnterior > 0 {
 		varFat := ((resumo.FaturamentoBruto - resumo.FaturamentoAnterior) / resumo.FaturamentoAnterior) * 100
@@ -266,9 +299,9 @@ REGRAS:
      | Imposto | Valor | Observacao |
      |---------|-------|------------|
      | ICMS a Recolher | R$ X | Imposto atual |
-     | IBS Projetado | R$ X | Novo imposto (Reforma Tributaria) |
-     | CBS Projetado | R$ X | Novo imposto (Reforma Tributaria) |
-     | Total IBS + CBS | R$ X | Substituira ICMS + PIS/COFINS |
+     | IBS Projetado a Pagar | R$ X | Novo imposto - projecao 2033 |
+     | CBS Projetado a Pagar | R$ X | Novo imposto - projecao 2033 |
+     | Total IBS + CBS a Pagar | R$ X | Substituira ICMS + PIS/COFINS |
   4. Comparativo com periodo anterior (se disponivel) com variacao percentual
   5. Destaques relevantes
   6. Recomendacoes praticas (2-3 itens)
@@ -320,21 +353,26 @@ func GetExecutiveSummaryHandler(db *sql.DB) http.HandlerFunc {
 			periodo = fmt.Sprintf("%02d/%04d", now.Month(), now.Year())
 		}
 
+		// Check if force regeneration requested (skip cache)
+		forceRegen := r.URL.Query().Get("force") == "true"
+
 		// Check if we already have a saved report for this company/period (to save tokens)
 		var savedNarrativa string
 		var savedModel string
 		var resumo *ApuracaoResumo
 
-		errCache := db.QueryRow(`
-			SELECT resumo, 'cached' as model
-			FROM ai_reports
-			WHERE company_id = $1 AND periodo = $2
-			ORDER BY created_at DESC
-			LIMIT 1
-		`, companyID, periodo).Scan(&savedNarrativa, &savedModel)
+		if !forceRegen {
+			db.QueryRow(`
+				SELECT resumo, 'cached' as model
+				FROM ai_reports
+				WHERE company_id = $1 AND periodo = $2
+				ORDER BY created_at DESC
+				LIMIT 1
+			`, companyID, periodo).Scan(&savedNarrativa, &savedModel)
+		}
 
 		// If found saved report, aggregate data and return cached version
-		if errCache == nil && savedNarrativa != "" {
+		if !forceRegen && savedNarrativa != "" {
 			resumo, err = getApuracaoResumo(db, companyID, periodo)
 			if err != nil {
 				http.Error(w, "Error aggregating data: "+err.Error(), http.StatusInternalServerError)

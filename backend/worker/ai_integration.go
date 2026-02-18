@@ -226,26 +226,50 @@ func getApuracaoResumoForAI(db *sql.DB, companyID, periodo string) (*AIResumo, e
 		WHERE mv.company_id = $1 AND mv.mes_ano = $2
 	`, companyID, periodo).Scan(&resumo.TotalNFes)
 
-	// Aggregate IBS/CBS projections from all aggregated tables
-	db.QueryRow(`
-		SELECT COALESCE(SUM(ibs), 0), COALESCE(SUM(cbs), 0) FROM (
-			SELECT SUM(vl_ibs_projetado) as ibs, SUM(vl_cbs_projetado) as cbs
-			FROM operacoes_comerciais oc JOIN import_jobs j ON j.id = oc.job_id
-			WHERE j.company_id = $1 AND oc.mes_ano = $2
-			UNION ALL
-			SELECT SUM(vl_ibs_projetado), SUM(vl_cbs_projetado)
-			FROM energia_agregado ea JOIN import_jobs j ON j.id = ea.job_id
-			WHERE j.company_id = $1 AND ea.mes_ano = $2
-			UNION ALL
-			SELECT SUM(vl_ibs_projetado), SUM(vl_cbs_projetado)
-			FROM frete_agregado fa JOIN import_jobs j ON j.id = fa.job_id
-			WHERE j.company_id = $1 AND fa.mes_ano = $2
-			UNION ALL
-			SELECT SUM(vl_ibs_projetado), SUM(vl_cbs_projetado)
-			FROM comunicacoes_agregado ca JOIN import_jobs j ON j.id = ca.job_id
-			WHERE j.company_id = $1 AND ca.mes_ano = $2
-		) combined
-	`, companyID, periodo).Scan(&resumo.IbsProjetado, &resumo.CbsProjetado)
+	// Calculate IBS/CBS projections using same logic as Dashboard (year 2033 = full reform)
+	// Uses mv_mercadorias_agregada with NET calculation (Debit - Credit), excludes CFOP T and O
+	var rates TaxRates
+	rates, _ = getTaxRates(db, 2033)
+
+	ibsCbsRows, err := db.Query(`
+		SELECT
+			tipo,
+			COALESCE(SUM(CASE WHEN tipo_cfop NOT IN ('T', 'O') THEN valor_contabil ELSE 0 END), 0) as taxable_valor,
+			COALESCE(SUM(CASE WHEN tipo_cfop NOT IN ('T', 'O') THEN vl_icms_origem ELSE 0 END), 0) as taxable_icms
+		FROM mv_mercadorias_agregada
+		WHERE company_id = $1 AND mes_ano = $2
+		GROUP BY tipo
+	`, companyID, periodo)
+	if err == nil {
+		defer ibsCbsRows.Close()
+		var ibsDebit, ibsCredit, cbsDebit, cbsCredit float64
+		ibsRate := (rates.PercIBS_UF + rates.PercIBS_Mun) / 100.0
+		cbsRate := rates.PercCBS / 100.0
+		for ibsCbsRows.Next() {
+			var tipo string
+			var valTax, icmsTax float64
+			if err := ibsCbsRows.Scan(&tipo, &valTax, &icmsTax); err != nil {
+				continue
+			}
+			icmsProj := icmsTax * (1.0 - (rates.PercReducICMS / 100.0))
+			base := valTax - icmsProj
+			if tipo == "SAIDA" {
+				ibsDebit = base * ibsRate
+				cbsDebit = base * cbsRate
+			} else {
+				ibsCredit = base * ibsRate
+				cbsCredit = base * cbsRate
+			}
+		}
+		resumo.IbsProjetado = ibsDebit - ibsCredit
+		resumo.CbsProjetado = cbsDebit - cbsCredit
+		if resumo.IbsProjetado < 0 {
+			resumo.IbsProjetado = 0
+		}
+		if resumo.CbsProjetado < 0 {
+			resumo.CbsProjetado = 0
+		}
+	}
 
 	return resumo, nil
 }
@@ -263,10 +287,11 @@ func buildExecutiveSummaryPromptForAI(resumo *AIResumo) string {
 	sb.WriteString(fmt.Sprintf("- ICMS sobre entradas (crédito): R$ %.2f\n", resumo.IcmsEntrada))
 	sb.WriteString(fmt.Sprintf("- ICMS a recolher (débito - crédito): R$ %.2f\n", resumo.IcmsAPagar))
 
-	sb.WriteString("\nNOVOS IMPOSTOS - REFORMA TRIBUTÁRIA (Projeção):\n")
-	sb.WriteString(fmt.Sprintf("- IBS projetado (Imposto sobre Bens e Serviços): R$ %.2f\n", resumo.IbsProjetado))
-	sb.WriteString(fmt.Sprintf("- CBS projetado (Contribuição sobre Bens e Serviços): R$ %.2f\n", resumo.CbsProjetado))
-	sb.WriteString(fmt.Sprintf("- Total IBS + CBS: R$ %.2f\n", resumo.IbsProjetado+resumo.CbsProjetado))
+	sb.WriteString("\nNOVOS IMPOSTOS - REFORMA TRIBUTÁRIA (Projeção 2033 - Implementação Completa):\n")
+	sb.WriteString("NOTA: Valores calculados como SALDO A PAGAR (débito saídas - crédito entradas), mesma lógica do painel operacional.\n")
+	sb.WriteString(fmt.Sprintf("- IBS projetado a pagar (Imposto sobre Bens e Serviços): R$ %.2f\n", resumo.IbsProjetado))
+	sb.WriteString(fmt.Sprintf("- CBS projetado a pagar (Contribuição sobre Bens e Serviços): R$ %.2f\n", resumo.CbsProjetado))
+	sb.WriteString(fmt.Sprintf("- Total IBS + CBS a pagar: R$ %.2f\n", resumo.IbsProjetado+resumo.CbsProjetado))
 
 	if len(resumo.Operacoes) > 0 {
 		sb.WriteString("\nDETALHAMENTO POR TIPO DE OPERAÇÃO:\n")
@@ -300,9 +325,9 @@ REGRAS:
      | Imposto | Valor | Observação |
      |---------|-------|------------|
      | ICMS a Recolher | R$ X | Imposto atual |
-     | IBS Projetado | R$ X | Novo imposto (Reforma Tributária) |
-     | CBS Projetado | R$ X | Novo imposto (Reforma Tributária) |
-     | Total IBS + CBS | R$ X | Substituirá ICMS + PIS/COFINS |
+     | IBS Projetado a Pagar | R$ X | Novo imposto - projeção 2033 |
+     | CBS Projetado a Pagar | R$ X | Novo imposto - projeção 2033 |
+     | Total IBS + CBS a Pagar | R$ X | Substituirá ICMS + PIS/COFINS |
   4. Destaques relevantes
   5. Recomendações práticas (2-3 itens)
 - NÃO invente dados. Use APENAS os números fornecidos.
