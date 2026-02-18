@@ -190,57 +190,87 @@ func (c *AIClient) doRequest(reqBody chatRequest) (*AIResponse, error) {
 }
 
 // extractMarkdownReport extracts the final Markdown report from GLM reasoning output.
-// GLM flash models always include chain-of-thought in reasoning_content.
-// Strategy: find the last "## Resumo" header and extract everything from there.
-// If not found, try to find the largest contiguous block of Portuguese text.
+// GLM flash models return chain-of-thought in reasoning_content with the actual
+// report embedded (often indented). This function finds the best candidate block
+// starting with "## Resumo" that has enough content to be a real report.
 func extractMarkdownReport(text string) string {
 	lines := strings.Split(text, "\n")
 
-	// Strategy 1: Find the LAST "## Resumo" line (possibly indented)
-	reportStart := -1
-	for i := len(lines) - 1; i >= 0; i-- {
-		trimmed := strings.TrimSpace(lines[i])
+	// Find ALL occurrences of "## Resumo" and pick the best one
+	// (the one followed by the most content lines)
+	type candidate struct {
+		startIdx int
+		content  string
+	}
+	var candidates []candidate
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "## Resumo") {
-			reportStart = i
-			break
+			extracted := cleanExtractedLines(lines[i:])
+			candidates = append(candidates, candidate{startIdx: i, content: extracted})
 		}
 	}
 
-	if reportStart >= 0 {
-		return cleanExtractedLines(lines[reportStart:])
-	}
-
-	// Strategy 2: Find last block starting with any "## " header
-	for i := len(lines) - 1; i >= 0; i-- {
-		trimmed := strings.TrimSpace(lines[i])
-		if strings.HasPrefix(trimmed, "## ") && !strings.Contains(trimmed, "Analyze") && !strings.Contains(trimmed, "Review") {
-			return cleanExtractedLines(lines[i:])
-		}
-	}
-
-	// Strategy 3: Look for "Final" section markers typical of GLM reasoning
-	// e.g., "5. **Final" or "**Final Output**" or "**Resultado Final**"
-	for i := len(lines) - 1; i >= 0; i-- {
-		lower := strings.ToLower(strings.TrimSpace(lines[i]))
-		if strings.Contains(lower, "final output") || strings.Contains(lower, "resultado final") ||
-			strings.Contains(lower, "relatório final") || strings.Contains(lower, "relatorio final") {
-			// The report content starts on the NEXT line (or a few lines after)
-			for j := i + 1; j < len(lines); j++ {
-				trimmed := strings.TrimSpace(lines[j])
-				if strings.HasPrefix(trimmed, "## ") || strings.HasPrefix(trimmed, "# ") {
-					return cleanExtractedLines(lines[j:])
-				}
+	// Pick the candidate with the longest content (most likely the full report)
+	if len(candidates) > 0 {
+		best := candidates[0]
+		for _, c := range candidates[1:] {
+			if len(c.content) > len(best.content) {
+				best = c
 			}
 		}
+		// Only use if it has meaningful content (> 200 chars = likely a real report)
+		if len(best.content) > 200 {
+			return best.content
+		}
+	}
+
+	// Fallback: look for the longest block starting with any "## " header
+	// that contains Portuguese fiscal keywords
+	ptKeywords := []string{"ICMS", "faturamento", "recolher", "tributari", "imposto", "IBS", "CBS"}
+	bestBlock := ""
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "## ") {
+			block := cleanExtractedLines(lines[i:])
+			// Check if it contains Portuguese fiscal content
+			keywordCount := 0
+			blockLower := strings.ToLower(block)
+			for _, kw := range ptKeywords {
+				if strings.Contains(blockLower, strings.ToLower(kw)) {
+					keywordCount++
+				}
+			}
+			if keywordCount >= 3 && len(block) > len(bestBlock) {
+				bestBlock = block
+			}
+		}
+	}
+	if bestBlock != "" {
+		return bestBlock
 	}
 
 	return text
 }
 
-// cleanExtractedLines removes indentation from extracted report lines
+// cleanExtractedLines removes indentation and trailing reasoning from extracted lines.
+// Stops extraction when it encounters a new numbered reasoning step (e.g., "5. **Review")
+// which indicates we've gone past the report back into chain-of-thought.
 func cleanExtractedLines(lines []string) string {
 	var sb strings.Builder
+	foundContent := false
 	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Stop if we hit a new numbered reasoning step AFTER finding report content
+		// Pattern: line starts with a digit followed by ". " (e.g., "5. **Review")
+		if foundContent && len(trimmed) > 3 {
+			if trimmed[0] >= '1' && trimmed[0] <= '9' && (strings.HasPrefix(trimmed[1:], ". **") || strings.HasPrefix(trimmed[1:], ".  **")) {
+				break
+			}
+		}
+
 		// Remove leading indentation (up to 8 spaces from chain-of-thought nesting)
 		cleaned := line
 		spaces := 0
@@ -254,6 +284,11 @@ func cleanExtractedLines(lines []string) string {
 		if spaces > 0 && spaces <= 8 {
 			cleaned = cleaned[spaces:]
 		}
+
+		if strings.TrimSpace(cleaned) != "" {
+			foundContent = true
+		}
+
 		sb.WriteString(cleaned)
 		sb.WriteString("\n")
 	}
