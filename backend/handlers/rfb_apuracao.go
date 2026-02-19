@@ -162,6 +162,83 @@ func SolicitarApuracaoHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+// DownloadManualHandler manually triggers the download for a request that has a tiquete
+func DownloadManualHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+
+		companyID, err := GetEffectiveCompanyID(db, userID, r.Header.Get("X-Company-ID"))
+		if err != nil {
+			http.Error(w, "Error getting company: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		var req struct {
+			RequestID string `json:"request_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		// Verify request belongs to company and has a tiquete
+		var requestID, tiquete, status string
+		err = db.QueryRow(`
+			SELECT id, COALESCE(tiquete, ''), status FROM rfb_requests
+			WHERE id = $1 AND company_id = $2
+		`, req.RequestID, companyID).Scan(&requestID, &tiquete, &status)
+		if err == sql.ErrNoRows {
+			http.Error(w, "Solicitação não encontrada", http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			http.Error(w, "Erro ao buscar solicitação: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if tiquete == "" {
+			http.Error(w, "Solicitação sem tíquete - não é possível fazer download", http.StatusBadRequest)
+			return
+		}
+
+		if status == "completed" {
+			http.Error(w, "Download já realizado para esta solicitação", http.StatusConflict)
+			return
+		}
+
+		if status == "downloading" {
+			http.Error(w, "Download já está em andamento", http.StatusConflict)
+			return
+		}
+
+		// Trigger download in background
+		go func() {
+			rfbClient := services.NewRFBClient()
+			if err := services.ProcessarDownloadRFB(db, rfbClient, requestID); err != nil {
+				log.Printf("[RFB Manual Download] Error processing request %s: %v", requestID, err)
+			}
+		}()
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "downloading",
+			"message": "Download iniciado. Acompanhe o status na lista de solicitações.",
+		})
+	}
+}
+
 // RFBWebhookHandler receives callbacks from the RFB API (PUBLIC - no JWT auth)
 func RFBWebhookHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

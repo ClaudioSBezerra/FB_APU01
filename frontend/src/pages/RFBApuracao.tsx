@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Globe, Send, RefreshCw, ChevronLeft, AlertTriangle } from 'lucide-react';
+import { Globe, Send, RefreshCw, ChevronLeft, AlertTriangle, Download } from 'lucide-react';
 
 interface RFBRequest {
   id: string;
@@ -146,6 +146,26 @@ export default function RFBApuracao() {
       }
     } catch {
       setMessage({ type: 'error', text: 'Erro ao carregar detalhes' });
+    }
+  };
+
+  const handleDownloadManual = async (requestId: string) => {
+    setMessage(null);
+    try {
+      const response = await fetch('/api/rfb/apuracao/download', {
+        method: 'POST',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: requestId }),
+      });
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'Download iniciado! Acompanhe o status.' });
+        fetchRequests();
+      } else {
+        const text = await response.text();
+        setMessage({ type: 'error', text: text || 'Erro ao iniciar download' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Erro de conexão' });
     }
   };
 
@@ -367,12 +387,23 @@ export default function RFBApuracao() {
                         </p>
                       </div>
                     </div>
-                    {req.status === 'completed' && (
-                      <span className="text-xs text-muted-foreground">Clique para ver detalhes</span>
-                    )}
-                    {req.status === 'error' && (
-                      <Badge variant="destructive" className="text-xs">{req.error_code}</Badge>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {req.status === 'requested' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => { e.stopPropagation(); handleDownloadManual(req.id); }}
+                        >
+                          <Download className="mr-1 h-3 w-3" /> Download Manual
+                        </Button>
+                      )}
+                      {req.status === 'completed' && (
+                        <span className="text-xs text-muted-foreground">Clique para ver detalhes</span>
+                      )}
+                      {req.status === 'error' && (
+                        <Badge variant="destructive" className="text-xs">{req.error_code}</Badge>
+                      )}
+                    </div>
                   </div>
                 );
               })}
