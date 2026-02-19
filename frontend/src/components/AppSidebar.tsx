@@ -79,7 +79,8 @@ const menuItems = [
     title: "Conectar Receita Federal",
     icon: Globe,
     items: [
-      { title: "Importar Apuração RFB", url: "/rfb/importar", icon: Download, disabled: true },
+      { title: "Credenciais API", url: "/rfb/credenciais", icon: Globe },
+      { title: "Apuração CBS", url: "/rfb/apuracao", icon: Download },
     ]
   }
 ]

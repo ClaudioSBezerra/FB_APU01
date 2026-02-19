@@ -36,6 +36,9 @@ func StartWorker(db *sql.DB) {
 		}
 	}
 
+	// STARTUP CLEANUP: Finalize any jobs that were being cancelled
+	db.Exec("UPDATE import_jobs SET status = 'cancelled', message = 'Cancelado (servidor reiniciado)', updated_at = NOW() WHERE status = 'cancelling'")
+
 	// CRASH RECOVERY: Reset any 'processing' jobs to 'pending' on startup
 	// This ensures that if the server crashed, interrupted jobs are resumed automatically
 	res, err := db.Exec("UPDATE import_jobs SET status = 'pending', message = message || ' [Recovered]' WHERE status = 'processing'")
@@ -123,9 +126,14 @@ func processNextJob(db *sql.DB, workerID int) {
 	summary, err := processFile(db, id, filename)
 
 	if err != nil {
-		// Report Error
-		fmt.Printf("Worker #%d: Job %s failed: %v\n", workerID, id, err)
-		db.Exec("UPDATE import_jobs SET status = 'error', message = $1, updated_at = NOW() WHERE id = $2", err.Error(), id)
+		// Check if it was a cancellation
+		if strings.Contains(err.Error(), "cancelled by user") {
+			fmt.Printf("Worker #%d: Job %s cancelled by user\n", workerID, id)
+			db.Exec("UPDATE import_jobs SET status = 'cancelled', message = 'Cancelado pelo usuário', updated_at = NOW() WHERE id = $2", id)
+		} else {
+			fmt.Printf("Worker #%d: Job %s failed: %v\n", workerID, id, err)
+			db.Exec("UPDATE import_jobs SET status = 'error', message = $1, updated_at = NOW() WHERE id = $2", err.Error(), id)
+		}
 	} else {
 		// Report Success
 		fmt.Printf("Worker #%d: Job %s completed: %s\n", workerID, id, summary)

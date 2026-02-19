@@ -44,6 +44,13 @@ APP_URL=https://fbtax.cloud
 ZAI_API_KEY=your_zai_api_key_here
 
 # ========================================
+# RECEITA FEDERAL - API CBS/IBS
+# ========================================
+RFB_API_URL=https://api.receitafederal.gov.br
+RFB_TOKEN_URL=https://api.receitafederal.gov.br/token
+RFB_WEBHOOK_URL=https://fbtax.cloud/api/rfb/webhook
+
+# ========================================
 # SECURITY
 # ========================================
 CORS_ORIGINS=https://fbtax.cloud,https://www.fbtax.cloud

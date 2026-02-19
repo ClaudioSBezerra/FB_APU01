@@ -11,6 +11,8 @@ import TabelaCFOP from './pages/TabelaCFOP';
 import TabelaFornSimples from './pages/TabelaFornSimples';
 import GestaoAmbiente from './pages/GestaoAmbiente';
 import Managers from './pages/Managers';
+import RFBCredentials from './pages/RFBCredentials';
+import RFBApuracao from './pages/RFBApuracao';
 import AdminUsers from './pages/AdminUsers';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -123,7 +125,8 @@ function AppLayout() {
             <Route path="/apuracao/nfse" element={<ComingSoon title="Importar XMLs NFS-e" />} />
             
             {/* RFB */}
-            <Route path="/rfb/importar" element={<ComingSoon title="Importar Apuração RFB" />} />
+            <Route path="/rfb/credenciais" element={<RFBCredentials />} />
+            <Route path="/rfb/apuracao" element={<RFBApuracao />} />
           </Routes>
         </div>
         <Toaster />

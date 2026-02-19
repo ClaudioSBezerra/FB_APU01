@@ -392,7 +392,7 @@ func main() {
 	// Register Job Status Handler
 	http.HandleFunc("/api/jobs", withAuth(handlers.ListJobsHandler, ""))
 
-	// Custom wrapper for jobs/id
+	// Custom wrapper for jobs/id (supports /participants and /cancel sub-routes)
 	http.HandleFunc("/api/jobs/", func(w http.ResponseWriter, r *http.Request) {
 		database := getDB()
 		if database == nil {
@@ -400,9 +400,13 @@ func main() {
 			return
 		}
 		handlers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
-			id := strings.TrimPrefix(r.URL.Path, "/api/jobs/")
-			if strings.HasSuffix(id, "/participants") {
+			path := strings.TrimPrefix(r.URL.Path, "/api/jobs/")
+			if strings.HasSuffix(path, "/participants") {
 				handlers.GetJobParticipantsHandler(database)(w, r)
+				return
+			}
+			if strings.HasSuffix(path, "/cancel") {
+				handlers.CancelJobHandler(database)(w, r)
 				return
 			}
 			handlers.GetJobStatusHandler(database)(w, r)
@@ -501,6 +505,33 @@ func main() {
 			}
 		}
 	}, ""))
+
+	// RFB Credentials Endpoints (Conectar Receita Federal)
+	http.HandleFunc("/api/rfb/credentials", func(w http.ResponseWriter, r *http.Request) {
+		database := getDB()
+		if database == nil {
+			http.Error(w, "Database initializing...", http.StatusServiceUnavailable)
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			handlers.AuthMiddleware(handlers.GetRFBCredentialHandler(database), "")(w, r)
+		case http.MethodPost:
+			handlers.AuthMiddleware(handlers.SaveRFBCredentialHandler(database), "")(w, r)
+		case http.MethodDelete:
+			handlers.AuthMiddleware(handlers.DeleteRFBCredentialHandler(database), "")(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// RFB Apuração Endpoints
+	http.HandleFunc("/api/rfb/apuracao/solicitar", withAuth(handlers.SolicitarApuracaoHandler, ""))
+	http.HandleFunc("/api/rfb/apuracao/status", withAuth(handlers.StatusApuracaoHandler, ""))
+	http.HandleFunc("/api/rfb/apuracao/", withAuth(handlers.DetalheApuracaoHandler, ""))
+
+	// RFB Webhook (PUBLIC - no JWT auth, called by Receita Federal)
+	http.HandleFunc("/api/rfb/webhook", withDB(handlers.RFBWebhookHandler))
 
 	// Managers Endpoints (Gestores para relatorios IA)
 	http.HandleFunc("/api/managers", withAuth(handlers.ListManagersHandler, ""))

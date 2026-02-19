@@ -211,3 +211,60 @@ func GetJobStatusHandler(db *sql.DB) http.HandlerFunc {
 		json.NewEncoder(w).Encode(job)
 	}
 }
+
+func CancelJobHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+
+		companyID, err := GetEffectiveCompanyID(db, userID, r.Header.Get("X-Company-ID"))
+		if err != nil {
+			http.Error(w, "Error getting user company: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Extract job ID: /api/jobs/{id}/cancel
+		pathParts := strings.Split(r.URL.Path, "/")
+		if len(pathParts) < 5 {
+			http.Error(w, "Invalid URL", http.StatusBadRequest)
+			return
+		}
+		jobID := pathParts[3]
+
+		// Only cancel jobs that are pending or processing, and belong to this company
+		res, err := db.Exec(
+			"UPDATE import_jobs SET status = 'cancelling', message = 'Cancelamento solicitado pelo usuário', updated_at = NOW() WHERE id = $1 AND company_id = $2 AND status IN ('pending', 'processing')",
+			jobID, companyID,
+		)
+		if err != nil {
+			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		rows, _ := res.RowsAffected()
+		if rows == 0 {
+			http.Error(w, "Job not found or already completed", http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "cancelling", "message": "Job cancellation requested"})
+	}
+}
