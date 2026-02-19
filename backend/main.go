@@ -1,16 +1,19 @@
 package main
 
-// Force rebuild: 2026-02-15 - Version 5.5.0 - Z.AI Migration
+// Force rebuild: 2026-02-19 - Version 5.6.0 - RFB Integration + Stability Fixes
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"fb_apu01/handlers"
@@ -76,9 +79,11 @@ func initDBAsync() {
 				err = conn.Ping()
 				if err == nil {
 					// Configure Connection Pool
+					// MaxIdleConns=10 keeps connections warm for workers
+					// ConnMaxLifetime=30min prevents overnight stale connection kills
 					conn.SetMaxOpenConns(25)
-					conn.SetMaxIdleConns(5)
-					conn.SetConnMaxLifetime(5 * time.Minute)
+					conn.SetMaxIdleConns(10)
+					conn.SetConnMaxLifetime(30 * time.Minute)
 
 					dbMutex.Lock()
 					db = conn
@@ -570,7 +575,33 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	if err := server.ListenAndServe(); err != nil {
+	// Graceful Shutdown: close DB connections on SIGTERM/SIGINT
+	// Prevents stale connections accumulating in PostgreSQL overnight
+	go func() {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
+		sig := <-sigChan
+		log.Printf("Received signal %v, shutting down gracefully...", sig)
+
+		// Give active requests 10 seconds to finish
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := server.Shutdown(ctx); err != nil {
+			log.Printf("HTTP server shutdown error: %v", err)
+		}
+
+		database := getDB()
+		if database != nil {
+			log.Println("Closing database connections...")
+			database.Close()
+		}
+
+		log.Println("Shutdown complete.")
+		os.Exit(0)
+	}()
+
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 }

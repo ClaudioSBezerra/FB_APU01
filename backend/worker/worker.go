@@ -53,18 +53,24 @@ func StartWorker(db *sql.DB) {
 
 	for i := 0; i < WorkerPoolSize; i++ {
 		workerID := i + 1
-		go func(id int) {
-			defer func() {
-				if r := recover(); r != nil {
-					fmt.Printf("Worker #%d PANIC RECOVERED: %v\n", id, r)
-				}
-			}()
-			fmt.Printf("Worker #%d started\n", id)
-			for {
-				processNextJob(db, id)
-				time.Sleep(2 * time.Second)
-			}
-		}(workerID)
+		go workerLoop(db, workerID)
+	}
+}
+
+// workerLoop runs the worker loop with auto-restart on panic.
+// If the worker panics or dies, it waits 5 seconds and restarts itself.
+func workerLoop(db *sql.DB, id int) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Worker #%d PANIC: %v — restarting in 5s...\n", id, r)
+			time.Sleep(5 * time.Second)
+			go workerLoop(db, id) // Auto-restart
+		}
+	}()
+	fmt.Printf("Worker #%d started\n", id)
+	for {
+		processNextJob(db, id)
+		time.Sleep(2 * time.Second)
 	}
 }
 
