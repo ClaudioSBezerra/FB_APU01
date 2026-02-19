@@ -127,6 +127,10 @@ function AppLayout() {
             {/* RFB */}
             <Route path="/rfb/credenciais" element={<RFBCredentials />} />
             <Route path="/rfb/apuracao" element={<RFBApuracao />} />
+            <Route path="/rfb/creditos-cbs" element={<ComingSoon title="Créditos CBS mês corrente" />} />
+            <Route path="/rfb/pagamentos-cbs" element={<ComingSoon title="Pagamentos CBS mês corrente" />} />
+            <Route path="/rfb/pagamentos-fornecedores" element={<ComingSoon title="Pagamentos CBS a Fornecedores" />} />
+            <Route path="/rfb/concluir-apuracao" element={<ComingSoon title="Concluir apuração mês anterior" />} />
           </Routes>
         </div>
         <Toaster />

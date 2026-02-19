@@ -15,7 +15,12 @@ import {
   Database,
   LogOut,
   Store,
-  Sparkles
+  Sparkles,
+  CreditCard,
+  Wallet,
+  Truck,
+  CheckCircle,
+  Clock
 } from "lucide-react"
 import {
   Sidebar,
@@ -80,7 +85,11 @@ const menuItems = [
     icon: Globe,
     items: [
       { title: "Credenciais API", url: "/rfb/credenciais", icon: Globe },
-      { title: "Apuração CBS", url: "/rfb/apuracao", icon: Download },
+      { title: "Débitos CBS mês corrente", url: "/rfb/apuracao", icon: Download },
+      { title: "Créditos CBS mês corrente", url: "/rfb/creditos-cbs", icon: CreditCard, disabled: true },
+      { title: "Pagamentos CBS mês corrente", url: "/rfb/pagamentos-cbs", icon: Wallet, disabled: true },
+      { title: "Pagamentos CBS a Fornecedores", url: "/rfb/pagamentos-fornecedores", icon: Truck, disabled: true },
+      { title: "Concluir apuração mês anterior", url: "/rfb/concluir-apuracao", icon: CheckCircle, disabled: true },
     ]
   }
 ]
