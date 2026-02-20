@@ -97,8 +97,11 @@ CREATE TABLE import_jobs (
 -- Alíquotas da Reforma Tributária
 CREATE TABLE tabela_aliquotas (
     ano INTEGER,
-    aliquota_ibs DECIMAL,
-    aliquota_cbs DECIMAL
+    perc_ibs_uf   DECIMAL,   -- alíquota IBS estadual
+    perc_ibs_mun  DECIMAL,   -- alíquota IBS municipal
+    perc_cbs      DECIMAL,   -- alíquota CBS federal
+    perc_reduc_icms DECIMAL  -- percentual de redução do ICMS
+    -- IBS total = perc_ibs_uf + perc_ibs_mun
 );
 
 -- EXEMPLOS DE JOIN CORRETO:
