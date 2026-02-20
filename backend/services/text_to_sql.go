@@ -109,7 +109,7 @@ CREATE TABLE tabela_aliquotas (
 var (
 	reSQLBlock  = regexp.MustCompile("(?is)```(?:sql)?\\s*([\\s\\S]+?)```")
 	reDangerous = regexp.MustCompile(`(?i)\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE)\b`)
-	reSelect    = regexp.MustCompile(`(?i)^\s*(SELECT|WITH)\b`)
+	reSelectPos = regexp.MustCompile(`(?i)\b(SELECT|WITH)\b`)
 )
 
 // BuildTextToSQLPrompt builds the full user prompt for the AI.
@@ -118,29 +118,49 @@ func BuildTextToSQLPrompt(pergunta string) string {
 }
 
 // ExtractSQL extracts and validates SQL from an AI response.
-// Returns the SQL string or an error if it's invalid/unsafe.
+// Strategy:
+//  1. Look for a ```sql ... ``` code block — preferred
+//  2. Fallback: find the first SELECT/WITH keyword anywhere in the text
 func ExtractSQL(aiResponse string) (string, error) {
-	sql := aiResponse
-
-	// Try to extract from a markdown ```sql ... ``` block
+	// 1. Try markdown code block first
 	if matches := reSQLBlock.FindStringSubmatch(aiResponse); len(matches) > 1 {
-		sql = strings.TrimSpace(matches[1])
+		if sql := strings.TrimSpace(matches[1]); sql != "" {
+			return validateSQL(sql)
+		}
 	}
 
-	sql = strings.TrimSpace(sql)
-	if sql == "" {
-		return "", fmt.Errorf("nenhum SQL encontrado na resposta da IA")
+	// 2. Fallback: find first SELECT or WITH in the raw text
+	loc := reSelectPos.FindStringIndex(aiResponse)
+	if loc != nil {
+		candidate := strings.TrimSpace(aiResponse[loc[0]:])
+
+		// Cut off at triple-backtick (end of a code block boundary)
+		if idx := strings.Index(candidate, "```"); idx != -1 {
+			candidate = candidate[:idx]
+		}
+		// Cut off at a blank line if what follows looks like prose (not SQL)
+		if idx := strings.Index(candidate, "\n\n"); idx != -1 {
+			after := strings.TrimSpace(candidate[idx:])
+			peek := after
+			if len(peek) > 20 {
+				peek = peek[:20]
+			}
+			if !reSelectPos.MatchString(peek) {
+				candidate = candidate[:idx]
+			}
+		}
+
+		if candidate = strings.TrimSpace(candidate); candidate != "" {
+			return validateSQL(candidate)
+		}
 	}
 
-	// Must be a SELECT or WITH query
-	if !reSelect.MatchString(sql) {
-		return "", fmt.Errorf("apenas queries SELECT são permitidas")
-	}
+	return "", fmt.Errorf("nenhum SQL encontrado na resposta da IA")
+}
 
-	// Block dangerous operations
+func validateSQL(sql string) (string, error) {
 	if reDangerous.MatchString(sql) {
 		return "", fmt.Errorf("query contém operações não permitidas")
 	}
-
 	return sql, nil
 }

@@ -75,6 +75,7 @@ func AIQueryHandler(db *sql.DB) http.HandlerFunc {
 		// Extract and validate SQL from AI response
 		generatedSQL, err := services.ExtractSQL(aiResp.Text)
 		if err != nil {
+			fmt.Printf("[AI Query] ExtractSQL failed: %v\nRaw AI text (first 500): %.500s\n", err, aiResp.Text)
 			w.WriteHeader(http.StatusUnprocessableEntity)
 			json.NewEncoder(w).Encode(map[string]string{
 				"error":   fmt.Sprintf("IA não retornou SQL válido: %v", err),
