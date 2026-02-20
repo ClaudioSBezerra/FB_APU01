@@ -193,9 +193,20 @@ export default function ConsultaInteligente() {
               <p className="text-sm font-medium">{error.error}</p>
             </div>
             {error.sql && (
-              <pre className="mt-2 text-xs bg-red-100 text-red-800 p-3 rounded-md overflow-x-auto whitespace-pre-wrap">
-                {error.sql}
-              </pre>
+              <div>
+                <p className="text-xs font-semibold text-red-700 mb-1">SQL gerado:</p>
+                <pre className="text-xs bg-red-100 text-red-800 p-3 rounded-md overflow-x-auto whitespace-pre-wrap">
+                  {error.sql}
+                </pre>
+              </div>
+            )}
+            {error.ai_text && (
+              <div>
+                <p className="text-xs font-semibold text-red-700 mb-1">Resposta bruta da IA:</p>
+                <pre className="text-xs bg-red-100 text-red-800 p-3 rounded-md overflow-x-auto whitespace-pre-wrap max-h-48">
+                  {error.ai_text}
+                </pre>
+              </div>
             )}
           </CardContent>
         </Card>
