@@ -105,7 +105,18 @@ CREATE TABLE tabela_aliquotas (
 --   WHERE j.company_id = '__COMPANY_ID__'
 --
 -- Para consultar mv_mercadorias_agregada:
---   FROM mv_mercadorias_agregada WHERE company_id = '__COMPANY_ID__'`
+--   FROM mv_mercadorias_agregada WHERE company_id = '__COMPANY_ID__'
+--
+-- PADRÕES COMUNS (use exatamente assim):
+-- Último período importado (mes_ano 'MM/YYYY' — comparar com TO_DATE):
+--   AND mes_ano = (SELECT mes_ano FROM mv_mercadorias_agregada
+--                  WHERE company_id = '__COMPANY_ID__'
+--                  ORDER BY TO_DATE(mes_ano, 'MM/YYYY') DESC LIMIT 1)
+--
+-- Proporção/percentual por grupo (window function):
+--   SUM(valor) * 100.0 / SUM(SUM(valor)) OVER (PARTITION BY mes_ano)
+--
+-- Faturamento por filial: GROUP BY filial_nome, filial_cnpj`
 
 var (
 	reSQLBlock  = regexp.MustCompile("(?is)```(?:sql)?\\s*([\\s\\S]+?)```")

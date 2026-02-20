@@ -184,7 +184,7 @@ export default function ConsultaInteligente() {
             <Loader2 className="h-5 w-5 animate-spin shrink-0" />
             <div>
               <p className="text-sm font-medium">Gerando SQL e consultando o banco...</p>
-              <p className="text-xs text-indigo-500 mt-0.5">A IA está analisando sua pergunta e os dados fiscais.</p>
+              <p className="text-xs text-indigo-500 mt-0.5">Perguntas complexas podem levar até 90 segundos.</p>
             </div>
           </CardContent>
         </Card>

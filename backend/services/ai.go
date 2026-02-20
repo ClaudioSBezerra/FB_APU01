@@ -89,7 +89,7 @@ func (c *AIClient) GenerateFastRaw(system, userPrompt, model string, maxTokens i
 	if maxTokens == 0 {
 		maxTokens = 4096
 	}
-	fastClient := &http.Client{Timeout: 45 * time.Second}
+	fastClient := &http.Client{Timeout: 90 * time.Second}
 	origClient := c.httpClient
 	c.httpClient = fastClient
 	defer func() { c.httpClient = origClient }()
