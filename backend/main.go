@@ -383,6 +383,7 @@ func main() {
 	http.HandleFunc("/api/reports/available-periods", withAuth(handlers.GetAvailablePeriodsHandler, ""))
 	http.HandleFunc("/api/reports/executive-summary", withAuth(handlers.GetExecutiveSummaryHandler, ""))
 	http.HandleFunc("/api/insights/daily", withAuth(handlers.GetDailyInsightHandler, ""))
+	http.HandleFunc("/api/ai/query", withAuth(handlers.AIQueryHandler, ""))
 
 	// Saved AI Reports
 	http.HandleFunc("/api/reports", withAuth(handlers.ListSavedAIReportsHandler, ""))

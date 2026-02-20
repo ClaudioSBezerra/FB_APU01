@@ -70,6 +70,7 @@ const menuItems = [
       { title: "Operações Simples Nacional", url: "/operacoes/simples", icon: Store },
       { title: "Dashboard Reforma", url: "/dashboards", icon: LayoutDashboard },
       { title: "Resumo Executivo IA", url: "/relatorios/resumo-executivo", icon: Sparkles },
+      { title: "Consulta Inteligente", url: "/relatorios/consulta-inteligente", icon: Sparkles },
     ]
   },
   {

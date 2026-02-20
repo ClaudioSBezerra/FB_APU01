@@ -14,6 +14,7 @@ import Managers from './pages/Managers';
 import RFBCredentials from './pages/RFBCredentials';
 import RFBApuracao from './pages/RFBApuracao';
 import GestaoCredIBSCBS from './pages/GestaoCredIBSCBS';
+import ConsultaInteligente from './pages/ConsultaInteligente';
 import AdminUsers from './pages/AdminUsers';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -101,6 +102,7 @@ function AppLayout() {
             <Route path="/operacoes/simples" element={<OperacoesSimplesNacional />} />
             <Route path="/dashboards" element={<Dashboard />} />
             <Route path="/relatorios/resumo-executivo" element={<ExecutiveSummary />} />
+            <Route path="/relatorios/consulta-inteligente" element={<ConsultaInteligente />} />
             
             {/* Configurações */}
             <Route path="/config/aliquotas" element={<TabelaAliquotas />} />
