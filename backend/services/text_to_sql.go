@@ -109,7 +109,7 @@ CREATE TABLE tabela_aliquotas (
 var (
 	reSQLBlock  = regexp.MustCompile("(?is)```(?:sql)?\\s*([\\s\\S]+?)```")
 	reDangerous = regexp.MustCompile(`(?i)\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE)\b`)
-	reSelectPos = regexp.MustCompile(`(?i)\b(SELECT|WITH)\b`)
+	reSelectPos = regexp.MustCompile(`(?i)\b(SELECT|WITH)\s+`) // \s+ evita "SELECT." do texto em prosa
 )
 
 // BuildTextToSQLPrompt builds the full user prompt for the AI.
@@ -155,12 +155,12 @@ func ExtractSQL(aiResponse string) (string, error) {
 			}
 		}
 
-		if sql := cleanSQL(candidate); sql != "" {
+		if sql := cleanSQL(candidate); len(sql) >= 20 {
 			return validateSQL(sql)
 		}
 	}
 
-	return "", fmt.Errorf("nenhum SQL encontrado na resposta da IA")
+	return "", fmt.Errorf("IA não retornou SQL em formato correto (use ``` para envolver o código)")
 }
 
 // cleanSQL removes leading/trailing whitespace, ellipsis lines and comment lines
