@@ -13,6 +13,7 @@ import GestaoAmbiente from './pages/GestaoAmbiente';
 import Managers from './pages/Managers';
 import RFBCredentials from './pages/RFBCredentials';
 import RFBApuracao from './pages/RFBApuracao';
+import GestaoCredIBSCBS from './pages/GestaoCredIBSCBS';
 import AdminUsers from './pages/AdminUsers';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -127,6 +128,7 @@ function AppLayout() {
             {/* RFB */}
             <Route path="/rfb/credenciais" element={<RFBCredentials />} />
             <Route path="/rfb/apuracao" element={<RFBApuracao />} />
+            <Route path="/rfb/gestao-creditos" element={<GestaoCredIBSCBS />} />
             <Route path="/rfb/creditos-cbs" element={<ComingSoon title="Créditos CBS mês corrente" />} />
             <Route path="/rfb/pagamentos-cbs" element={<ComingSoon title="Pagamentos CBS mês corrente" />} />
             <Route path="/rfb/pagamentos-fornecedores" element={<ComingSoon title="Pagamentos CBS a Fornecedores" />} />
