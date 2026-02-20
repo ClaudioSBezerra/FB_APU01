@@ -21,7 +21,11 @@ REGRAS OBRIGATÓRIAS:
 7. Use aliases em português (ex: AS fornecedor, AS valor_total, AS periodo).
 8. mes_ano está no formato 'MM/YYYY' — contém datas reais dos dados importados, não anos futuros.
 9. vl_ibs_projetado e vl_cbs_projetado em operacoes_comerciais são projeções calculadas sobre os dados reais.
-10. "Prejuízo do Simples Nacional" = SUM(total_icms) FROM mv_operacoes_simples GROUP BY fornecedor_nome, fornecedor_cnpj. Nunca selecione total_icms diretamente sem agregar — há múltiplas linhas por fornecedor (meses/origens diferentes).
+10. "Prejuízo do Simples Nacional" = crédito IBS+CBS perdido, calculado sobre o total comprado:
+    lost_ibs = SUM(total_valor) * (perc_ibs_uf + perc_ibs_mun) / 100
+    lost_cbs = SUM(total_valor) * perc_cbs / 100
+    total_lost = lost_ibs + lost_cbs
+    Use ano=2033 da tabela_aliquotas. total_icms é sempre 0 para fornecedores do Simples — ignore-o.
 11. Faturamento/vendas = tipo = 'SAIDA'. Compras = tipo = 'ENTRADA' (mv_mercadorias_agregada).
 12. Ordene por valor DESC quando relevante.`
 
@@ -116,7 +120,19 @@ CREATE TABLE tabela_aliquotas (
 -- Proporção/percentual por grupo (window function):
 --   SUM(valor) * 100.0 / SUM(SUM(valor)) OVER (PARTITION BY mes_ano)
 --
--- Faturamento por filial: GROUP BY filial_nome, filial_cnpj`
+-- Faturamento por filial: GROUP BY filial_nome, filial_cnpj
+--
+-- Prejuízo Simples Nacional (IBS+CBS perdido, ano 2033):
+--   SELECT s.fornecedor_nome, s.fornecedor_cnpj,
+--          SUM(s.total_valor) AS total_comprado,
+--          SUM(s.total_valor) * (ta.perc_ibs_uf + ta.perc_ibs_mun) / 100 AS lost_ibs,
+--          SUM(s.total_valor) * ta.perc_cbs / 100 AS lost_cbs,
+--          SUM(s.total_valor) * (ta.perc_ibs_uf + ta.perc_ibs_mun + ta.perc_cbs) / 100 AS total_perdido
+--   FROM mv_operacoes_simples s
+--   CROSS JOIN (SELECT perc_ibs_uf, perc_ibs_mun, perc_cbs FROM tabela_aliquotas WHERE ano = 2033 LIMIT 1) ta
+--   WHERE s.company_id = '__COMPANY_ID__'
+--   GROUP BY s.fornecedor_nome, s.fornecedor_cnpj, ta.perc_ibs_uf, ta.perc_ibs_mun, ta.perc_cbs
+--   ORDER BY total_perdido DESC`
 
 var (
 	reSQLBlock  = regexp.MustCompile("(?is)```(?:sql)?\\s*([\\s\\S]+?)```")
