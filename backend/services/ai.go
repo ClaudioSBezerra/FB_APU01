@@ -306,14 +306,25 @@ func (c *AIClient) doRequestRaw(reqBody chatRequest) (*AIResponse, error) {
 		return nil, fmt.Errorf("empty response from API")
 	}
 
-	// Combine content + reasoning_content so ExtractSQL can find ```sql blocks anywhere.
-	content := chatResp.Choices[0].Message.Content
-	reasoning := chatResp.Choices[0].Message.ReasoningContent
-	text := content
-	if reasoning != "" {
-		text = content + "\n" + reasoning
-	}
-	if strings.TrimSpace(text) == "" {
+	content := strings.TrimSpace(chatResp.Choices[0].Message.Content)
+	reasoning := strings.TrimSpace(chatResp.Choices[0].Message.ReasoningContent)
+
+	// Strategy for SQL generation:
+	// 1. Prefer content (final answer) — it has the actual SQL code block.
+	// 2. If content is empty, fall back to reasoning_content.
+	// 3. Never mix them: reasoning contains prose "with `x`" that breaks SQL extraction.
+	var text string
+	switch {
+	case content != "" && strings.Contains(content, "```"):
+		// content has a code block — use it directly
+		text = content
+	case content != "":
+		// content has text but no code block — still prefer it over reasoning
+		text = content
+	case reasoning != "":
+		// content empty — fall back to reasoning_content
+		text = reasoning
+	default:
 		return nil, fmt.Errorf("empty response from API")
 	}
 
