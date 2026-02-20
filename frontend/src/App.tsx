@@ -142,7 +142,7 @@ function AppLayout() {
 }
 
 function App() {
-  console.log("App Version: 0.3.2 - Simples Nacional & UI Fixes");
+  console.log("App Version: 5.6.0 - Gestão Créditos IBS/CBS");
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
