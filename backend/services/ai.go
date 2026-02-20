@@ -76,6 +76,41 @@ func NewAIClient() *AIClient {
 	}
 }
 
+// GenerateFastRaw is like GenerateFast but returns the raw AI text without
+// running extractMarkdownReport. Use this for SQL generation and other tasks
+// where the output is not a Markdown report (e.g. code blocks).
+func (c *AIClient) GenerateFastRaw(system, userPrompt, model string, maxTokens int) (*AIResponse, error) {
+	if c == nil {
+		return nil, fmt.Errorf("AI client not configured")
+	}
+	if model == "" {
+		model = ModelFlash
+	}
+	if maxTokens == 0 {
+		maxTokens = 4096
+	}
+	fastClient := &http.Client{Timeout: 25 * time.Second}
+	origClient := c.httpClient
+	c.httpClient = fastClient
+	defer func() { c.httpClient = origClient }()
+
+	messages := []chatMessage{{Role: "user", Content: userPrompt}}
+	if system != "" {
+		messages = append([]chatMessage{{Role: "system", Content: system}}, messages...)
+	}
+	reqBody := chatRequest{Model: model, MaxTokens: maxTokens, Messages: messages}
+
+	resp, err := c.doRequestRaw(reqBody)
+	if err != nil {
+		if strings.Contains(err.Error(), "429") && reqBody.Model == ModelFlash {
+			fmt.Printf("[AI Raw] Rate limited on %s, single attempt with %s\n", ModelFlash, ModelFlashFallback)
+			reqBody.Model = ModelFlashFallback
+			resp, err = c.doRequestRaw(reqBody)
+		}
+	}
+	return resp, err
+}
+
 // GenerateFast is like Generate but with a single attempt and shorter timeout.
 // Use this in HTTP handlers where the user is waiting — the background worker
 // handles retries. Returns an error immediately on rate-limit or timeout.
@@ -218,6 +253,69 @@ func (c *AIClient) doRequest(reqBody chatRequest) (*AIResponse, error) {
 	// GLM flash models include chain-of-thought in reasoning_content.
 	// Extract only the final Markdown report (starts with "## ").
 	text = extractMarkdownReport(text)
+
+	return &AIResponse{
+		Text:         text,
+		InputTokens:  chatResp.Usage.PromptTokens,
+		OutputTokens: chatResp.Usage.CompletionTokens,
+		Model:        reqBody.Model,
+	}, nil
+}
+
+// doRequestRaw is identical to doRequest but skips extractMarkdownReport.
+// Returns content + reasoning_content concatenated so callers can search for
+// code blocks (e.g. ```sql) anywhere in the full response.
+func (c *AIClient) doRequestRaw(reqBody chatRequest) (*AIResponse, error) {
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", c.baseURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var chatResp chatResponse
+	if err := json.Unmarshal(respBody, &chatResp); err != nil {
+		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	if chatResp.Error != nil {
+		return nil, fmt.Errorf("API error: %s - %s", chatResp.Error.Code, chatResp.Error.Message)
+	}
+
+	if len(chatResp.Choices) == 0 {
+		return nil, fmt.Errorf("empty response from API")
+	}
+
+	// Combine content + reasoning_content so ExtractSQL can find ```sql blocks anywhere.
+	content := chatResp.Choices[0].Message.Content
+	reasoning := chatResp.Choices[0].Message.ReasoningContent
+	text := content
+	if reasoning != "" {
+		text = content + "\n" + reasoning
+	}
+	if strings.TrimSpace(text) == "" {
+		return nil, fmt.Errorf("empty response from API")
+	}
 
 	return &AIResponse{
 		Text:         text,

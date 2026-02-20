@@ -63,7 +63,7 @@ func AIQueryHandler(db *sql.DB) http.HandlerFunc {
 
 		// Generate SQL via AI
 		userPrompt := services.BuildTextToSQLPrompt(req.Pergunta)
-		aiResp, err := aiClient.GenerateFast(services.SystemPromptTextToSQL, userPrompt, "", 1024)
+		aiResp, err := aiClient.GenerateFastRaw(services.SystemPromptTextToSQL, userPrompt, "", 1024)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(map[string]string{
