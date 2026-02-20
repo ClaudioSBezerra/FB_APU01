@@ -309,20 +309,25 @@ func (c *AIClient) doRequestRaw(reqBody chatRequest) (*AIResponse, error) {
 	content := strings.TrimSpace(chatResp.Choices[0].Message.Content)
 	reasoning := strings.TrimSpace(chatResp.Choices[0].Message.ReasoningContent)
 
-	// Strategy for SQL generation:
-	// 1. Prefer content (final answer) — it has the actual SQL code block.
-	// 2. If content is empty, fall back to reasoning_content.
-	// 3. Never mix them: reasoning contains prose "with `x`" that breaks SQL extraction.
+	// GLM flash models vary in where they put the final SQL:
+	// - Sometimes in content (with a ```sql block)
+	// - Sometimes in reasoning_content (with a ```sql block), with content having prose
+	// Priority: whichever field has a ```sql code block wins.
+	// Never mix the two — reasoning prose contains backtick-quoted identifiers
+	// and numbered lists that corrupt SQL extraction.
 	var text string
 	switch {
-	case content != "" && strings.Contains(content, "```"):
-		// content has a code block — use it directly
+	case strings.Contains(content, "```sql"):
 		text = content
+	case strings.Contains(reasoning, "```sql"):
+		text = reasoning
+	case strings.Contains(content, "```"):
+		text = content
+	case strings.Contains(reasoning, "```"):
+		text = reasoning
 	case content != "":
-		// content has text but no code block — still prefer it over reasoning
 		text = content
 	case reasoning != "":
-		// content empty — fall back to reasoning_content
 		text = reasoning
 	default:
 		return nil, fmt.Errorf("empty response from API")
