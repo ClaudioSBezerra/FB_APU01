@@ -25,6 +25,18 @@ type aiQueryResult struct {
 	Model    string                   `json:"model"`
 }
 
+func jsonErr(w http.ResponseWriter, status int, msg string, extra ...map[string]string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	out := map[string]string{"error": msg}
+	for _, m := range extra {
+		for k, v := range m {
+			out[k] = v
+		}
+	}
+	json.NewEncoder(w).Encode(out)
+}
+
 // AIQueryHandler receives a natural language question, generates SQL via GLM,
 // executes it against the database, and returns the results as JSON.
 func AIQueryHandler(db *sql.DB) http.HandlerFunc {
@@ -32,32 +44,32 @@ func AIQueryHandler(db *sql.DB) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 
 		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			jsonErr(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
 
 		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
 		if !ok {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			jsonErr(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 		userID, _ := claims["user_id"].(string)
 
 		companyID, err := GetEffectiveCompanyID(db, userID, r.Header.Get("X-Company-ID"))
 		if err != nil {
-			http.Error(w, "erro ao obter empresa: "+err.Error(), http.StatusInternalServerError)
+			jsonErr(w, http.StatusInternalServerError, "erro ao obter empresa: "+err.Error())
 			return
 		}
 
 		var req aiQueryRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Pergunta) == "" {
-			http.Error(w, "pergunta inválida ou ausente", http.StatusBadRequest)
+			jsonErr(w, http.StatusBadRequest, "pergunta inválida ou ausente")
 			return
 		}
 
 		aiClient := services.NewAIClient()
 		if !aiClient.IsAvailable() {
-			http.Error(w, "IA não configurada (ZAI_API_KEY ausente)", http.StatusServiceUnavailable)
+			jsonErr(w, http.StatusServiceUnavailable, "IA não configurada (ZAI_API_KEY ausente)")
 			return
 		}
 
@@ -65,10 +77,7 @@ func AIQueryHandler(db *sql.DB) http.HandlerFunc {
 		userPrompt := services.BuildTextToSQLPrompt(req.Pergunta)
 		aiResp, err := aiClient.GenerateFastRaw(services.SystemPromptTextToSQL, userPrompt, "", 2048)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]string{
-				"error": fmt.Sprintf("Erro na IA: %v", err),
-			})
+			jsonErr(w, http.StatusInternalServerError, fmt.Sprintf("Erro na IA: %v", err))
 			return
 		}
 
@@ -76,11 +85,10 @@ func AIQueryHandler(db *sql.DB) http.HandlerFunc {
 		generatedSQL, err := services.ExtractSQL(aiResp.Text)
 		if err != nil {
 			fmt.Printf("[AI Query] ExtractSQL failed: %v\nRaw AI text (first 500): %.500s\n", err, aiResp.Text)
-			w.WriteHeader(http.StatusUnprocessableEntity)
-			json.NewEncoder(w).Encode(map[string]string{
-				"error":   fmt.Sprintf("IA não retornou SQL válido: %v", err),
-				"ai_text": aiResp.Text,
-			})
+			jsonErr(w, http.StatusUnprocessableEntity,
+				fmt.Sprintf("IA não retornou SQL válido: %v", err),
+				map[string]string{"ai_text": aiResp.Text},
+			)
 			return
 		}
 
@@ -95,11 +103,10 @@ func AIQueryHandler(db *sql.DB) http.HandlerFunc {
 		// Execute the query
 		rows, err := db.Query(finalSQL)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{
-				"error": fmt.Sprintf("Erro ao executar query: %v", err),
-				"sql":   finalSQL,
-			})
+			jsonErr(w, http.StatusBadRequest,
+				fmt.Sprintf("Erro ao executar query: %v", err),
+				map[string]string{"sql": finalSQL},
+			)
 			return
 		}
 		defer rows.Close()
