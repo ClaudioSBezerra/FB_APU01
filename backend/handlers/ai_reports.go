@@ -39,6 +39,12 @@ type ApuracaoResumo struct {
 	// Import jobs info
 	UltimaImportacao string `json:"ultima_importacao"`
 	TotalJobs        int    `json:"total_jobs"`
+	// Alíquotas efetivas (% sobre faturamento bruto)
+	AliquotaEfetivaICMS         float64 `json:"aliquota_efetiva_icms"`
+	AliquotaEfetivaIBS          float64 `json:"aliquota_efetiva_ibs"`
+	AliquotaEfetivaCBS          float64 `json:"aliquota_efetiva_cbs"`
+	AliquotaEfetivaTotalReforma float64 `json:"aliquota_efetiva_total_reforma"`
+	AliquotaEfetivaICMSAnterior float64 `json:"aliquota_efetiva_icms_anterior"`
 }
 
 type OperacaoResumo struct {
@@ -218,6 +224,17 @@ func getApuracaoResumo(db *sql.DB, companyID, periodo string) (*ApuracaoResumo, 
 		}
 	}
 
+	// Calcular alíquotas efetivas (% sobre faturamento bruto)
+	if resumo.FaturamentoBruto > 0 {
+		resumo.AliquotaEfetivaICMS = math.Round((resumo.IcmsAPagar/resumo.FaturamentoBruto)*10000) / 100
+		resumo.AliquotaEfetivaIBS = math.Round((resumo.IbsProjetado/resumo.FaturamentoBruto)*10000) / 100
+		resumo.AliquotaEfetivaCBS = math.Round((resumo.CbsProjetado/resumo.FaturamentoBruto)*10000) / 100
+		resumo.AliquotaEfetivaTotalReforma = math.Round(((resumo.IbsProjetado+resumo.CbsProjetado)/resumo.FaturamentoBruto)*10000) / 100
+	}
+	if resumo.FaturamentoAnterior > 0 {
+		resumo.AliquotaEfetivaICMSAnterior = math.Round((resumo.IcmsAPagarAnterior/resumo.FaturamentoAnterior)*10000) / 100
+	}
+
 	return resumo, nil
 }
 
@@ -255,6 +272,18 @@ func buildExecutiveSummaryPrompt(resumo *ApuracaoResumo) string {
 	sb.WriteString(fmt.Sprintf("- IBS projetado a pagar (Imposto sobre Bens e Servicos): R$ %.2f\n", resumo.IbsProjetado))
 	sb.WriteString(fmt.Sprintf("- CBS projetado a pagar (Contribuicao sobre Bens e Servicos): R$ %.2f\n", resumo.CbsProjetado))
 	sb.WriteString(fmt.Sprintf("- Total IBS + CBS a pagar: R$ %.2f\n", resumo.IbsProjetado+resumo.CbsProjetado))
+
+	if resumo.FaturamentoBruto > 0 {
+		sb.WriteString("\nALIQUOTA EFETIVA DO NEGOCIO (sobre faturamento bruto):\n")
+		sb.WriteString(fmt.Sprintf("- ICMS efetivo atual: %.2f%%\n", resumo.AliquotaEfetivaICMS))
+		sb.WriteString(fmt.Sprintf("- IBS efetivo projetado (2033): %.2f%%\n", resumo.AliquotaEfetivaIBS))
+		sb.WriteString(fmt.Sprintf("- CBS efetivo projetado (2033): %.2f%%\n", resumo.AliquotaEfetivaCBS))
+		sb.WriteString(fmt.Sprintf("- Total IBS+CBS efetivo (2033): %.2f%%\n", resumo.AliquotaEfetivaTotalReforma))
+		if resumo.AliquotaEfetivaICMSAnterior > 0 {
+			varAliq := resumo.AliquotaEfetivaICMS - resumo.AliquotaEfetivaICMSAnterior
+			sb.WriteString(fmt.Sprintf("- ICMS efetivo periodo anterior: %.2f%% (variacao: %+.2f p.p.)\n", resumo.AliquotaEfetivaICMSAnterior, varAliq))
+		}
+	}
 
 	if resumo.FaturamentoAnterior > 0 {
 		varFat := ((resumo.FaturamentoBruto - resumo.FaturamentoAnterior) / resumo.FaturamentoAnterior) * 100
@@ -295,16 +324,17 @@ REGRAS:
 - Inclua obrigatoriamente:
   1. Situacao geral (1-2 frases)
   2. Impostos a recolher
-  3. Tabela comparativa em Markdown:
-     | Imposto | Valor | Observacao |
-     |---------|-------|------------|
-     | ICMS a Recolher | R$ X | Imposto atual |
-     | IBS Projetado a Pagar | R$ X | Novo imposto - projecao 2033 |
-     | CBS Projetado a Pagar | R$ X | Novo imposto - projecao 2033 |
-     | Total IBS + CBS a Pagar | R$ X | Substituira ICMS + PIS/COFINS |
-  4. Comparativo com periodo anterior (se disponivel) com variacao percentual
-  5. Destaques relevantes
-  6. Recomendacoes praticas (2-3 itens)
+  3. Tabela comparativa em Markdown com aliquota efetiva:
+     | Imposto | Valor | Aliquota Efetiva | Observacao |
+     |---------|-------|------------------|------------|
+     | ICMS a Recolher | R$ X | X.XX% | Regime atual |
+     | IBS Projetado a Pagar | R$ X | X.XX% | Novo imposto - projecao 2033 |
+     | CBS Projetado a Pagar | R$ X | X.XX% | Novo imposto - projecao 2033 |
+     | Total IBS + CBS a Pagar | R$ X | X.XX% | Substituira ICMS + PIS/COFINS |
+  4. Comentario sobre aliquota efetiva: compare ICMS efetivo atual vs total IBS+CBS efetivo, explique o impacto pratico
+  5. Comparativo com periodo anterior (se disponivel) com variacao percentual e variacao em pontos percentuais da aliquota efetiva
+  6. Destaques relevantes
+  7. Recomendacoes praticas (2-3 itens)
 - NAO invente dados. Use APENAS os numeros fornecidos.
 - Mantenha entre 300-500 palavras.
 - Comece DIRETO com "## Resumo Executivo" sem nenhum texto antes.`
@@ -419,7 +449,8 @@ func GetExecutiveSummaryHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		dataPrompt := buildExecutiveSummaryPrompt(resumo)
-		aiResp, err := aiClient.Generate(executiveSummarySystem, dataPrompt, services.ModelFlash, 4096)
+		// GenerateFast: 1 tentativa, 25s timeout — worker trata retries em background
+		aiResp, err := aiClient.GenerateFast(executiveSummarySystem, dataPrompt, services.ModelFlash, 4096)
 		if err != nil {
 			fmt.Printf("AI generation error (falling back): %v\n", err)
 			// Re-check cache — worker may have saved a report while we were waiting
@@ -563,7 +594,7 @@ func GetDailyInsightHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		dataPrompt := buildExecutiveSummaryPrompt(resumo)
-		aiResp, err := aiClient.Generate(insightSystem, dataPrompt, services.ModelFlash, 256)
+		aiResp, err := aiClient.GenerateFast(insightSystem, dataPrompt, services.ModelFlash, 256)
 		if err != nil {
 			fmt.Printf("AI insight error (falling back): %v\n", err)
 			json.NewEncoder(w).Encode(buildFallbackInsight(resumo))

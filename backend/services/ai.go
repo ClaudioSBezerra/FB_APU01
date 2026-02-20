@@ -76,6 +76,44 @@ func NewAIClient() *AIClient {
 	}
 }
 
+// GenerateFast is like Generate but with a single attempt and shorter timeout.
+// Use this in HTTP handlers where the user is waiting — the background worker
+// handles retries. Returns an error immediately on rate-limit or timeout.
+func (c *AIClient) GenerateFast(system, userPrompt, model string, maxTokens int) (*AIResponse, error) {
+	if c == nil {
+		return nil, fmt.Errorf("AI client not configured")
+	}
+	if model == "" {
+		model = ModelFlash
+	}
+	if maxTokens == 0 {
+		maxTokens = 4096
+	}
+	// Shorter HTTP timeout for the synchronous request path
+	fastClient := &http.Client{Timeout: 25 * time.Second}
+	origClient := c.httpClient
+	c.httpClient = fastClient
+	defer func() { c.httpClient = origClient }()
+
+	messages := []chatMessage{{Role: "user", Content: userPrompt}}
+	if system != "" {
+		messages = append([]chatMessage{{Role: "system", Content: system}}, messages...)
+	}
+	reqBody := chatRequest{Model: model, MaxTokens: maxTokens, Messages: messages}
+
+	// Single attempt — no retries
+	resp, err := c.doRequest(reqBody)
+	if err != nil {
+		// On rate-limit try fallback model once, but don't loop
+		if strings.Contains(err.Error(), "429") && reqBody.Model == ModelFlash {
+			fmt.Printf("[AI Fast] Rate limited on %s, single attempt with %s\n", ModelFlash, ModelFlashFallback)
+			reqBody.Model = ModelFlashFallback
+			resp, err = c.doRequest(reqBody)
+		}
+	}
+	return resp, err
+}
+
 // Generate sends a prompt to Z.AI GLM and returns the narrative text.
 // Uses retry with exponential backoff (max 3 attempts).
 func (c *AIClient) Generate(system, userPrompt, model string, maxTokens int) (*AIResponse, error) {

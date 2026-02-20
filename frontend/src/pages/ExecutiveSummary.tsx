@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Loader2, RefreshCw, Sparkles, FileText } from 'lucide-react';
+import { Loader2, RefreshCw, Sparkles, FileText, TrendingDown, TrendingUp, Minus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface SummaryData {
@@ -17,10 +17,17 @@ interface SummaryData {
     icms_entrada: number;
     icms_saida: number;
     icms_a_pagar: number;
+    ibs_projetado: number;
+    cbs_projetado: number;
     faturamento_anterior: number;
     icms_a_pagar_anterior: number;
     periodo_anterior: string;
     total_jobs: number;
+    aliquota_efetiva_icms: number;
+    aliquota_efetiva_ibs: number;
+    aliquota_efetiva_cbs: number;
+    aliquota_efetiva_total_reforma: number;
+    aliquota_efetiva_icms_anterior: number;
   } | null;
   periodo: string;
   model?: string;
@@ -33,6 +40,9 @@ const formatMoney = (value: number) => {
     currency: 'BRL',
   }).format(value);
 };
+
+const formatPct = (value: number) =>
+  `${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
 
 // Simple Markdown renderer for narratives
 function RenderMarkdown({ text }: { text: string }) {
@@ -105,6 +115,104 @@ function getMonthOptions() {
     options.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) });
   }
   return options;
+}
+
+// Widget dedicado: Carga Tributária Efetiva
+function CargaTributariaEfetiva({ dados }: { dados: NonNullable<SummaryData['dados']> }) {
+  const { aliquota_efetiva_icms, aliquota_efetiva_ibs, aliquota_efetiva_cbs,
+          aliquota_efetiva_total_reforma, aliquota_efetiva_icms_anterior } = dados;
+
+  if (!aliquota_efetiva_icms && !aliquota_efetiva_total_reforma) return null;
+
+  const diff = aliquota_efetiva_total_reforma - aliquota_efetiva_icms;
+  const diffPrev = aliquota_efetiva_icms_anterior
+    ? aliquota_efetiva_icms - aliquota_efetiva_icms_anterior
+    : null;
+
+  const maxRate = Math.max(aliquota_efetiva_icms, aliquota_efetiva_total_reforma, 1);
+
+  return (
+    <Card>
+      <CardHeader className="pb-2 pt-4 px-4">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-semibold">Carga Tributária Efetiva</CardTitle>
+          <Badge variant="outline" className="text-[10px]">% sobre faturamento</Badge>
+        </div>
+        <CardDescription className="text-[11px]">
+          Quanto do faturamento bruto é consumido por cada imposto após créditos
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="px-4 pb-4 space-y-4">
+        {/* Barras comparativas */}
+        <div className="space-y-3">
+          {/* ICMS atual */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground font-medium">ICMS (Regime Atual)</span>
+              <div className="flex items-center gap-2">
+                {diffPrev !== null && (
+                  <span className={`text-[10px] ${diffPrev > 0 ? 'text-red-500' : diffPrev < 0 ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                    {diffPrev > 0 ? '+' : ''}{diffPrev.toFixed(2)} p.p. vs anterior
+                  </span>
+                )}
+                <span className="font-bold text-orange-600">{formatPct(aliquota_efetiva_icms)}</span>
+              </div>
+            </div>
+            <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-orange-500 rounded-full transition-all"
+                style={{ width: `${(aliquota_efetiva_icms / maxRate) * 100}%` }}
+              />
+            </div>
+          </div>
+
+          {/* IBS projetado */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground font-medium">IBS (Reforma 2033)</span>
+              <span className="font-bold text-blue-600">{formatPct(aliquota_efetiva_ibs)}</span>
+            </div>
+            <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all"
+                style={{ width: `${(aliquota_efetiva_ibs / maxRate) * 100}%` }}
+              />
+            </div>
+          </div>
+
+          {/* CBS projetado */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground font-medium">CBS (Reforma 2033)</span>
+              <span className="font-bold text-purple-600">{formatPct(aliquota_efetiva_cbs)}</span>
+            </div>
+            <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-purple-500 rounded-full transition-all"
+                style={{ width: `${(aliquota_efetiva_cbs / maxRate) * 100}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Resumo do impacto */}
+        <div className="border-t pt-3 flex items-center justify-between">
+          <div className="text-xs text-muted-foreground">
+            <span className="font-medium">Total IBS + CBS (2033):</span>{' '}
+            <span className="font-bold text-foreground">{formatPct(aliquota_efetiva_total_reforma)}</span>
+          </div>
+          <div className={`flex items-center gap-1 text-xs font-semibold ${
+            diff < -0.01 ? 'text-emerald-600' : diff > 0.01 ? 'text-red-500' : 'text-muted-foreground'
+          }`}>
+            {diff < -0.01 ? <TrendingDown className="h-3.5 w-3.5" /> :
+             diff > 0.01 ? <TrendingUp className="h-3.5 w-3.5" /> :
+             <Minus className="h-3.5 w-3.5" />}
+            {diff > 0 ? '+' : ''}{diff.toFixed(2)} p.p. vs ICMS
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function ExecutiveSummary() {
@@ -286,6 +394,9 @@ export default function ExecutiveSummary() {
           </Card>
         </div>
       )}
+
+      {/* Carga Tributária Efetiva */}
+      {dados && <CargaTributariaEfetiva dados={dados} />}
 
       {/* AI Narrative */}
       <Card>

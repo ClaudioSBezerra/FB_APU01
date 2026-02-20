@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +27,11 @@ type AIResumo struct {
 	CbsProjetado     float64  `json:"cbs_projetado"`
 	TotalNFes        int       `json:"total_nfs"`
 	Operacoes        []AIOperacaoResumo `json:"operacoes"`
+	// Alíquotas efetivas (% sobre faturamento bruto)
+	AliquotaEfetivaICMS         float64 `json:"aliquota_efetiva_icms"`
+	AliquotaEfetivaIBS          float64 `json:"aliquota_efetiva_ibs"`
+	AliquotaEfetivaCBS          float64 `json:"aliquota_efetiva_cbs"`
+	AliquotaEfetivaTotalReforma float64 `json:"aliquota_efetiva_total_reforma"`
 }
 
 // AIOperacaoResumo represents an operation for AI report
@@ -160,11 +166,15 @@ func buildDadosBrutosJSON(resumo *AIResumo) string {
 		"icms_entrada":      resumo.IcmsEntrada,
 		"icms_saida":        resumo.IcmsSaida,
 		"icms_a_pagar":      resumo.IcmsAPagar,
-		"ibs_projetado":     resumo.IbsProjetado,
-		"cbs_projetado":     resumo.CbsProjetado,
-		"ibs_cbs_total":     resumo.IbsProjetado + resumo.CbsProjetado,
-		"total_nfs":         resumo.TotalNFes,
-		"operacoes":         resumo.Operacoes,
+		"ibs_projetado":               resumo.IbsProjetado,
+		"cbs_projetado":               resumo.CbsProjetado,
+		"ibs_cbs_total":               resumo.IbsProjetado + resumo.CbsProjetado,
+		"aliquota_efetiva_icms":        resumo.AliquotaEfetivaICMS,
+		"aliquota_efetiva_ibs":         resumo.AliquotaEfetivaIBS,
+		"aliquota_efetiva_cbs":         resumo.AliquotaEfetivaCBS,
+		"aliquota_efetiva_total_reforma": resumo.AliquotaEfetivaTotalReforma,
+		"total_nfs":                    resumo.TotalNFes,
+		"operacoes":                    resumo.Operacoes,
 	}
 	jsonBytes, _ := json.Marshal(data)
 	return string(jsonBytes)
@@ -271,6 +281,14 @@ func getApuracaoResumoForAI(db *sql.DB, companyID, periodo string) (*AIResumo, e
 		}
 	}
 
+	// Calcular alíquotas efetivas (% sobre faturamento bruto)
+	if resumo.FaturamentoBruto > 0 {
+		resumo.AliquotaEfetivaICMS = math.Round((resumo.IcmsAPagar/resumo.FaturamentoBruto)*10000) / 100
+		resumo.AliquotaEfetivaIBS = math.Round((resumo.IbsProjetado/resumo.FaturamentoBruto)*10000) / 100
+		resumo.AliquotaEfetivaCBS = math.Round((resumo.CbsProjetado/resumo.FaturamentoBruto)*10000) / 100
+		resumo.AliquotaEfetivaTotalReforma = math.Round(((resumo.IbsProjetado+resumo.CbsProjetado)/resumo.FaturamentoBruto)*10000) / 100
+	}
+
 	return resumo, nil
 }
 
@@ -292,6 +310,14 @@ func buildExecutiveSummaryPromptForAI(resumo *AIResumo) string {
 	sb.WriteString(fmt.Sprintf("- IBS projetado a pagar (Imposto sobre Bens e Serviços): R$ %.2f\n", resumo.IbsProjetado))
 	sb.WriteString(fmt.Sprintf("- CBS projetado a pagar (Contribuição sobre Bens e Serviços): R$ %.2f\n", resumo.CbsProjetado))
 	sb.WriteString(fmt.Sprintf("- Total IBS + CBS a pagar: R$ %.2f\n", resumo.IbsProjetado+resumo.CbsProjetado))
+
+	if resumo.FaturamentoBruto > 0 {
+		sb.WriteString("\nALÍQUOTA EFETIVA DO NEGÓCIO (sobre faturamento bruto):\n")
+		sb.WriteString(fmt.Sprintf("- ICMS efetivo atual: %.2f%%\n", resumo.AliquotaEfetivaICMS))
+		sb.WriteString(fmt.Sprintf("- IBS efetivo projetado (2033): %.2f%%\n", resumo.AliquotaEfetivaIBS))
+		sb.WriteString(fmt.Sprintf("- CBS efetivo projetado (2033): %.2f%%\n", resumo.AliquotaEfetivaCBS))
+		sb.WriteString(fmt.Sprintf("- Total IBS+CBS efetivo (2033): %.2f%%\n", resumo.AliquotaEfetivaTotalReforma))
+	}
 
 	if len(resumo.Operacoes) > 0 {
 		sb.WriteString("\nDETALHAMENTO POR TIPO DE OPERAÇÃO:\n")
@@ -321,15 +347,17 @@ REGRAS:
 - Inclua obrigatoriamente:
   1. Situação geral (1-2 frases)
   2. Impostos a recolher
-  3. Tabela comparativa em Markdown:
-     | Imposto | Valor | Observação |
-     |---------|-------|------------|
-     | ICMS a Recolher | R$ X | Imposto atual |
-     | IBS Projetado a Pagar | R$ X | Novo imposto - projeção 2033 |
-     | CBS Projetado a Pagar | R$ X | Novo imposto - projeção 2033 |
-     | Total IBS + CBS a Pagar | R$ X | Substituirá ICMS + PIS/COFINS |
-  4. Destaques relevantes
-  5. Recomendações práticas (2-3 itens)
+  3. Tabela comparativa em Markdown com alíquota efetiva:
+     | Imposto | Valor | Alíquota Efetiva | Observação |
+     |---------|-------|------------------|------------|
+     | ICMS a Recolher | R$ X | X,XX% | Regime atual |
+     | IBS Projetado a Pagar | R$ X | X,XX% | Novo imposto - projeção 2033 |
+     | CBS Projetado a Pagar | R$ X | X,XX% | Novo imposto - projeção 2033 |
+     | Total IBS + CBS a Pagar | R$ X | X,XX% | Substituirá ICMS + PIS/COFINS |
+  4. Comentário sobre alíquota efetiva: compare ICMS efetivo atual vs total IBS+CBS efetivo, explique o impacto prático para o negócio
+  5. Comparativo com período anterior (se disponível) com variação percentual e variação em pontos percentuais da alíquota efetiva
+  6. Destaques relevantes
+  7. Recomendações práticas (2-3 itens)
 - NÃO invente dados. Use APENAS os números fornecidos.
 - Mantenha entre 300-500 palavras.
 - Comece DIRETO com "## Resumo Executivo" sem nenhum texto antes.`
@@ -345,12 +373,13 @@ func buildFallbackNarrative(r *AIResumo) string {
 	sb.WriteString(fmt.Sprintf("- **ICMS Credito (Entradas):** R$ %.2f\n", r.IcmsEntrada))
 	sb.WriteString(fmt.Sprintf("- **ICMS a Recolher:** R$ %.2f\n\n", r.IcmsAPagar))
 
-	sb.WriteString("### Novos Impostos - Reforma Tributaria (Projecao)\n\n")
-	sb.WriteString("| Imposto | Valor |\n")
-	sb.WriteString("|---------|-------|\n")
-	sb.WriteString(fmt.Sprintf("| IBS Projetado | R$ %.2f |\n", r.IbsProjetado))
-	sb.WriteString(fmt.Sprintf("| CBS Projetado | R$ %.2f |\n", r.CbsProjetado))
-	sb.WriteString(fmt.Sprintf("| **Total IBS + CBS** | **R$ %.2f** |\n\n", r.IbsProjetado+r.CbsProjetado))
+	sb.WriteString("### Novos Impostos - Reforma Tributaria (Projecao 2033)\n\n")
+	sb.WriteString("| Imposto | Valor | Aliquota Efetiva |\n")
+	sb.WriteString("|---------|-------|------------------|\n")
+	sb.WriteString(fmt.Sprintf("| ICMS a Recolher | R$ %.2f | %.2f%% |\n", r.IcmsAPagar, r.AliquotaEfetivaICMS))
+	sb.WriteString(fmt.Sprintf("| IBS Projetado | R$ %.2f | %.2f%% |\n", r.IbsProjetado, r.AliquotaEfetivaIBS))
+	sb.WriteString(fmt.Sprintf("| CBS Projetado | R$ %.2f | %.2f%% |\n", r.CbsProjetado, r.AliquotaEfetivaCBS))
+	sb.WriteString(fmt.Sprintf("| **Total IBS + CBS** | **R$ %.2f** | **%.2f%%** |\n\n", r.IbsProjetado+r.CbsProjetado, r.AliquotaEfetivaTotalReforma))
 
 	if len(r.Operacoes) > 0 {
 		sb.WriteString("### Detalhamento por Operacao\n\n")
