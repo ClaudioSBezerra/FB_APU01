@@ -21,7 +21,7 @@ REGRAS OBRIGATÓRIAS:
 7. Use aliases em português (ex: AS fornecedor, AS valor_total, AS periodo).
 8. mes_ano está no formato 'MM/YYYY' — contém datas reais dos dados importados, não anos futuros.
 9. vl_ibs_projetado e vl_cbs_projetado em operacoes_comerciais são projeções calculadas sobre os dados reais.
-10. "Prejuízo do Simples Nacional" = total_icms da mv_operacoes_simples.
+10. "Prejuízo do Simples Nacional" = SUM(total_icms) FROM mv_operacoes_simples GROUP BY fornecedor_nome, fornecedor_cnpj. Nunca selecione total_icms diretamente sem agregar — há múltiplas linhas por fornecedor (meses/origens diferentes).
 11. Faturamento/vendas = tipo = 'SAIDA'. Compras = tipo = 'ENTRADA' (mv_mercadorias_agregada).
 12. Ordene por valor DESC quando relevante.`
 

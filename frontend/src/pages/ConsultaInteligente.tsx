@@ -35,6 +35,16 @@ const sugestoes = [
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+function applyMask(digits: string, col: string): string | null {
+  if (/cnpj/i.test(col) && /^\d{14}$/.test(digits)) {
+    return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+  }
+  if (/cpf/i.test(col) && /^\d{11}$/.test(digits)) {
+    return digits.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+  }
+  return null;
+}
+
 function formatNumeric(n: number): string {
   if (Math.abs(n) > 100) {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
@@ -42,17 +52,24 @@ function formatNumeric(n: number): string {
   return n.toLocaleString('pt-BR', { maximumFractionDigits: 4 });
 }
 
-function formatCellValue(value: unknown): string {
+function formatCellValue(value: unknown, col = ''): string {
   if (value === null || value === undefined) return '—';
+  const str = String(value).trim();
+
+  // Aplicar máscara de CNPJ/CPF se a coluna indicar
+  const masked = applyMask(str, col);
+  if (masked) return masked;
+
   if (typeof value === 'number') return formatNumeric(value);
   if (typeof value === 'string') {
-    // DECIMAL do PostgreSQL vem como string após fix do backend
-    const n = parseFloat(value);
-    if (!isNaN(n) && value.trim() !== '' && /^-?\d+(\.\d+)?$/.test(value.trim())) {
-      return formatNumeric(n);
+    // DECIMAL do PostgreSQL vem como string após fix do backend.
+    // Inteiros longos (>= 9 dígitos sem ponto) são códigos/IDs, não valores monetários.
+    if (/^-?\d+(\.\d+)?$/.test(str)) {
+      if (!str.includes('.') && str.replace('-', '').length >= 9) return str;
+      return formatNumeric(parseFloat(str));
     }
   }
-  return String(value);
+  return str;
 }
 
 function isMoneyColumn(col: string): boolean {
@@ -289,7 +306,7 @@ export default function ConsultaInteligente() {
                                 isMoneyColumn(col) ? 'text-right font-medium' : 'text-left'
                               }`}
                             >
-                              {formatCellValue(row[col])}
+                              {formatCellValue(row[col], col)}
                             </td>
                           ))}
                         </tr>
