@@ -35,16 +35,22 @@ const sugestoes = [
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+function formatNumeric(n: number): string {
+  if (Math.abs(n) > 100) {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
+  }
+  return n.toLocaleString('pt-BR', { maximumFractionDigits: 4 });
+}
+
 function formatCellValue(value: unknown): string {
   if (value === null || value === undefined) return '—';
-  if (typeof value === 'number') {
-    if (Math.abs(value) > 100) {
-      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  if (typeof value === 'number') return formatNumeric(value);
+  if (typeof value === 'string') {
+    // DECIMAL do PostgreSQL vem como string após fix do backend
+    const n = parseFloat(value);
+    if (!isNaN(n) && value.trim() !== '' && /^-?\d+(\.\d+)?$/.test(value.trim())) {
+      return formatNumeric(n);
     }
-    return value.toLocaleString('pt-BR', { maximumFractionDigits: 4 });
-  }
-  if (typeof value === 'object' && value instanceof Uint8Array) {
-    return Buffer.from(value).toString('hex');
   }
   return String(value);
 }

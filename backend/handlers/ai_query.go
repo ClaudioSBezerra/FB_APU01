@@ -118,7 +118,13 @@ func AIQueryHandler(db *sql.DB) http.HandlerFunc {
 			}
 			row := make(map[string]interface{})
 			for i, col := range cols {
-				row[col] = vals[i]
+				// PostgreSQL DECIMAL/NUMERIC scans as []byte; convert to string
+				// to prevent json.Marshal from base64-encoding it.
+				if b, ok := vals[i].([]byte); ok {
+					row[col] = string(b)
+				} else {
+					row[col] = vals[i]
+				}
 			}
 			resultRows = append(resultRows, row)
 		}
