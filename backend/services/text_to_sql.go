@@ -124,7 +124,7 @@ func BuildTextToSQLPrompt(pergunta string) string {
 func ExtractSQL(aiResponse string) (string, error) {
 	// 1. Try markdown code block first
 	if matches := reSQLBlock.FindStringSubmatch(aiResponse); len(matches) > 1 {
-		if sql := strings.TrimSpace(matches[1]); sql != "" {
+		if sql := cleanSQL(matches[1]); sql != "" {
 			return validateSQL(sql)
 		}
 	}
@@ -132,13 +132,13 @@ func ExtractSQL(aiResponse string) (string, error) {
 	// 2. Fallback: find first SELECT or WITH in the raw text
 	loc := reSelectPos.FindStringIndex(aiResponse)
 	if loc != nil {
-		candidate := strings.TrimSpace(aiResponse[loc[0]:])
+		candidate := aiResponse[loc[0]:]
 
-		// Cut off at triple-backtick (end of a code block boundary)
+		// Cut off at triple-backtick
 		if idx := strings.Index(candidate, "```"); idx != -1 {
 			candidate = candidate[:idx]
 		}
-		// Cut off at a blank line if what follows looks like prose (not SQL)
+		// Cut off at blank line followed by prose (not SQL)
 		if idx := strings.Index(candidate, "\n\n"); idx != -1 {
 			after := strings.TrimSpace(candidate[idx:])
 			peek := after
@@ -150,12 +150,33 @@ func ExtractSQL(aiResponse string) (string, error) {
 			}
 		}
 
-		if candidate = strings.TrimSpace(candidate); candidate != "" {
-			return validateSQL(candidate)
+		if sql := cleanSQL(candidate); sql != "" {
+			return validateSQL(sql)
 		}
 	}
 
 	return "", fmt.Errorf("nenhum SQL encontrado na resposta da IA")
+}
+
+// cleanSQL removes leading/trailing whitespace, ellipsis lines and comment lines
+// that GLM sometimes emits before the actual SELECT statement.
+func cleanSQL(raw string) string {
+	lines := strings.Split(raw, "\n")
+	var kept []string
+	started := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Skip leading noise: empty lines, "...", "--" comments before SELECT
+		if !started {
+			if trimmed == "" || trimmed == "..." || trimmed == ".." ||
+				strings.HasPrefix(trimmed, "--") {
+				continue
+			}
+			started = true
+		}
+		kept = append(kept, line)
+	}
+	return strings.TrimSpace(strings.Join(kept, "\n"))
 }
 
 func validateSQL(sql string) (string, error) {
