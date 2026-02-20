@@ -119,13 +119,18 @@ func BuildTextToSQLPrompt(pergunta string) string {
 
 // ExtractSQL extracts and validates SQL from an AI response.
 // Strategy:
-//  1. Look for a ```sql ... ``` code block — preferred
+//  1. Look for a ```sql ... ``` code block — use the LAST match
+//     (GLM reasoning cites ```sql ... ``` literally in its rule analysis;
+//      the real SQL is always at the END of the response)
 //  2. Fallback: find the first SELECT/WITH keyword anywhere in the text
 func ExtractSQL(aiResponse string) (string, error) {
-	// 1. Try markdown code block first
-	if matches := reSQLBlock.FindStringSubmatch(aiResponse); len(matches) > 1 {
-		if sql := cleanSQL(matches[1]); sql != "" {
-			return validateSQL(sql)
+	// 1. Try markdown code block — use LAST match to skip inline citations
+	if allMatches := reSQLBlock.FindAllStringSubmatch(aiResponse, -1); len(allMatches) > 0 {
+		last := allMatches[len(allMatches)-1]
+		if len(last) > 1 {
+			if sql := cleanSQL(last[1]); sql != "" {
+				return validateSQL(sql)
+			}
 		}
 	}
 
