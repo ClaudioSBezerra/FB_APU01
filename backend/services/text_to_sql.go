@@ -9,6 +9,7 @@ import (
 // SystemPromptTextToSQL is the system message sent to the AI for SQL generation.
 const SystemPromptTextToSQL = `Você é um especialista em SQL PostgreSQL e tributação brasileira (Reforma Tributária - IBS/CBS/ICMS).
 Sua única tarefa é gerar uma query SQL para responder à pergunta do usuário.
+NÃO escreva análise, raciocínio ou explicação. Vá direto ao bloco SQL.
 
 REGRAS OBRIGATÓRIAS:
 1. Responda SOMENTE com o bloco SQL dentro de ` + "```sql\n...\n```" + `. Zero texto fora do bloco.
