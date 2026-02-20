@@ -75,6 +75,7 @@ const menuItems = [
   {
     title: "Apuração Assistida",
     icon: FileText,
+    isActive: true,
     items: [
       { title: "Gestão Créditos IBS/CBS", url: "/rfb/gestao-creditos", icon: BarChart3 },
       { title: "Importar XMLs Entrada", url: "/apuracao/entrada", icon: Upload, disabled: true },
