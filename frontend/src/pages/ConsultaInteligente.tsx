@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react';
-import { Sparkles, Send, ChevronDown, ChevronUp, Loader2, AlertCircle, Database } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Sparkles, Send, ChevronDown, ChevronUp, Loader2, AlertCircle, Database, History, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -76,6 +76,25 @@ function isMoneyColumn(col: string): boolean {
   return /valor|vl_|total|prejuizo|icms|ibs|cbs|doc/i.test(col);
 }
 
+// ─── Histórico (localStorage) ─────────────────────────────────────────────────
+
+const HISTORICO_KEY = 'consulta_inteligente_historico';
+const HISTORICO_MAX = 10;
+
+function loadHistorico(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORICO_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveHistorico(pergunta: string) {
+  const atual = loadHistorico().filter((h) => h !== pergunta);
+  const novo = [pergunta, ...atual].slice(0, HISTORICO_MAX);
+  localStorage.setItem(HISTORICO_KEY, JSON.stringify(novo));
+}
+
 // ─── Componente ──────────────────────────────────────────────────────────────
 
 export default function ConsultaInteligente() {
@@ -84,7 +103,12 @@ export default function ConsultaInteligente() {
   const [result, setResult] = useState<QueryResult | null>(null);
   const [error, setError] = useState<QueryError | null>(null);
   const [showSQL, setShowSQL] = useState(false);
+  const [historico, setHistorico] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    setHistorico(loadHistorico());
+  }, []);
 
   const getHeaders = () => {
     const token = localStorage.getItem('token');
@@ -120,6 +144,8 @@ export default function ConsultaInteligente() {
       } else {
         setResult(data as QueryResult);
         setShowSQL(false);
+        saveHistorico(query);
+        setHistorico(loadHistorico());
       }
     } catch {
       setError({ error: 'Erro de conexão com o servidor.' });
@@ -169,6 +195,38 @@ export default function ConsultaInteligente() {
           ))}
         </CardContent>
       </Card>
+
+      {/* ── Histórico ── */}
+      {historico.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2 pt-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <History className="h-3.5 w-3.5 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium text-muted-foreground">Perguntas anteriores</CardTitle>
+              </div>
+              <button
+                onClick={() => { localStorage.removeItem(HISTORICO_KEY); setHistorico([]); }}
+                className="text-[11px] text-muted-foreground hover:text-red-500 flex items-center gap-1 transition-colors"
+              >
+                <X className="h-3 w-3" /> Limpar
+              </button>
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2 pb-4">
+            {historico.map((h) => (
+              <button
+                key={h}
+                onClick={() => handleQuery(h)}
+                disabled={loading}
+                className="text-xs px-3 py-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {h}
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Input ── */}
       <div className="flex gap-2 items-end">
