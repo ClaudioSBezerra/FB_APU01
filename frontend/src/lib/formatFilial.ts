@@ -56,10 +56,10 @@ export function formatCNPJMasked(cnpj: string | null | undefined): string {
   const cleaned = cnpj.replace(/\D/g, '');
   if (cleaned.length !== 14) return cnpj;
   
-  // Máscara de privacidade: **********/{filial}-{dv}
+  // Máscara de privacidade: **.***.***/{filial}-{dv}
   const filial = cleaned.substring(8, 12);
   const dv = cleaned.substring(12, 14);
-  return `**********/${filial}-${dv}`;
+  return `**.***.***/${filial}-${dv}`;
 }
 
 /**
@@ -184,6 +184,6 @@ export function formatCnpjComApelido(
 ): string {
   const digits = cnpj.replace(/\D/g, "");
   const apelido = apelidos[digits];
-  const cnpjFormatado = formatCNPJ(digits);
+  const cnpjFormatado = formatCNPJMasked(digits);
   return apelido ? `${cnpjFormatado} - ${apelido}` : cnpjFormatado;
 }
