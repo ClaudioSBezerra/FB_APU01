@@ -284,16 +284,39 @@ const Mercadorias = () => {
     return ya - yb || ma - mb;
   });
   
-  const uniqueOperationTypes = Array.from(new Set(data.map(item => 
-    getCategoryLabel(item.tipo, item.tipo_cfop, item.origem, item.tipo_operacao)
-  ))).sort();
+  const OPERATION_FILTERS = [
+    { value: 'all',           label: 'Todos' },
+    { value: 'entradas',      label: 'Entradas (CFOP < 5000)' },
+    { value: 'saidas',        label: 'Saídas (CFOP ≥ 5000)' },
+    { value: 'revenda',       label: 'Revenda' },
+    { value: 'consumo',       label: 'Consumo / Uso' },
+    { value: 'ativo',         label: 'Ativo Imobilizado' },
+    { value: 'transferencia', label: 'Transferência' },
+    { value: 'outros',        label: 'Outros' },
+    { value: 'energia',       label: 'Energia / Água' },
+    { value: 'comunicacoes',  label: 'Comunicações' },
+  ];
 
   // Filter data
   const filteredData = data.filter(item => {
     const matchFilial = selectedFilial === "all" || item.filial_cnpj === selectedFilial;
     const matchMonth = selectedMonth === "all" || item.mes_ano === selectedMonth;
-    const matchOperation = selectedOperationType === "all" || 
-      getCategoryLabel(item.tipo, item.tipo_cfop, item.origem, item.tipo_operacao) === selectedOperationType;
+    const matchOperation = (() => {
+      switch (selectedOperationType) {
+        case 'all':           return true;
+        case 'entradas':      return item.tipo === 'ENTRADA';
+        case 'saidas':        return item.tipo === 'SAIDA';
+        case 'revenda':       return item.tipo_cfop === 'R';
+        case 'consumo':       return item.tipo_cfop === 'C';
+        case 'ativo':         return item.tipo_cfop === 'A';
+        case 'transferencia': return item.tipo_cfop === 'T';
+        case 'outros':        return item.tipo_cfop === 'O';
+        case 'energia':       return item.tipo_operacao === 'Entradas_Energia_Agua'
+                                  || item.tipo_operacao === 'Saidas_Energia_Agua';
+        case 'comunicacoes':  return item.tipo_operacao?.includes('Comunicaç') ?? false;
+        default:              return true;
+      }
+    })();
     return matchFilial && matchMonth && matchOperation;
   });
 
@@ -679,13 +702,12 @@ const Mercadorias = () => {
         </Select>
 
         <Select value={selectedOperationType} onValueChange={setSelectedOperationType}>
-          <SelectTrigger className="w-[280px] h-8 bg-white">
+          <SelectTrigger className="w-[220px] h-8 bg-white">
             <SelectValue placeholder="Tipo: Todos" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tipo: Todos</SelectItem>
-            {uniqueOperationTypes.map((t) => (
-              <SelectItem key={t} value={t}>{t}</SelectItem>
+            {OPERATION_FILTERS.map(f => (
+              <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
