@@ -283,3 +283,17 @@ export function formatFilialFromRow(row: {
   
   return row.filial_nome || '-';
 }
+
+/**
+ * Returns "XX.XXX.XXX/XXXX-XX - APELIDO" if an alias exists for the CNPJ,
+ * otherwise returns just the formatted CNPJ.
+ */
+export function formatCnpjComApelido(
+  cnpj: string,
+  apelidos: Record<string, string>
+): string {
+  const digits = cnpj.replace(/\D/g, "");
+  const apelido = apelidos[digits];
+  const cnpjFormatado = formatCNPJ(digits);
+  return apelido ? `${cnpjFormatado} - ${apelido}` : cnpjFormatado;
+}

@@ -9,6 +9,7 @@ import ExecutiveSummary from './pages/ExecutiveSummary';
 import TabelaAliquotas from './pages/TabelaAliquotas';
 import TabelaCFOP from './pages/TabelaCFOP';
 import TabelaFornSimples from './pages/TabelaFornSimples';
+import ApelidosFiliais from './pages/ApelidosFiliais';
 import GestaoAmbiente from './pages/GestaoAmbiente';
 import Managers from './pages/Managers';
 import RFBCredentials from './pages/RFBCredentials';
@@ -108,6 +109,7 @@ function AppLayout() {
             <Route path="/config/aliquotas" element={<TabelaAliquotas />} />
             <Route path="/config/cfop" element={<TabelaCFOP />} />
             <Route path="/config/forn-simples" element={<TabelaFornSimples />} />
+            <Route path="/config/apelidos-filiais" element={<ApelidosFiliais />} />
             <Route path="/config/gestores" element={<Managers />} />
             
             {/* Admin Routes */}
@@ -144,7 +146,7 @@ function AppLayout() {
 }
 
 function App() {
-  console.log("App Version: 5.6.0 - Gestão Créditos IBS/CBS");
+  console.log("App Version: 5.8.0 - Apelidos de Filiais");
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

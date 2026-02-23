@@ -26,6 +26,7 @@ import {
 import { Download, RefreshCcw, ArrowDownCircle, ArrowUpCircle, Scale, Info } from "lucide-react";
 import { exportToExcel } from "@/lib/exportToExcel";
 import { formatCurrency } from "@/lib/utils";
+import { formatCnpjComApelido } from "@/lib/formatFilial";
 
 interface AggregatedData {
   filial_nome: string;
@@ -69,6 +70,7 @@ const Mercadorias = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
+  const [apelidos, setApelidos] = useState<Record<string, string>>({});
 
   // Fetch tax rates
   useEffect(() => {
@@ -83,6 +85,24 @@ const Mercadorias = () => {
       .then((data) => setTaxRates(data || []))
       .catch((err) => console.error("Failed to fetch tax rates", err));
   }, [token]);
+
+  // Fetch filial apelidos
+  useEffect(() => {
+    if (!token) return;
+    fetch("/api/config/filial-apelidos", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-Company-ID": companyId || "",
+      },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((list: { cnpj: string; apelido: string }[]) => {
+        const map: Record<string, string> = {};
+        (list || []).forEach((fa) => { map[fa.cnpj] = fa.apelido; });
+        setApelidos(map);
+      })
+      .catch(() => {});
+  }, [token, companyId]);
 
   // Fetch data from backend
   const fetchData = useCallback(() => {
@@ -640,7 +660,7 @@ const Mercadorias = () => {
             <SelectItem value="all">Filial: Todas</SelectItem>
             {uniqueFiliais.map((f) => (
               <SelectItem key={f.cnpj} value={f.cnpj}>
-                {maskCnpj(f.cnpj)}
+                {formatCnpjComApelido(f.cnpj, apelidos)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -710,7 +730,7 @@ const Mercadorias = () => {
 
                   return (
                     <TableRow key={i} className="hover:bg-gray-50 h-6">
-                      <TableCell className="font-medium text-[9px] whitespace-nowrap py-0.5" title={row.filial_nome}>{maskCnpj(row.filial_cnpj)}</TableCell>
+                      <TableCell className="font-medium text-[9px] whitespace-nowrap py-0.5" title={row.filial_nome}>{formatCnpjComApelido(row.filial_cnpj, apelidos)}</TableCell>
                       <TableCell className="text-[9px] whitespace-nowrap py-0.5">{row.mes_ano}</TableCell>
                       <TableCell className="whitespace-nowrap py-0.5">
                         <span className={`px-2 py-0 rounded text-[9px] font-bold ${

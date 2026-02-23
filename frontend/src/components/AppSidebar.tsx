@@ -21,7 +21,8 @@ import {
   Truck,
   CheckCircle,
   Clock,
-  BarChart3
+  BarChart3,
+  Tag
 } from "lucide-react"
 import {
   Sidebar,
@@ -55,6 +56,7 @@ const menuItems = [
       { title: "Tabela de Alíquotas", url: "/config/aliquotas", icon: Table },
       { title: "Tabela CFOP", url: "/config/cfop", icon: Table },
       { title: "Simples Nacional", url: "/config/forn-simples", icon: Users },
+      { title: "Apelidos de Filiais", url: "/config/apelidos-filiais", icon: Tag },
       { title: "Gestão de Usuários", url: "/config/usuarios", icon: Users, adminOnly: true },
       { title: "Gestores de Relatórios", url: "/config/gestores", icon: Users },
       { title: "Gestão de Ambiente", url: "/config/ambiente", icon: Building },

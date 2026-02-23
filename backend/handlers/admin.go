@@ -221,6 +221,11 @@ func ResetDatabaseHandler(db *sql.DB) http.HandlerFunc {
 			}
 		}
 
+		// Apelidos de filiais (NOT cascaded by import_jobs — delete explicitly)
+		if _, err := tx.Exec("DELETE FROM filial_apelidos"); err != nil {
+			log.Printf("Warning: could not clear filial_apelidos: %v", err)
+		}
+
 		if err := tx.Commit(); err != nil {
 			log.Printf("Error committing transaction: %v", err)
 			http.Error(w, "Failed to commit transaction", http.StatusInternalServerError)

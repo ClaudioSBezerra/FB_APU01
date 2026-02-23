@@ -1,6 +1,6 @@
 package main
 
-// Force rebuild: 2026-02-23 - Version 5.7.0 - Consulta Inteligente: mv_compras_fornecedores (todos fornecedores CFOP<5000)
+// Force rebuild: 2026-02-23 - Version 5.8.0 - Apelidos de Filiais
 import (
 	"context"
 	"database/sql"
@@ -25,8 +25,8 @@ import (
 
 // Version information for backend deployment validation
 const (
-	BackendVersion = "5.7.0"
-	FeatureSet     = "Z.AI GLM Integration, AI Executive Reports, Multipart Email, Tax Reform Projection, Simples Nacional Dashboard"
+	BackendVersion = "5.8.0"
+	FeatureSet     = "Z.AI GLM Integration, AI Executive Reports, Multipart Email, Tax Reform Projection, Simples Nacional Dashboard, Apelidos de Filiais"
 )
 
 func GetVersionInfo() string {
@@ -463,6 +463,9 @@ func main() {
 		}
 	})
 	http.HandleFunc("/api/config/forn-simples/import", withDB(handlers.ImportFornSimplesHandler))
+
+	http.HandleFunc("/api/config/filial-apelidos", withAuth(handlers.FilialApelidosHandler, ""))
+	http.HandleFunc("/api/config/filial-apelidos/import", withAuth(handlers.ImportFilialApelidosHandler, ""))
 
 	// Environment & Groups Endpoints
 	http.HandleFunc("/api/config/environments", withAuth(func(db *sql.DB) http.HandlerFunc {
