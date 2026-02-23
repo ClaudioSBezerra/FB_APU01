@@ -162,9 +162,9 @@ func ImportFilialApelidosHandler(db *sql.DB) http.HandlerFunc {
 			}
 
 			apelido := strings.TrimSpace(rawApelido)
-			if len(apelido) < 4 || len(apelido) > 20 {
+			if len(apelido) < 2 || len(apelido) > 20 {
 				skipped++
-				errs = append(errs, "Linha "+strconv.Itoa(i+1)+": apelido '"+apelido+"' deve ter entre 4 e 20 caracteres")
+				errs = append(errs, "Linha "+strconv.Itoa(i+1)+": apelido '"+apelido+"' deve ter entre 2 e 20 caracteres")
 				continue
 			}
 

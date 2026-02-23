@@ -168,7 +168,7 @@ export default function ApelidosFiliais() {
           <CardDescription>
             Arquivo delimitado por <code className="font-mono text-xs bg-muted px-1 rounded">;</code> com colunas{" "}
             <code className="font-mono text-xs bg-muted px-1 rounded">CNPJ;APELIDO</code>.
-            Apelido: 4–20 caracteres. A linha de cabeçalho é opcional.
+            Apelido: 2–20 caracteres. A linha de cabeçalho é opcional.
           </CardDescription>
         </CardHeader>
         <CardContent>
