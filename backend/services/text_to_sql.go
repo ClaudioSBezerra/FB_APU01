@@ -57,6 +57,7 @@ CREATE MATERIALIZED VIEW mv_compras_fornecedores (
     fornecedor_cnpj VARCHAR,
     cod_part VARCHAR,        -- código do parceiro no SPED
     filial_nome VARCHAR,     -- nome da filial importadora
+    tipo_cfop CHAR(1),       -- tipo do CFOP: 'R'=Revenda,'C'=Consumo,'A'=Ativo,'T'=Transferência,'O'=Operacional,'D'=Devolução
     mes_ano VARCHAR,         -- 'MM/YYYY'
     ano INTEGER,
     total_valor DECIMAL,     -- valor total das compras (vl_opr do reg_c190)
