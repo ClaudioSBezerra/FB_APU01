@@ -5,12 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"fb_apu01/services"
 
 	"github.com/golang-jwt/jwt/v5"
 )
+
+// reCompanyPlaceholder captura __COMPANY_ID__ e variações truncadas pela IA,
+// com ou sem aspas simples ao redor (ex: '__COMPANY_ID__', '__COMPANY_ID', '__COMPANY').
+var reCompanyPlaceholder = regexp.MustCompile(`'?__COMPANY(?:_ID(?:__)?)?'?`)
 
 type aiQueryRequest struct {
 	Pergunta string `json:"pergunta"`
@@ -92,8 +97,18 @@ func AIQueryHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Inject company_id (UUID — safe for direct substitution)
-		finalSQL := strings.ReplaceAll(generatedSQL, "__COMPANY_ID__", companyID)
+		// Inject company_id — substitui __COMPANY_ID__ e qualquer variação truncada pela IA
+		// (ex: '__COMPANY_ID', '__COMPANY', com ou sem aspas simples ao redor)
+		finalSQL := reCompanyPlaceholder.ReplaceAllString(generatedSQL, "'"+companyID+"'")
+
+		// Verificação de segurança: se ainda sobrou algum placeholder não resolvido, rejeitar
+		if strings.Contains(finalSQL, "__COMPANY") {
+			jsonErr(w, http.StatusUnprocessableEntity,
+				"SQL gerado contém placeholder não resolvido — tente reformular a pergunta",
+				map[string]string{"sql": finalSQL},
+			)
+			return
+		}
 
 		// Ensure there's a LIMIT
 		if !strings.Contains(strings.ToUpper(finalSQL), "LIMIT") {
