@@ -100,6 +100,12 @@ func ResetCompanyDataHandler(db *sql.DB) http.HandlerFunc {
 				db.Exec("REFRESH MATERIALIZED VIEW mv_operacoes_simples")
 			}
 
+			// Refresh mv_compras_fornecedores (todos os fornecedores)
+			if _, err := db.Exec("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_compras_fornecedores"); err != nil {
+				log.Printf("ResetCompanyData: Concurrent refresh failed for mv_compras_fornecedores, trying standard: %v", err)
+				db.Exec("REFRESH MATERIALIZED VIEW mv_compras_fornecedores")
+			}
+
 			log.Printf("ResetCompanyData: View refresh completed for CompanyID %s", req.CompanyID)
 		}()
 
@@ -152,6 +158,18 @@ func RefreshViewsHandler(db *sql.DB) http.HandlerFunc {
 			if err != nil {
 				log.Printf("Error refreshing mv_operacoes_simples: %v", err)
 				http.Error(w, "Failed to refresh mv_operacoes_simples: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		// Refresh mv_compras_fornecedores (todos os fornecedores)
+		_, err = db.Exec("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_compras_fornecedores")
+		if err != nil {
+			log.Printf("Concurrent refresh failed for mv_compras_fornecedores, trying standard: %v", err)
+			_, err = db.Exec("REFRESH MATERIALIZED VIEW mv_compras_fornecedores")
+			if err != nil {
+				log.Printf("Error refreshing mv_compras_fornecedores: %v", err)
+				http.Error(w, "Failed to refresh mv_compras_fornecedores: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 		}
@@ -226,6 +244,13 @@ func ResetDatabaseHandler(db *sql.DB) http.HandlerFunc {
 			log.Printf("Error refreshing mv_operacoes_simples after reset: %v", err)
 		} else {
 			log.Println("Admin: mv_operacoes_simples refreshed successfully (Empty).")
+		}
+
+		// Refresh mv_compras_fornecedores (todos os fornecedores)
+		if _, err := db.Exec("REFRESH MATERIALIZED VIEW mv_compras_fornecedores"); err != nil {
+			log.Printf("Error refreshing mv_compras_fornecedores after reset: %v", err)
+		} else {
+			log.Println("Admin: mv_compras_fornecedores refreshed successfully (Empty).")
 		}
 
 		w.Header().Set("Content-Type", "application/json")

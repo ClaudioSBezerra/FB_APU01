@@ -1,6 +1,6 @@
 package main
 
-// Force rebuild: 2026-02-19 - Version 5.6.0 - RFB Integration + Stability Fixes
+// Force rebuild: 2026-02-23 - Version 5.7.0 - Consulta Inteligente: mv_compras_fornecedores (todos fornecedores CFOP<5000)
 import (
 	"context"
 	"database/sql"
@@ -25,7 +25,7 @@ import (
 
 // Version information for backend deployment validation
 const (
-	BackendVersion = "5.5.0"
+	BackendVersion = "5.7.0"
 	FeatureSet     = "Z.AI GLM Integration, AI Executive Reports, Multipart Email, Tax Reform Projection, Simples Nacional Dashboard"
 )
 

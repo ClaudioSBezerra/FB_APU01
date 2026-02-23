@@ -196,6 +196,18 @@ func processNextJob(db *sql.DB, workerID int) {
 				fmt.Printf("Worker #%d: mv_operacoes_simples refreshed successfully.\n", workerID)
 			}
 
+			// 3. Refresh mv_compras_fornecedores (todos os fornecedores, CFOP < 5000)
+			_, err = db.Exec("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_compras_fornecedores")
+			if err != nil {
+				fmt.Printf("Worker #%d: Concurrent refresh failed for mv_compras_fornecedores, trying standard: %v\n", workerID, err)
+				_, err = db.Exec("REFRESH MATERIALIZED VIEW mv_compras_fornecedores")
+			}
+			if err != nil {
+				fmt.Printf("Worker #%d: Error refreshing mv_compras_fornecedores: %v\n", workerID, err)
+			} else {
+				fmt.Printf("Worker #%d: mv_compras_fornecedores refreshed successfully.\n", workerID)
+			}
+
 			fmt.Printf("Worker #%d: All views refreshed in %v.\n", workerID, time.Since(start))
 
 			// Trigger AI Report Generation for last job
