@@ -63,7 +63,8 @@ const Mercadorias = () => {
   const [selectedYear, setSelectedYear] = useState<string>("2027");
   const [selectedFilial, setSelectedFilial] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
-  const [selectedOperationType, setSelectedOperationType] = useState<string>("all");
+  const [selectedMovimento, setSelectedMovimento] = useState<string>("all");
+  const [selectedTipoCfop, setSelectedTipoCfop] = useState<string>("all");
   const [data, setData] = useState<AggregatedData[]>([]);
   const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -284,10 +285,14 @@ const Mercadorias = () => {
     return ya - yb || ma - mb;
   });
   
-  const OPERATION_FILTERS = [
+  const MOVIMENTO_FILTERS = [
+    { value: 'all',     label: 'Todos' },
+    { value: 'entrada', label: 'Entrada' },
+    { value: 'saida',   label: 'Saída' },
+  ];
+
+  const CFOP_TYPE_FILTERS = [
     { value: 'all',           label: 'Todos' },
-    { value: 'entradas',      label: 'Entradas (CFOP < 5000)' },
-    { value: 'saidas',        label: 'Saídas (CFOP ≥ 5000)' },
     { value: 'revenda',       label: 'Revenda' },
     { value: 'consumo',       label: 'Consumo / Uso' },
     { value: 'ativo',         label: 'Ativo Imobilizado' },
@@ -301,11 +306,12 @@ const Mercadorias = () => {
   const filteredData = data.filter(item => {
     const matchFilial = selectedFilial === "all" || item.filial_cnpj === selectedFilial;
     const matchMonth = selectedMonth === "all" || item.mes_ano === selectedMonth;
-    const matchOperation = (() => {
-      switch (selectedOperationType) {
+    const matchMovimento = selectedMovimento === 'all'
+      || (selectedMovimento === 'entrada' && item.tipo === 'ENTRADA')
+      || (selectedMovimento === 'saida'   && item.tipo === 'SAIDA');
+    const matchTipoCfop = (() => {
+      switch (selectedTipoCfop) {
         case 'all':           return true;
-        case 'entradas':      return item.tipo === 'ENTRADA';
-        case 'saidas':        return item.tipo === 'SAIDA';
         case 'revenda':       return item.tipo_cfop === 'R';
         case 'consumo':       return item.tipo_cfop === 'C';
         case 'ativo':         return item.tipo_cfop === 'A';
@@ -317,7 +323,7 @@ const Mercadorias = () => {
         default:              return true;
       }
     })();
-    return matchFilial && matchMonth && matchOperation;
+    return matchFilial && matchMonth && matchMovimento && matchTipoCfop;
   });
 
   const totals = filteredData.reduce((acc, item) => {
@@ -701,12 +707,23 @@ const Mercadorias = () => {
           </SelectContent>
         </Select>
 
-        <Select value={selectedOperationType} onValueChange={setSelectedOperationType}>
-          <SelectTrigger className="w-[220px] h-8 bg-white">
-            <SelectValue placeholder="Tipo: Todos" />
+        <Select value={selectedMovimento} onValueChange={setSelectedMovimento}>
+          <SelectTrigger className="w-[130px] h-8 bg-white">
+            <SelectValue placeholder="Movimento: Todos" />
           </SelectTrigger>
           <SelectContent>
-            {OPERATION_FILTERS.map(f => (
+            {MOVIMENTO_FILTERS.map(f => (
+              <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={selectedTipoCfop} onValueChange={setSelectedTipoCfop}>
+          <SelectTrigger className="w-[190px] h-8 bg-white">
+            <SelectValue placeholder="Operação: Todos" />
+          </SelectTrigger>
+          <SelectContent>
+            {CFOP_TYPE_FILTERS.map(f => (
               <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
             ))}
           </SelectContent>
