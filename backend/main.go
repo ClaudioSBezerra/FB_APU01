@@ -543,6 +543,10 @@ func main() {
 	// RFB Webhook (PUBLIC - no JWT auth, called by Receita Federal)
 	http.HandleFunc("/api/rfb/webhook", withDB(handlers.RFBWebhookHandler))
 
+	// Apuração Assistida — NF-e Saídas
+	http.HandleFunc("/api/nfe-saidas/upload", withAuth(handlers.NfeSaidasUploadHandler, ""))
+	http.HandleFunc("/api/nfe-saidas", withAuth(handlers.NfeSaidasListHandler, ""))
+
 	// Managers Endpoints (Gestores para relatorios IA)
 	http.HandleFunc("/api/managers", withAuth(handlers.ListManagersHandler, ""))
 	http.HandleFunc("/api/managers/create", withAuth(handlers.CreateManagerHandler, ""))

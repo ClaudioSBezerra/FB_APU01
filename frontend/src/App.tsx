@@ -15,6 +15,7 @@ import Managers from './pages/Managers';
 import RFBCredentials from './pages/RFBCredentials';
 import RFBApuracao from './pages/RFBApuracao';
 import GestaoCredIBSCBS from './pages/GestaoCredIBSCBS';
+import ImportarXMLsSaida from './pages/ImportarXMLsSaida';
 import ConsultaInteligente from './pages/ConsultaInteligente';
 import AdminUsers from './pages/AdminUsers';
 import Login from './pages/Login';
@@ -126,7 +127,7 @@ function AppLayout() {
             
             {/* Apuração */}
             <Route path="/apuracao/entrada" element={<ComingSoon title="Importar XMLs Entrada" />} />
-            <Route path="/apuracao/saida" element={<ComingSoon title="Importar XMLs Saída" />} />
+            <Route path="/apuracao/saida" element={<ImportarXMLsSaida />} />
             <Route path="/apuracao/nfse" element={<ComingSoon title="Importar XMLs NFS-e" />} />
             
             {/* RFB */}
@@ -146,7 +147,7 @@ function AppLayout() {
 }
 
 function App() {
-  console.log("App Version: 5.8.0 - Apelidos de Filiais");
+  console.log("App Version: 5.9.0 - Importar XMLs NF-e Saída");
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

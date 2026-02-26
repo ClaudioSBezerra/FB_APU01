@@ -82,7 +82,7 @@ const menuItems = [
     items: [
       { title: "Gestão Créditos IBS/CBS", url: "/rfb/gestao-creditos", icon: BarChart3 },
       { title: "Importar XMLs Entrada", url: "/apuracao/entrada", icon: Upload, disabled: true },
-      { title: "Importar XMLs Saída", url: "/apuracao/saida", icon: Upload, disabled: true },
+      { title: "Importar XMLs Saída", url: "/apuracao/saida", icon: Upload },
       { title: "Importar XMLs NFS-e", url: "/apuracao/nfse", icon: FileText, disabled: true },
     ]
   },
