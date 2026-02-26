@@ -16,6 +16,7 @@ import RFBCredentials from './pages/RFBCredentials';
 import RFBApuracao from './pages/RFBApuracao';
 import GestaoCredIBSCBS from './pages/GestaoCredIBSCBS';
 import ImportarXMLsSaida from './pages/ImportarXMLsSaida';
+import ConsultaNFeSaidas from './pages/ConsultaNFeSaidas';
 import ConsultaInteligente from './pages/ConsultaInteligente';
 import AdminUsers from './pages/AdminUsers';
 import Login from './pages/Login';
@@ -128,6 +129,7 @@ function AppLayout() {
             {/* Apuração */}
             <Route path="/apuracao/entrada" element={<ComingSoon title="Importar XMLs Entrada" />} />
             <Route path="/apuracao/saida" element={<ImportarXMLsSaida />} />
+            <Route path="/apuracao/saida/notas" element={<ConsultaNFeSaidas />} />
             <Route path="/apuracao/nfse" element={<ComingSoon title="Importar XMLs NFS-e" />} />
             
             {/* RFB */}

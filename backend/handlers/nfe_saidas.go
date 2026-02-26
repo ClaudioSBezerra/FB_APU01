@@ -393,31 +393,53 @@ func NfeSaidasUploadHandler(db *sql.DB) http.HandlerFunc {
 // ---------------------------------------------------------------------------
 
 type nfeSaidaRow struct {
-	ID          string   `json:"id"`
-	ChaveNFe    string   `json:"chave_nfe"`
-	Modelo      int      `json:"modelo"`
-	Serie       string   `json:"serie"`
-	NumeroNFe   string   `json:"numero_nfe"`
-	DataEmissao string   `json:"data_emissao"`
-	MesAno      string   `json:"mes_ano"`
-	NatOp       string   `json:"nat_op"`
-	EmitCNPJ    string   `json:"emit_cnpj"`
-	EmitNome    string   `json:"emit_nome"`
-	EmitUF      string   `json:"emit_uf"`
-	DestCNPJCPF string   `json:"dest_cnpj_cpf"`
-	DestNome    string   `json:"dest_nome"`
-	DestUF      string   `json:"dest_uf"`
-	DestCMun    string   `json:"dest_c_mun"`
-	VProd       float64  `json:"v_prod"`
-	VDesc       float64  `json:"v_desc"`
-	VNF         float64  `json:"v_nf"`
-	VBC         float64  `json:"v_bc"`
-	VICMS       float64  `json:"v_icms"`
-	VPIS        float64  `json:"v_pis"`
-	VCOFINS     float64  `json:"v_cofins"`
+	// Identificação
+	ID          string `json:"id"`
+	ChaveNFe    string `json:"chave_nfe"`
+	Modelo      int    `json:"modelo"`
+	Serie       string `json:"serie"`
+	NumeroNFe   string `json:"numero_nfe"`
+	DataEmissao string `json:"data_emissao"`
+	MesAno      string `json:"mes_ano"`
+	NatOp       string `json:"nat_op"`
+	// Emitente
+	EmitCNPJ      string `json:"emit_cnpj"`
+	EmitNome      string `json:"emit_nome"`
+	EmitUF        string `json:"emit_uf"`
+	EmitMunicipio string `json:"emit_municipio"`
+	// Destinatário
+	DestCNPJCPF string `json:"dest_cnpj_cpf"`
+	DestNome    string `json:"dest_nome"`
+	DestUF      string `json:"dest_uf"`
+	DestCMun    string `json:"dest_c_mun"`
+	// ICMSTot
+	VBC       float64 `json:"v_bc"`
+	VICMS     float64 `json:"v_icms"`
+	VICMSDeson float64 `json:"v_icms_deson"`
+	VFCP      float64 `json:"v_fcp"`
+	VBcST     float64 `json:"v_bc_st"`
+	VST       float64 `json:"v_st"`
+	VFcpST    float64 `json:"v_fcp_st"`
+	VFcpSTRet float64 `json:"v_fcp_st_ret"`
+	VProd     float64 `json:"v_prod"`
+	VFrete    float64 `json:"v_frete"`
+	VSeg      float64 `json:"v_seg"`
+	VDesc     float64 `json:"v_desc"`
+	VII       float64 `json:"v_ii"`
+	VIPI      float64 `json:"v_ipi"`
+	VIPIDevol float64 `json:"v_ipi_devol"`
+	VPIS      float64 `json:"v_pis"`
+	VCOFINS   float64 `json:"v_cofins"`
+	VOutro    float64 `json:"v_outro"`
+	VNF       float64 `json:"v_nf"`
+	// IBSCBSTot
 	VBCIbsCbs   *float64 `json:"v_bc_ibs_cbs"`
+	VIBSuf      *float64 `json:"v_ibs_uf"`
+	VIBSMun     *float64 `json:"v_ibs_mun"`
 	VIBS        *float64 `json:"v_ibs"`
-	VCBS        *float64 `json:"v_cbs"`
+	VCredPresIBS *float64 `json:"v_cred_pres_ibs"`
+	VCBS         *float64 `json:"v_cbs"`
+	VCredPresCBS *float64 `json:"v_cred_pres_cbs"`
 }
 
 func NfeSaidasListHandler(db *sql.DB) http.HandlerFunc {
@@ -456,10 +478,14 @@ func NfeSaidasListHandler(db *sql.DB) http.HandlerFunc {
 			SELECT
 				id, chave_nfe, modelo, serie, numero_nfe,
 				TO_CHAR(data_emissao, 'DD/MM/YYYY'), mes_ano, COALESCE(nat_op,''),
-				emit_cnpj, COALESCE(emit_nome,''), COALESCE(emit_uf,''),
+				emit_cnpj, COALESCE(emit_nome,''), COALESCE(emit_uf,''), COALESCE(emit_municipio,''),
 				COALESCE(dest_cnpj_cpf,''), COALESCE(dest_nome,''), COALESCE(dest_uf,''), COALESCE(dest_c_mun,''),
-				v_prod, v_desc, v_nf, v_bc, v_icms, v_pis, v_cofins,
-				v_bc_ibs_cbs, v_ibs, v_cbs
+				v_bc, v_icms, v_icms_deson, v_fcp,
+				v_bc_st, v_st, v_fcp_st, v_fcp_st_ret,
+				v_prod, v_frete, v_seg, v_desc,
+				v_ii, v_ipi, v_ipi_devol, v_pis, v_cofins, v_outro, v_nf,
+				v_bc_ibs_cbs, v_ibs_uf, v_ibs_mun, v_ibs, v_cred_pres_ibs,
+				v_cbs, v_cred_pres_cbs
 			FROM nfe_saidas
 			WHERE company_id = $1`
 
@@ -493,10 +519,14 @@ func NfeSaidasListHandler(db *sql.DB) http.HandlerFunc {
 			err := rows.Scan(
 				&row.ID, &row.ChaveNFe, &row.Modelo, &row.Serie, &row.NumeroNFe,
 				&row.DataEmissao, &row.MesAno, &row.NatOp,
-				&row.EmitCNPJ, &row.EmitNome, &row.EmitUF,
+				&row.EmitCNPJ, &row.EmitNome, &row.EmitUF, &row.EmitMunicipio,
 				&row.DestCNPJCPF, &row.DestNome, &row.DestUF, &row.DestCMun,
-				&row.VProd, &row.VDesc, &row.VNF, &row.VBC, &row.VICMS, &row.VPIS, &row.VCOFINS,
-				&row.VBCIbsCbs, &row.VIBS, &row.VCBS,
+				&row.VBC, &row.VICMS, &row.VICMSDeson, &row.VFCP,
+				&row.VBcST, &row.VST, &row.VFcpST, &row.VFcpSTRet,
+				&row.VProd, &row.VFrete, &row.VSeg, &row.VDesc,
+				&row.VII, &row.VIPI, &row.VIPIDevol, &row.VPIS, &row.VCOFINS, &row.VOutro, &row.VNF,
+				&row.VBCIbsCbs, &row.VIBSuf, &row.VIBSMun, &row.VIBS, &row.VCredPresIBS,
+				&row.VCBS, &row.VCredPresCBS,
 			)
 			if err != nil {
 				log.Printf("NfeSaidasList scan error: %v", err)
