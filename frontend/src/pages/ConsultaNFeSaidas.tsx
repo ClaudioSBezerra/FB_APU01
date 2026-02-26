@@ -94,22 +94,22 @@ function fmtCNPJ(v: string): string {
 // ---------------------------------------------------------------------------
 function DetalheNFe({ nfe, onClose }: { nfe: NfeSaidaRow; onClose: () => void }) {
   const Linha = ({ label, value }: { label: string; value: string | number | null | undefined }) => (
-    <div className="flex justify-between py-1 border-b border-dashed last:border-0">
-      <span className="text-xs text-muted-foreground w-40 shrink-0">{label}</span>
-      <span className="text-xs font-medium text-right">{value ?? '—'}</span>
+    <div className="flex justify-between py-0.5 border-b border-dashed last:border-0">
+      <span className="text-[11px] text-muted-foreground w-36 shrink-0">{label}</span>
+      <span className="text-[11px] font-medium text-right">{value ?? '—'}</span>
     </div>
   );
 
   const LinhaBRL = ({ label, value }: { label: string; value: number | null | undefined }) => (
-    <div className="flex justify-between py-1 border-b border-dashed last:border-0">
-      <span className="text-xs text-muted-foreground w-40 shrink-0">{label}</span>
-      <span className="text-xs font-medium text-right">{fmtBRL(value, '—')}</span>
+    <div className="flex justify-between py-0.5 border-b border-dashed last:border-0">
+      <span className="text-[11px] text-muted-foreground w-36 shrink-0">{label}</span>
+      <span className="text-[11px] font-medium text-right">{fmtBRL(value, '—')}</span>
     </div>
   );
 
   const Secao = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <div className="mb-4">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 pb-1 border-b">
+    <div className="mb-2">
+      <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1 pb-0.5 border-b">
         {title}
       </h3>
       {children}
@@ -120,15 +120,15 @@ function DetalheNFe({ nfe, onClose }: { nfe: NfeSaidaRow; onClose: () => void })
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-sm">
+          <DialogTitle className="text-xs">
             NF-e {nfe.modelo} · Série {nfe.serie} · Nº {nfe.numero_nfe}
-            <div className="text-xs font-normal text-muted-foreground mt-1 break-all">
+            <div className="text-[11px] font-normal text-muted-foreground mt-0.5 break-all">
               Chave: {nfe.chave_nfe}
             </div>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-2 mt-2">
+        <div className="space-y-1 mt-1">
           <Secao title="Identificação">
             <Linha label="Modelo" value={nfe.modelo} />
             <Linha label="Série" value={nfe.serie} />
@@ -297,16 +297,16 @@ export default function ConsultaNFeSaidas() {
 
       {/* ── Totalizador ── */}
       {items.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {[
-            { label: 'Total vNF',  value: totalVNF },
+            { label: 'Total vNF',   value: totalVNF },
             { label: 'Total vICMS', value: totalICMS },
             { label: 'Total vIBS',  value: totalIBS },
             { label: 'Total vCBS',  value: totalCBS },
           ].map(c => (
-            <Card key={c.label} className="p-3">
-              <p className="text-xs text-muted-foreground">{c.label}</p>
-              <p className="text-sm font-bold mt-1">{fmtBRL(c.value)}</p>
+            <Card key={c.label} className="p-2">
+              <p className="text-[10px] text-muted-foreground">{c.label}</p>
+              <p className="text-xs font-bold mt-0.5">{fmtBRL(c.value)}</p>
             </Card>
           ))}
         </div>
@@ -314,58 +314,60 @@ export default function ConsultaNFeSaidas() {
 
       {/* ── Tabela ── */}
       <Card>
-        <CardHeader className="py-3">
-          <CardTitle className="text-sm">Clique em uma linha para ver todos os dados da nota</CardTitle>
+        <CardHeader className="py-2 px-4">
+          <CardTitle className="text-[11px] text-muted-foreground font-normal">
+            Clique em uma linha para ver todos os dados da nota
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {items.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-10">
+            <p className="text-xs text-muted-foreground text-center py-8">
               {loading ? 'Carregando...' : 'Nenhuma nota encontrada. Use os filtros acima.'}
             </p>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>CNPJ Emitente</TableHead>
-                    <TableHead>Filial / UF</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Data</TableHead>
-                    <TableHead className="text-center">Série</TableHead>
-                    <TableHead className="text-center">Nº Nota</TableHead>
-                    <TableHead className="text-center">Mod</TableHead>
-                    <TableHead className="text-right">Valor Total (vNF)</TableHead>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="py-1.5 px-2 text-[11px]">CNPJ Emitente</TableHead>
+                    <TableHead className="py-1.5 px-2 text-[11px]">Filial / UF</TableHead>
+                    <TableHead className="py-1.5 px-2 text-[11px]">Cliente</TableHead>
+                    <TableHead className="py-1.5 px-2 text-[11px]">Data</TableHead>
+                    <TableHead className="py-1.5 px-2 text-[11px] text-center">Série</TableHead>
+                    <TableHead className="py-1.5 px-2 text-[11px] text-center">Nº Nota</TableHead>
+                    <TableHead className="py-1.5 px-2 text-[11px] text-center">Mod</TableHead>
+                    <TableHead className="py-1.5 px-2 text-[11px] text-right">Valor Total (vNF)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {items.map(row => (
                     <TableRow
                       key={row.id}
-                      className="cursor-pointer hover:bg-muted/50"
+                      className="cursor-pointer hover:bg-muted/50 h-8"
                       onClick={() => setSelected(row)}
                     >
-                      <TableCell className="font-mono text-xs">
+                      <TableCell className="py-1 px-2 font-mono text-[11px]">
                         {fmtCNPJ(row.emit_cnpj)}
                       </TableCell>
-                      <TableCell className="text-xs">
-                        <div className="font-medium">{row.emit_nome || '—'}</div>
-                        <div className="text-muted-foreground">{row.emit_uf}</div>
+                      <TableCell className="py-1 px-2">
+                        <div className="text-[11px] font-medium leading-tight">{row.emit_nome || '—'}</div>
+                        <div className="text-[10px] text-muted-foreground leading-tight">{row.emit_uf}</div>
                       </TableCell>
-                      <TableCell className="text-xs">
-                        <div className="font-medium">{row.dest_nome || '—'}</div>
-                        <div className="text-muted-foreground font-mono">
+                      <TableCell className="py-1 px-2">
+                        <div className="text-[11px] font-medium leading-tight">{row.dest_nome || '—'}</div>
+                        <div className="text-[10px] text-muted-foreground font-mono leading-tight">
                           {fmtCNPJ(row.dest_cnpj_cpf)}
                         </div>
                       </TableCell>
-                      <TableCell className="text-xs whitespace-nowrap">
+                      <TableCell className="py-1 px-2 text-[11px] whitespace-nowrap">
                         {row.data_emissao}
                       </TableCell>
-                      <TableCell className="text-center text-xs">{row.serie}</TableCell>
-                      <TableCell className="text-center text-xs font-mono">{row.numero_nfe}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="outline" className="text-xs">{row.modelo}</Badge>
+                      <TableCell className="py-1 px-2 text-[11px] text-center">{row.serie}</TableCell>
+                      <TableCell className="py-1 px-2 text-[11px] text-center font-mono">{row.numero_nfe}</TableCell>
+                      <TableCell className="py-1 px-2 text-center">
+                        <Badge variant="outline" className="text-[10px] px-1 py-0">{row.modelo}</Badge>
                       </TableCell>
-                      <TableCell className="text-right text-xs font-semibold">
+                      <TableCell className="py-1 px-2 text-[11px] text-right font-semibold">
                         {fmtBRL(row.v_nf)}
                       </TableCell>
                     </TableRow>
