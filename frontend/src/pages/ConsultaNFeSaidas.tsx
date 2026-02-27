@@ -1,10 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -20,6 +27,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Search, X } from 'lucide-react';
+import { formatCnpjComApelido } from '@/lib/formatFilial';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -87,6 +95,13 @@ function fmtCNPJ(v: string): string {
   if (d.length === 11)
     return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`;
   return v;
+}
+
+/** Converte "DD/MM/YYYY" → Date (para comparação de range) */
+function parseDMY(s: string): Date | null {
+  const m = s?.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return null;
+  return new Date(+m[3], +m[2] - 1, +m[1]);
 }
 
 // ---------------------------------------------------------------------------
@@ -198,27 +213,43 @@ export default function ConsultaNFeSaidas() {
   const [items, setItems] = useState<NfeSaidaRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<NfeSaidaRow | null>(null);
+  const [apelidos, setApelidos] = useState<Record<string, string>>({});
 
-  // Filtros
-  const [filterMes, setFilterMes] = useState('');
-  const [filterCNPJ, setFilterCNPJ] = useState('');
+  // Filtros client-side
+  const [filterFilial, setFilterFilial] = useState('all');
+  const [filterCliente, setFilterCliente] = useState('');
+  const [filterDataDe, setFilterDataDe] = useState('');
+  const [filterDataAte, setFilterDataAte] = useState('');
 
   const authHeaders = {
     Authorization: `Bearer ${token}`,
     'X-Company-ID': companyId || '',
   };
 
+  // Carrega apelidos de filiais
+  useEffect(() => {
+    if (!token) return;
+    fetch('/api/config/filial-apelidos', { headers: authHeaders })
+      .then(r => r.ok ? r.json() : [])
+      .then((list: { cnpj: string; apelido: string }[]) => {
+        const map: Record<string, string> = {};
+        (list || []).forEach(fa => { map[fa.cnpj] = fa.apelido; });
+        setApelidos(map);
+      })
+      .catch(() => {});
+  }, [token, companyId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (filterMes)  params.set('mes_ano',    filterMes);
-      if (filterCNPJ) params.set('emit_cnpj',  filterCNPJ.replace(/\D/g, ''));
-
-      const res = await fetch(`/api/nfe-saidas?${params}`, { headers: authHeaders });
+      const res = await fetch('/api/nfe-saidas', { headers: authHeaders });
       if (!res.ok) throw new Error(res.statusText);
       const data = await res.json();
       setItems(data.items || []);
+      setFilterFilial('all');
+      setFilterCliente('');
+      setFilterDataDe('');
+      setFilterDataAte('');
     } catch (err: unknown) {
       toast.error('Erro ao buscar notas: ' + String(err));
     } finally {
@@ -226,24 +257,55 @@ export default function ConsultaNFeSaidas() {
     }
   };
 
-  // Busca automática ao montar
   useEffect(() => { fetchData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') fetchData();
-  };
-
   const clearFilters = () => {
-    setFilterMes('');
-    setFilterCNPJ('');
-    // Rebusca sem filtros
-    setTimeout(fetchData, 0);
+    setFilterFilial('all');
+    setFilterCliente('');
+    setFilterDataDe('');
+    setFilterDataAte('');
   };
 
-  const totalVNF   = items.reduce((s, r) => s + r.v_nf,   0);
-  const totalICMS  = items.reduce((s, r) => s + r.v_icms,  0);
-  const totalIBS   = items.reduce((s, r) => s + (r.v_ibs ?? 0), 0);
-  const totalCBS   = items.reduce((s, r) => s + (r.v_cbs ?? 0), 0);
+  // Filiais únicas derivadas dos dados carregados
+  const uniqueFiliais = useMemo(() => {
+    const seen = new Map<string, string>();
+    items.forEach(r => { if (r.emit_cnpj) seen.set(r.emit_cnpj, r.emit_nome); });
+    return Array.from(seen.entries())
+      .map(([cnpj, nome]) => ({ cnpj, nome }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [items]);
+
+  // Filtros client-side aplicados
+  const displayItems = useMemo(() => {
+    const dataDe  = filterDataDe  ? new Date(filterDataDe)  : null;
+    const dataAte = filterDataAte ? new Date(filterDataAte) : null;
+
+    return items.filter(r => {
+      if (filterFilial !== 'all' && r.emit_cnpj !== filterFilial) return false;
+
+      if (filterCliente) {
+        const nomeOk = r.dest_nome?.toLowerCase().includes(filterCliente.toLowerCase());
+        const cnpjOk = r.dest_cnpj_cpf?.replace(/\D/g, '').includes(filterCliente.replace(/\D/g, ''));
+        if (!nomeOk && !cnpjOk) return false;
+      }
+
+      if (dataDe || dataAte) {
+        const d = parseDMY(r.data_emissao);
+        if (!d) return false;
+        if (dataDe && d < dataDe) return false;
+        if (dataAte && d > dataAte) return false;
+      }
+
+      return true;
+    });
+  }, [items, filterFilial, filterCliente, filterDataDe, filterDataAte]);
+
+  const hasClientFilters = filterFilial !== 'all' || filterCliente || filterDataDe || filterDataAte;
+
+  const totalVNF  = displayItems.reduce((s, r) => s + r.v_nf,           0);
+  const totalICMS = displayItems.reduce((s, r) => s + r.v_icms,          0);
+  const totalIBS  = displayItems.reduce((s, r) => s + (r.v_ibs  ?? 0),  0);
+  const totalCBS  = displayItems.reduce((s, r) => s + (r.v_cbs  ?? 0),  0);
 
   return (
     <div className="space-y-6">
@@ -256,47 +318,87 @@ export default function ConsultaNFeSaidas() {
 
       {/* ── Filtros ── */}
       <Card>
-        <CardContent className="pt-4">
+        <CardContent className="pt-4 space-y-3">
+
+          {/* Linha 1: Recarregar */}
           <div className="flex flex-wrap gap-3 items-end">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted-foreground">Mês/Ano</label>
-              <Input
-                placeholder="MM/YYYY"
-                value={filterMes}
-                onChange={e => setFilterMes(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="h-8 w-28"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted-foreground">CNPJ Emitente (filial)</label>
-              <Input
-                placeholder="00.000.000/0000-00"
-                value={filterCNPJ}
-                onChange={e => setFilterCNPJ(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="h-8 w-52"
-              />
-            </div>
             <Button size="sm" onClick={fetchData} disabled={loading}>
               <Search className="h-3 w-3 mr-1" />
-              {loading ? 'Buscando...' : 'Buscar'}
+              {loading ? 'Carregando...' : 'Recarregar'}
             </Button>
-            {(filterMes || filterCNPJ) && (
+            {hasClientFilters && (
               <Button size="sm" variant="ghost" onClick={clearFilters}>
                 <X className="h-3 w-3 mr-1" />
-                Limpar
+                Limpar filtros
               </Button>
             )}
             <span className="text-xs text-muted-foreground ml-auto self-end">
-              {items.length} nota(s) encontrada(s)
+              {displayItems.length} de {items.length} nota(s)
             </span>
           </div>
+
+          {/* Linha 2: Filial + Cliente + Datas — só aparecem após dados carregados */}
+          {items.length > 0 && (
+            <div className="flex flex-wrap gap-3 items-end border-t pt-3">
+
+              {/* Filial */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">Filial</label>
+                <Select value={filterFilial} onValueChange={setFilterFilial}>
+                  <SelectTrigger className="h-8 w-64 text-[11px]">
+                    <SelectValue placeholder="Todas as filiais" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as filiais</SelectItem>
+                    {uniqueFiliais.map(f => (
+                      <SelectItem key={f.cnpj} value={f.cnpj}>
+                        {formatCnpjComApelido(f.cnpj, apelidos)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Cliente */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">Cliente (nome ou CNPJ/CPF)</label>
+                <Input
+                  placeholder="Digite nome ou documento..."
+                  value={filterCliente}
+                  onChange={e => setFilterCliente(e.target.value)}
+                  className="h-8 w-60"
+                />
+              </div>
+
+              {/* Data De */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">Emissão De</label>
+                <Input
+                  type="date"
+                  value={filterDataDe}
+                  onChange={e => setFilterDataDe(e.target.value)}
+                  className="h-8 w-36"
+                />
+              </div>
+
+              {/* Data Até */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">Emissão Até</label>
+                <Input
+                  type="date"
+                  value={filterDataAte}
+                  onChange={e => setFilterDataAte(e.target.value)}
+                  className="h-8 w-36"
+                />
+              </div>
+
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {/* ── Totalizador ── */}
-      {items.length > 0 && (
+      {displayItems.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {[
             { label: 'Total vNF',   value: totalVNF },
@@ -320,7 +422,7 @@ export default function ConsultaNFeSaidas() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {items.length === 0 ? (
+          {displayItems.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-8">
               {loading ? 'Carregando...' : 'Nenhuma nota encontrada. Use os filtros acima.'}
             </p>
@@ -340,7 +442,7 @@ export default function ConsultaNFeSaidas() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map(row => (
+                  {displayItems.map(row => (
                     <TableRow
                       key={row.id}
                       className="cursor-pointer hover:bg-muted/50 h-8"

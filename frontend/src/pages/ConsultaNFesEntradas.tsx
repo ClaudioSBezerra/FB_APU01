@@ -1,10 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -20,6 +27,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Search, X, AlertTriangle } from 'lucide-react';
+import { formatCnpjComApelido } from '@/lib/formatFilial';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -87,6 +95,12 @@ function fmtCNPJ(v: string): string {
   if (d.length === 11)
     return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`;
   return v;
+}
+
+function parseDMY(s: string): Date | null {
+  const m = s?.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return null;
+  return new Date(+m[3], +m[2] - 1, +m[1]);
 }
 
 // ---------------------------------------------------------------------------
@@ -198,27 +212,45 @@ export default function ConsultaNFesEntradas() {
   const [items, setItems] = useState<NfeEntradaRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<NfeEntradaRow | null>(null);
+  const [apelidos, setApelidos] = useState<Record<string, string>>({});
 
-  const [filterMes, setFilterMes] = useState('');
-  const [filterCNPJ, setFilterCNPJ] = useState('');
-  const [filterSemIBS, setFilterSemIBS] = useState(false);
+  // Filtros client-side
+  const [filterFilial, setFilterFilial]   = useState('all');
+  const [filterFornec, setFilterFornec]   = useState('');
+  const [filterDataDe, setFilterDataDe]   = useState('');
+  const [filterDataAte, setFilterDataAte] = useState('');
+  const [filterSemIBS, setFilterSemIBS]   = useState(false);
 
   const authHeaders = {
     Authorization: `Bearer ${token}`,
     'X-Company-ID': companyId || '',
   };
 
+  // Apelidos de filiais
+  useEffect(() => {
+    if (!token) return;
+    fetch('/api/config/filial-apelidos', { headers: authHeaders })
+      .then(r => r.ok ? r.json() : [])
+      .then((list: { cnpj: string; apelido: string }[]) => {
+        const map: Record<string, string> = {};
+        (list || []).forEach(fa => { map[fa.cnpj] = fa.apelido; });
+        setApelidos(map);
+      })
+      .catch(() => {});
+  }, [token, companyId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (filterMes)  params.set('mes_ano',   filterMes);
-      if (filterCNPJ) params.set('forn_cnpj', filterCNPJ.replace(/\D/g, ''));
-
-      const res = await fetch(`/api/nfe-entradas?${params}`, { headers: authHeaders });
+      const res = await fetch('/api/nfe-entradas', { headers: authHeaders });
       if (!res.ok) throw new Error(res.statusText);
       const data = await res.json();
       setItems(data.items || []);
+      setFilterFilial('all');
+      setFilterFornec('');
+      setFilterDataDe('');
+      setFilterDataAte('');
+      setFilterSemIBS(false);
     } catch (err: unknown) {
       toast.error('Erro ao buscar notas: ' + String(err));
     } finally {
@@ -228,25 +260,61 @@ export default function ConsultaNFesEntradas() {
 
   useEffect(() => { fetchData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') fetchData();
-  };
-
   const clearFilters = () => {
-    setFilterMes('');
-    setFilterCNPJ('');
-    setTimeout(fetchData, 0);
+    setFilterFilial('all');
+    setFilterFornec('');
+    setFilterDataDe('');
+    setFilterDataAte('');
+    setFilterSemIBS(false);
   };
 
-  const semIBSCount = items.filter(r => r.v_ibs === 0 && r.v_cbs === 0).length;
-  const displayItems = filterSemIBS
-    ? items.filter(r => r.v_ibs === 0 && r.v_cbs === 0)
-    : items;
+  // Filiais únicas: destinatário = a empresa (suas filiais)
+  const uniqueFiliais = useMemo(() => {
+    const seen = new Map<string, string>();
+    items.forEach(r => { if (r.dest_cnpj_cpf) seen.set(r.dest_cnpj_cpf, r.dest_nome); });
+    return Array.from(seen.entries())
+      .map(([cnpj, nome]) => ({ cnpj, nome }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [items]);
 
-  const totalVNF  = displayItems.reduce((s, r) => s + r.v_nf,  0);
-  const totalICMS = displayItems.reduce((s, r) => s + r.v_icms, 0);
-  const totalIBS  = displayItems.reduce((s, r) => s + r.v_ibs,  0);
-  const totalCBS  = displayItems.reduce((s, r) => s + r.v_cbs,  0);
+  // Filtros client-side aplicados
+  const displayItems = useMemo(() => {
+    const dataDe  = filterDataDe  ? new Date(filterDataDe)  : null;
+    const dataAte = filterDataAte ? new Date(filterDataAte) : null;
+
+    return items.filter(r => {
+      if (filterFilial !== 'all' && r.dest_cnpj_cpf !== filterFilial) return false;
+
+      if (filterFornec) {
+        const nomeOk = r.forn_nome?.toLowerCase().includes(filterFornec.toLowerCase());
+        const cnpjOk = r.forn_cnpj?.replace(/\D/g, '').includes(filterFornec.replace(/\D/g, ''));
+        if (!nomeOk && !cnpjOk) return false;
+      }
+
+      if (dataDe || dataAte) {
+        const d = parseDMY(r.data_emissao);
+        if (!d) return false;
+        if (dataDe && d < dataDe) return false;
+        if (dataAte && d > dataAte) return false;
+      }
+
+      if (filterSemIBS && !(r.v_ibs === 0 && r.v_cbs === 0)) return false;
+
+      return true;
+    });
+  }, [items, filterFilial, filterFornec, filterDataDe, filterDataAte, filterSemIBS]);
+
+  const semIBSCount = useMemo(
+    () => items.filter(r => r.v_ibs === 0 && r.v_cbs === 0).length,
+    [items]
+  );
+
+  const hasClientFilters = filterFilial !== 'all' || filterFornec || filterDataDe || filterDataAte || filterSemIBS;
+
+  const totalVNF  = displayItems.reduce((s, r) => s + r.v_nf,   0);
+  const totalICMS = displayItems.reduce((s, r) => s + r.v_icms,  0);
+  const totalIBS  = displayItems.reduce((s, r) => s + r.v_ibs,   0);
+  const totalCBS  = displayItems.reduce((s, r) => s + r.v_cbs,   0);
 
   return (
     <div className="space-y-6">
@@ -259,43 +327,21 @@ export default function ConsultaNFesEntradas() {
 
       {/* ── Filtros ── */}
       <Card>
-        <CardContent className="pt-4">
+        <CardContent className="pt-4 space-y-3">
+
+          {/* Linha 1: Recarregar + Sem IBS+CBS + contador */}
           <div className="flex flex-wrap gap-3 items-end">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted-foreground">Mês/Ano</label>
-              <Input
-                placeholder="MM/YYYY"
-                value={filterMes}
-                onChange={e => setFilterMes(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="h-8 w-28"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted-foreground">CNPJ Fornecedor</label>
-              <Input
-                placeholder="00.000.000/0000-00"
-                value={filterCNPJ}
-                onChange={e => setFilterCNPJ(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="h-8 w-52"
-              />
-            </div>
             <Button size="sm" onClick={fetchData} disabled={loading}>
               <Search className="h-3 w-3 mr-1" />
-              {loading ? 'Buscando...' : 'Buscar'}
+              {loading ? 'Carregando...' : 'Recarregar'}
             </Button>
-            {(filterMes || filterCNPJ) && (
-              <Button size="sm" variant="ghost" onClick={clearFilters}>
-                <X className="h-3 w-3 mr-1" />
-                Limpar
-              </Button>
-            )}
             <Button
               size="sm"
               variant={filterSemIBS ? 'default' : 'outline'}
               onClick={() => setFilterSemIBS(v => !v)}
-              className={filterSemIBS ? 'bg-orange-600 hover:bg-orange-700 text-white' : 'text-orange-600 border-orange-300 hover:bg-orange-50'}
+              className={filterSemIBS
+                ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                : 'text-orange-600 border-orange-300 hover:bg-orange-50'}
             >
               <AlertTriangle className="h-3 w-3 mr-1" />
               Sem IBS+CBS
@@ -305,15 +351,79 @@ export default function ConsultaNFesEntradas() {
                 </Badge>
               )}
             </Button>
+            {hasClientFilters && (
+              <Button size="sm" variant="ghost" onClick={clearFilters}>
+                <X className="h-3 w-3 mr-1" />
+                Limpar filtros
+              </Button>
+            )}
             <span className="text-xs text-muted-foreground ml-auto self-end">
-              {displayItems.length}{filterSemIBS ? ` de ${items.length}` : ''} nota(s)
+              {displayItems.length} de {items.length} nota(s)
             </span>
           </div>
+
+          {/* Linha 2: Filial + Fornecedor + Datas */}
+          {items.length > 0 && (
+            <div className="flex flex-wrap gap-3 items-end border-t pt-3">
+
+              {/* Filial destinatária */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">Filial (Destinatário)</label>
+                <Select value={filterFilial} onValueChange={setFilterFilial}>
+                  <SelectTrigger className="h-8 w-64 text-[11px]">
+                    <SelectValue placeholder="Todas as filiais" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as filiais</SelectItem>
+                    {uniqueFiliais.map(f => (
+                      <SelectItem key={f.cnpj} value={f.cnpj}>
+                        {formatCnpjComApelido(f.cnpj, apelidos)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Fornecedor */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">Fornecedor (nome ou CNPJ)</label>
+                <Input
+                  placeholder="Digite nome ou documento..."
+                  value={filterFornec}
+                  onChange={e => setFilterFornec(e.target.value)}
+                  className="h-8 w-60"
+                />
+              </div>
+
+              {/* Data De */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">Emissão De</label>
+                <Input
+                  type="date"
+                  value={filterDataDe}
+                  onChange={e => setFilterDataDe(e.target.value)}
+                  className="h-8 w-36"
+                />
+              </div>
+
+              {/* Data Até */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">Emissão Até</label>
+                <Input
+                  type="date"
+                  value={filterDataAte}
+                  onChange={e => setFilterDataAte(e.target.value)}
+                  className="h-8 w-36"
+                />
+              </div>
+
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {/* ── Totalizador ── */}
-      {items.length > 0 && (
+      {displayItems.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {[
             { label: 'Total vNF',   value: totalVNF },
@@ -342,8 +452,8 @@ export default function ConsultaNFesEntradas() {
               {loading
                 ? 'Carregando...'
                 : filterSemIBS
-                  ? 'Nenhuma nota sem IBS+CBS encontrada.'
-                  : 'Nenhuma nota encontrada. Use os filtros acima.'}
+                  ? 'Nenhuma nota sem IBS+CBS nos filtros atuais.'
+                  : 'Nenhuma nota encontrada. Clique em Recarregar ou ajuste os filtros.'}
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -352,7 +462,7 @@ export default function ConsultaNFesEntradas() {
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="py-1.5 px-2 text-[11px]">CNPJ Fornecedor</TableHead>
                     <TableHead className="py-1.5 px-2 text-[11px]">Fornecedor / UF</TableHead>
-                    <TableHead className="py-1.5 px-2 text-[11px]">Destinatário</TableHead>
+                    <TableHead className="py-1.5 px-2 text-[11px]">Destinatário (Filial)</TableHead>
                     <TableHead className="py-1.5 px-2 text-[11px]">Data</TableHead>
                     <TableHead className="py-1.5 px-2 text-[11px] text-center">Série</TableHead>
                     <TableHead className="py-1.5 px-2 text-[11px] text-center">Nº Nota</TableHead>
