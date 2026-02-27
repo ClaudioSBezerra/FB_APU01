@@ -154,7 +154,7 @@ function AppLayout() {
 }
 
 function App() {
-  console.log("App Version: 5.9.0 - Importar XMLs NF-e Entrada/Saída");
+  console.log("App Version: 5.9.0 - NF-e Entradas + Créditos em Risco + Email Estruturado");
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

@@ -1,6 +1,6 @@
 package main
 
-// Force rebuild: 2026-02-23 - Version 5.8.0 - Apelidos de Filiais
+// Force rebuild: 2026-02-27 - Version 5.9.0 - NF-e Entradas + Creditos em Risco + Email Estruturado
 import (
 	"context"
 	"database/sql"
@@ -25,8 +25,8 @@ import (
 
 // Version information for backend deployment validation
 const (
-	BackendVersion = "5.8.0"
-	FeatureSet     = "Z.AI GLM Integration, AI Executive Reports, Multipart Email, Tax Reform Projection, Simples Nacional Dashboard, Apelidos de Filiais"
+	BackendVersion = "5.9.0"
+	FeatureSet     = "Z.AI GLM Integration, AI Executive Reports, Email Estruturado, NF-e Entradas, Creditos em Risco, Tax Reform Projection, Simples Nacional Dashboard, Apelidos de Filiais"
 )
 
 func GetVersionInfo() string {
