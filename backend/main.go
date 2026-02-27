@@ -551,6 +551,9 @@ func main() {
 	http.HandleFunc("/api/nfe-entradas/upload", withAuth(handlers.NfeEntradasUploadHandler, ""))
 	http.HandleFunc("/api/nfe-entradas", withAuth(handlers.NfeEntradasListHandler, ""))
 
+	// Apuração Assistida — Créditos IBS/CBS em Risco
+	http.HandleFunc("/api/apuracao/creditos-perdidos", withAuth(handlers.CreditosPerdidosHandler, ""))
+
 	// Managers Endpoints (Gestores para relatorios IA)
 	http.HandleFunc("/api/managers", withAuth(handlers.ListManagersHandler, ""))
 	http.HandleFunc("/api/managers/create", withAuth(handlers.CreateManagerHandler, ""))

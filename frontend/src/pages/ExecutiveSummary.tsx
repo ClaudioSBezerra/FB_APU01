@@ -3,8 +3,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Loader2, RefreshCw, Sparkles, FileText, TrendingDown, TrendingUp, Minus } from 'lucide-react';
+import { Loader2, RefreshCw, Sparkles, FileText, TrendingDown, TrendingUp, Minus, ShieldAlert, AlertTriangle, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Link } from 'react-router-dom';
 
 interface SummaryData {
   narrativa: string;
@@ -215,6 +216,106 @@ function CargaTributariaEfetiva({ dados }: { dados: NonNullable<SummaryData['dad
   );
 }
 
+// ---------------------------------------------------------------------------
+// Widget: Créditos IBS/CBS em Risco — destaque para o empresário
+// ---------------------------------------------------------------------------
+interface CredRiscoData {
+  aliquotas: { ano: number; ibs: number; cbs: number };
+  nfe_sem_credito: { total_notas: number; total_universe: number; perc_sem_credito: number; total_estimado: number };
+  simples_nacional: { total_fornecedores: number; total_perdido: number };
+  total_credito_em_risco: number;
+}
+
+function CreditosEmRisco({ token, companyId }: { token: string | null; companyId: string | null }) {
+  const [data, setData] = useState<CredRiscoData | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch('/api/apuracao/creditos-perdidos', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Company-ID': companyId || '',
+      },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(setData)
+      .catch(() => {});
+  }, [token, companyId]);
+
+  if (!data) return null;
+
+  const total = data.total_credito_em_risco;
+  const nfeSemCred = data.nfe_sem_credito;
+  const simples = data.simples_nacional;
+
+  if (total <= 0) return null;
+
+  const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const fmtPct = (v: number) => `${v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+
+  return (
+    <Card className="border-red-300 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950/30 dark:to-orange-950/20">
+      <CardContent className="pt-4 pb-4">
+        <div className="flex flex-col gap-3">
+
+          {/* Linha de título */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/40 shrink-0">
+                <ShieldAlert className="h-4 w-4 text-red-600" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wide">
+                  Atenção — Créditos IBS+CBS em Risco
+                </p>
+                <p className="text-[10px] text-red-600/70">
+                  Estimativa 2033 · IBS {fmtPct(data.aliquotas.ibs)} + CBS {fmtPct(data.aliquotas.cbs)}
+                </p>
+              </div>
+            </div>
+            <Link to="/apuracao/creditos-perdidos">
+              <Button variant="outline" size="sm" className="h-7 text-[11px] border-red-200 text-red-700 hover:bg-red-100 gap-1">
+                Ver detalhes
+                <ExternalLink className="h-3 w-3" />
+              </Button>
+            </Link>
+          </div>
+
+          {/* Valor destaque */}
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-bold text-red-700 dark:text-red-300">{fmtBRL(total)}</span>
+            <span className="text-[11px] text-red-600/70">em créditos que não serão aproveitados</span>
+          </div>
+
+          {/* Breakdown */}
+          <div className="flex flex-wrap gap-4 pt-1 border-t border-red-200/60">
+            {nfeSemCred.total_notas > 0 && (
+              <div className="flex items-center gap-1.5">
+                <AlertTriangle className="h-3 w-3 text-orange-500 shrink-0" />
+                <span className="text-[11px] text-muted-foreground">
+                  <strong className="text-orange-600">{nfeSemCred.total_notas}</strong> NF-e sem IBS/CBS
+                  ({fmtPct(nfeSemCred.perc_sem_credito)} do total) ·{' '}
+                  <strong className="text-orange-600">{fmtBRL(nfeSemCred.total_estimado)}</strong> estimado
+                </span>
+              </div>
+            )}
+            {simples.total_fornecedores > 0 && (
+              <div className="flex items-center gap-1.5">
+                <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+                <span className="text-[11px] text-muted-foreground">
+                  <strong className="text-amber-600">{simples.total_fornecedores}</strong> fornecedores Simples Nacional ·{' '}
+                  <strong className="text-amber-600">{fmtBRL(simples.total_perdido)}</strong> perdido
+                </span>
+              </div>
+            )}
+          </div>
+
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ExecutiveSummary() {
   const { token, companyId } = useAuth();
   const [data, setData] = useState<SummaryData | null>(null);
@@ -397,6 +498,9 @@ export default function ExecutiveSummary() {
 
       {/* Carga Tributária Efetiva */}
       {dados && <CargaTributariaEfetiva dados={dados} />}
+
+      {/* Créditos IBS/CBS em Risco */}
+      <CreditosEmRisco token={token} companyId={companyId} />
 
       {/* AI Narrative */}
       <Card>

@@ -21,7 +21,8 @@ import {
   Truck,
   CheckCircle,
   BarChart3,
-  Tag
+  Tag,
+  ShieldAlert
 } from "lucide-react"
 import {
   Sidebar,
@@ -124,11 +125,12 @@ const menuItems: MenuItem[] = [
         icon: FileText,
         isActive: true,
         items: [
-          { title: "Entradas Mod. 55",   url: "/apuracao/entrada/notas", icon: FileText },
-          { title: "Saídas Mod. 55/65",  url: "/apuracao/saida/notas",   icon: FileText },
+          { title: "Entradas Mod. 55",   url: "/apuracao/entrada/notas",      icon: FileText },
+          { title: "Saídas Mod. 55/65",  url: "/apuracao/saida/notas",        icon: FileText },
           { title: "Entrada Serviços",   url: "#", icon: FileText, disabled: true },
           { title: "Saídas Serviços",    url: "#", icon: FileText, disabled: true },
           { title: "Entradas CT-e",      url: "#", icon: FileText, disabled: true },
+          { title: "Créditos em Risco",  url: "/apuracao/creditos-perdidos",  icon: ShieldAlert, className: "text-red-600 font-semibold" },
         ]
       },
     ]
