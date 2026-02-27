@@ -125,7 +125,23 @@ func TriggerAIReportGeneration(db *sql.DB, companyID, periodo, jobID string) err
 		recipients = append(recipients, m.Email)
 	}
 
-	//7. Send email with full structured data (mirrors the screen)
+	//7. Busca créditos em risco (NF-e sem IBS/CBS + Simples Nacional)
+	var ibsRate, cbsRate float64
+	db.QueryRow(`SELECT perc_ibs_uf + perc_ibs_mun, perc_cbs FROM tabela_aliquotas WHERE ano = 2033 LIMIT 1`).Scan(&ibsRate, &cbsRate)
+	if ibsRate == 0 { ibsRate = 17.7 }
+	if cbsRate == 0 { cbsRate = 8.8 }
+	totalRate := (ibsRate + cbsRate) / 100.0
+
+	var nfeValorSemCredito float64
+	db.QueryRow(`SELECT COALESCE(SUM(v_nf), 0) FROM nfe_entradas WHERE company_id = $1 AND v_ibs = 0 AND v_cbs = 0 AND LEFT(forn_cnpj, 8) != LEFT(dest_cnpj_cpf, 8)`, companyID).Scan(&nfeValorSemCredito)
+
+	var simplesTotalValor float64
+	db.QueryRow(`SELECT COALESCE(SUM(total_valor), 0) FROM mv_operacoes_simples WHERE company_id = $1`, companyID).Scan(&simplesTotalValor)
+
+	nfeCredLost := nfeValorSemCredito * totalRate
+	simplesCredLost := simplesTotalValor * totalRate
+
+	//8. Send email with full structured data (mirrors the screen)
 	taxData := services.TaxComparisonData{
 		IcmsAPagar:                  resumo.IcmsAPagar,
 		IbsProjetado:                resumo.IbsProjetado,
@@ -138,6 +154,9 @@ func TriggerAIReportGeneration(db *sql.DB, companyID, periodo, jobID string) err
 		AliquotaEfetivaIBS:          resumo.AliquotaEfetivaIBS,
 		AliquotaEfetivaCBS:          resumo.AliquotaEfetivaCBS,
 		AliquotaEfetivaTotalReforma: resumo.AliquotaEfetivaTotalReforma,
+		CreditosEmRiscoTotal:        nfeCredLost + simplesCredLost,
+		CreditosNFeSemIBS:           nfeCredLost,
+		CreditosSimplesNacional:     simplesCredLost,
 		// Previous period not available in worker context; fields remain zero
 	}
 	err = services.SendAIReportEmail(recipients, resumo.CompanyName, periodo, narrative, dadosBrutosJSON, taxData)

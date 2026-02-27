@@ -29,10 +29,14 @@ type TaxComparisonData struct {
 	AliquotaEfetivaCBS          float64
 	AliquotaEfetivaTotalReforma float64
 	// Comparativo período anterior
-	PeriodoAnterior            string
-	FaturamentoAnterior        float64
-	IcmsAPagarAnterior         float64
+	PeriodoAnterior             string
+	FaturamentoAnterior         float64
+	IcmsAPagarAnterior          float64
 	AliquotaEfetivaICMSAnterior float64
+	// Créditos IBS+CBS em risco (NF-e sem crédito + Simples Nacional)
+	CreditosEmRiscoTotal    float64
+	CreditosNFeSemIBS       float64 // estimado sobre NF-e com v_ibs=0 e v_cbs=0
+	CreditosSimplesNacional float64 // estimado sobre fornecedores do Simples
 }
 
 // EmailConfig holds SMTP configuration
@@ -235,6 +239,7 @@ func SendAIReportEmail(recipients []string, companyName, periodo, narrativaMarkd
 	reformaHTML := generateReformaHTML(taxData)
 	cargaHTML := generateCargaTributariaHTML(taxData)
 	comparativoHTML := generateComparativoHTML(taxData, periodo)
+	creditosHTML := generateCreditosEmRiscoHTML(taxData, appURL)
 
 	// Plain text summary
 	plainText := buildPlainTextSummary(companyName, periodo, taxData, narrativaPlain, appURL)
@@ -295,6 +300,7 @@ body{font-family:Arial,sans-serif;line-height:1.6;color:#333;max-width:640px;mar
   %s
   %s
   %s
+  %s
   <div class="ai-box">
     <div class="ai-label">&#129302; An&aacute;lise da Intelig&ecirc;ncia Artificial</div>
     %s
@@ -309,7 +315,7 @@ body{font-family:Arial,sans-serif;line-height:1.6;color:#333;max-width:640px;mar
 </html>`,
 			periodo,
 			companyName, periodo, getTimeBrasil(),
-			kpiHTML, reformaHTML, cargaHTML, comparativoHTML,
+			kpiHTML, reformaHTML, cargaHTML, comparativoHTML, creditosHTML,
 			narrativaHTML,
 			appURL)
 
@@ -368,20 +374,49 @@ func generateKPISectionHTML(d TaxComparisonData) string {
 	return sb.String()
 }
 
-// generateReformaHTML renders the Reforma Tributária section with SVG chart and table.
+// generateReformaHTML renders the Reforma Tributária section as a pure HTML table
+// (SVG is not supported by most email clients and produces garbled text).
 func generateReformaHTML(d TaxComparisonData) string {
-	taxChartSVG := generateTaxComparisonSVG(d)
 	ibsCbsTotal := d.IbsProjetado + d.CbsProjetado
+
+	// Compute bar widths (relative to the largest value)
+	maxVal := d.IcmsAPagar
+	if d.IbsProjetado > maxVal { maxVal = d.IbsProjetado }
+	if d.CbsProjetado > maxVal { maxVal = d.CbsProjetado }
+	if ibsCbsTotal > maxVal { maxVal = ibsCbsTotal }
+	if maxVal == 0 { maxVal = 1 }
+	barPct := func(v float64) int {
+		p := int(v / maxVal * 100)
+		if v > 0 && p < 3 { return 3 }
+		return p
+	}
+
 	var sb strings.Builder
 	sb.WriteString(`<div class="sec"><div class="sec-title">Reforma Tribut&aacute;ria &mdash; Proje&ccedil;&atilde;o 2033</div>`)
-	sb.WriteString(`<div style="text-align:center;margin:12px 0">`)
-	sb.WriteString(taxChartSVG)
-	sb.WriteString(`</div>`)
-	sb.WriteString(`<table class="data-table"><thead><tr><th>Imposto</th><th style="text-align:right">Valor</th><th>Tipo</th></tr></thead><tbody>`)
-	sb.WriteString(fmt.Sprintf(`<tr><td>IBS Projetado</td><td style="text-align:right">R$ %s</td><td style="color:#10b981">Novo (2033)</td></tr>`, formatEmailBRL(d.IbsProjetado)))
-	sb.WriteString(fmt.Sprintf(`<tr><td>CBS Projetado</td><td style="text-align:right">R$ %s</td><td style="color:#f59e0b">Novo (2033)</td></tr>`, formatEmailBRL(d.CbsProjetado)))
-	sb.WriteString(fmt.Sprintf(`<tr><td>Total IBS + CBS</td><td style="text-align:right">R$ %s</td><td>Substituir&aacute; ICMS + PIS/COFINS</td></tr>`, formatEmailBRL(ibsCbsTotal)))
-	sb.WriteString(`</tbody></table></div>`)
+
+	// HTML bar chart (table-based, works in all email clients)
+	type barRow struct { label, color, tipo string; val float64 }
+	rows := []barRow{
+		{"ICMS (atual)",   "#3B82F6", "Regime atual",              d.IcmsAPagar},
+		{"IBS Projetado",  "#10B981", "Novo imposto (2033)",       d.IbsProjetado},
+		{"CBS Projetado",  "#F59E0B", "Novo imposto (2033)",       d.CbsProjetado},
+		{"IBS + CBS",      "#8B5CF6", "Substituir&aacute; ICMS+PIS/COFINS", ibsCbsTotal},
+	}
+	sb.WriteString(`<table width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0 16px">`)
+	for _, r := range rows {
+		pct := barPct(r.val)
+		sb.WriteString(fmt.Sprintf(`<tr>
+  <td width="90" style="font-size:12px;font-weight:700;color:#4a5568;padding:4px 8px 10px 0;vertical-align:middle">%s</td>
+  <td style="padding:4px 0 10px;vertical-align:middle">
+    <table width="100%%" cellpadding="0" cellspacing="0"><tr>
+      <td width="%d%%" bgcolor="%s" height="22" style="border-radius:4px">&nbsp;</td>
+      <td style="padding-left:8px;font-size:12px;white-space:nowrap;color:#2d3748;font-weight:600">R$ %s</td>
+    </tr></table>
+    <div style="font-size:10px;color:#a0aec0;margin-top:2px">%s</div>
+  </td>
+</tr>`, r.label, pct, r.color, formatEmailBRL(r.val), r.tipo))
+	}
+	sb.WriteString(`</table></div>`)
 	return sb.String()
 }
 
@@ -462,9 +497,56 @@ func buildPlainTextSummary(companyName, periodo string, d TaxComparisonData, nar
 		sb.WriteString(fmt.Sprintf("=== COMPARATIVO COM %s ===\n", d.PeriodoAnterior))
 		sb.WriteString(fmt.Sprintf("Faturamento anterior: R$ %s (variacao: %+.1f%%)\n\n", formatEmailBRL(d.FaturamentoAnterior), varFat))
 	}
+	if d.CreditosEmRiscoTotal > 0 {
+		sb.WriteString("=== ATENCAO: CREDITOS IBS+CBS EM RISCO ===\n")
+		sb.WriteString(fmt.Sprintf("Total em risco:            R$ %s\n", formatEmailBRL(d.CreditosEmRiscoTotal)))
+		sb.WriteString(fmt.Sprintf("NF-e sem credito IBS/CBS:  R$ %s\n", formatEmailBRL(d.CreditosNFeSemIBS)))
+		sb.WriteString(fmt.Sprintf("Fornec. Simples Nacional:  R$ %s\n\n", formatEmailBRL(d.CreditosSimplesNacional)))
+	}
 	sb.WriteString("=== ANALISE DA IA ===\n")
 	sb.WriteString(narrativaPlain)
 	sb.WriteString(fmt.Sprintf("\n\nAcesse o painel completo: %s/relatorios/resumo-executivo\n\n---\n(c) 2026 FBTax Cloud - Todos os direitos reservados\n", appURL))
+	return sb.String()
+}
+
+// generateCreditosEmRiscoHTML renders the "Créditos IBS+CBS em Risco" alert section.
+func generateCreditosEmRiscoHTML(d TaxComparisonData, appURL string) string {
+	if d.CreditosEmRiscoTotal == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString(`<div class="sec" style="background:#fff5f5;border:2px solid #fc8181;border-radius:8px;padding:20px;margin:20px 0">`)
+	sb.WriteString(`<table cellpadding="0" cellspacing="0" style="margin-bottom:14px"><tr>`)
+	sb.WriteString(`<td style="font-size:20px;vertical-align:middle;padding-right:8px">&#9888;</td>`)
+	sb.WriteString(`<td style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#c53030;vertical-align:middle">Aten&ccedil;&atilde;o: Cr&eacute;ditos IBS+CBS em Risco</td>`)
+	sb.WriteString(`</tr></table>`)
+
+	// Total highlight
+	sb.WriteString(fmt.Sprintf(`<div style="background:#c53030;border-radius:8px;padding:16px;text-align:center;margin-bottom:14px">
+  <div style="font-size:11px;color:#fed7d7;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Total de Cr&eacute;ditos que podem N&Atilde;O ser aproveitados</div>
+  <div style="font-size:26px;font-weight:700;color:#fff">R$ %s</div>
+  <div style="font-size:10px;color:#fed7d7;margin-top:4px">Estimativa com al&iacute;quotas 2033</div>
+</div>`, formatEmailBRL(d.CreditosEmRiscoTotal)))
+
+	// Breakdown table
+	sb.WriteString(`<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px">`)
+	sb.WriteString(`<thead><tr>`)
+	sb.WriteString(`<th style="background:#822727;color:#fff;padding:8px 12px;text-align:left;font-size:12px">Origem</th>`)
+	sb.WriteString(`<th style="background:#822727;color:#fff;padding:8px 12px;text-align:right;font-size:12px">Cr&eacute;dito Estimado Perdido</th>`)
+	sb.WriteString(`</tr></thead><tbody>`)
+	sb.WriteString(fmt.Sprintf(`<tr style="background:#fff5f5">
+  <td style="padding:8px 12px;border-bottom:1px solid #fed7d7">NF-e de entradas sem IBS/CBS (fornecedores sem as tags)</td>
+  <td style="padding:8px 12px;border-bottom:1px solid #fed7d7;text-align:right;color:#c53030;font-weight:600">R$ %s</td>
+</tr>`, formatEmailBRL(d.CreditosNFeSemIBS)))
+	sb.WriteString(fmt.Sprintf(`<tr style="background:#fff5f5">
+  <td style="padding:8px 12px">Fornecedores do Simples Nacional (sem cr&eacute;dito de IBS/CBS)</td>
+  <td style="padding:8px 12px;text-align:right;color:#c53030;font-weight:600">R$ %s</td>
+</tr>`, formatEmailBRL(d.CreditosSimplesNacional)))
+	sb.WriteString(`</tbody></table>`)
+	sb.WriteString(fmt.Sprintf(`<div style="text-align:center;margin-top:12px">
+  <a href="%s/apuracao/creditos-perdidos" style="font-size:12px;color:#c53030;font-weight:600">Ver relat&oacute;rio completo de cr&eacute;ditos em risco &rarr;</a>
+</div>`, appURL))
+	sb.WriteString(`</div>`)
 	return sb.String()
 }
 

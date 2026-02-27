@@ -477,6 +477,22 @@ func GetExecutiveSummaryHandler(db *sql.DB) http.HandlerFunc {
 				for i, m := range managers {
 					recipients[i] = m.Email
 				}
+				// Busca créditos em risco (NF-e sem IBS/CBS + Simples Nacional)
+				var ibsRate, cbsRate float64
+				db.QueryRow(`SELECT perc_ibs_uf + perc_ibs_mun, perc_cbs FROM tabela_aliquotas WHERE ano = 2033 LIMIT 1`).Scan(&ibsRate, &cbsRate)
+				if ibsRate == 0 { ibsRate = 17.7 }
+				if cbsRate == 0 { cbsRate = 8.8 }
+				totalRate := (ibsRate + cbsRate) / 100.0
+
+				var nfeValorSemCredito float64
+				db.QueryRow(`SELECT COALESCE(SUM(v_nf), 0) FROM nfe_entradas WHERE company_id = $1 AND v_ibs = 0 AND v_cbs = 0 AND LEFT(forn_cnpj, 8) != LEFT(dest_cnpj_cpf, 8)`, companyID).Scan(&nfeValorSemCredito)
+
+				var simplesTotalValor float64
+				db.QueryRow(`SELECT COALESCE(SUM(total_valor), 0) FROM mv_operacoes_simples WHERE company_id = $1`, companyID).Scan(&simplesTotalValor)
+
+				nfeCredLost := nfeValorSemCredito * totalRate
+				simplesCredLost := simplesTotalValor * totalRate
+
 				taxData := services.TaxComparisonData{
 					IcmsAPagar:                  resumo.IcmsAPagar,
 					IbsProjetado:                resumo.IbsProjetado,
@@ -493,6 +509,9 @@ func GetExecutiveSummaryHandler(db *sql.DB) http.HandlerFunc {
 					FaturamentoAnterior:         resumo.FaturamentoAnterior,
 					IcmsAPagarAnterior:          resumo.IcmsAPagarAnterior,
 					AliquotaEfetivaICMSAnterior: resumo.AliquotaEfetivaICMSAnterior,
+					CreditosEmRiscoTotal:        nfeCredLost + simplesCredLost,
+					CreditosNFeSemIBS:           nfeCredLost,
+					CreditosSimplesNacional:     simplesCredLost,
 				}
 				errEmail := services.SendAIReportEmail(recipients, resumo.CompanyName, periodo, narrativa, dadosBrutos, taxData)
 				if errEmail != nil {
