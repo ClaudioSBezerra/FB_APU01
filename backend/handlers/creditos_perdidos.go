@@ -106,12 +106,19 @@ func CreditosPerdidosHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// ── 1. NF-e sem IBS/CBS ──────────────────────────────────────────────
+		// Exclui transferências internas: mesma raiz CNPJ (8 primeiros dígitos)
+		// cobre transferências entre filiais, uso e consumo e ativo imobilizado.
 
-		// Total geral de notas
+		// Total de notas de terceiros (excluindo intra-grupo)
 		var totalUniverse int
-		db.QueryRow(`SELECT COUNT(*) FROM nfe_entradas WHERE company_id = $1`, companyID).Scan(&totalUniverse)
+		db.QueryRow(`
+			SELECT COUNT(*)
+			FROM nfe_entradas
+			WHERE company_id = $1
+			  AND LEFT(forn_cnpj, 8) != LEFT(dest_cnpj_cpf, 8)
+		`, companyID).Scan(&totalUniverse)
 
-		// Notas sem IBS/CBS agrupadas por fornecedor
+		// Notas sem IBS/CBS de terceiros, agrupadas por fornecedor
 		rows, err := db.Query(`
 			SELECT
 				forn_cnpj,
@@ -122,6 +129,7 @@ func CreditosPerdidosHandler(db *sql.DB) http.HandlerFunc {
 			WHERE company_id = $1
 			  AND v_ibs = 0
 			  AND v_cbs = 0
+			  AND LEFT(forn_cnpj, 8) != LEFT(dest_cnpj_cpf, 8)
 			GROUP BY forn_cnpj, forn_nome
 			ORDER BY valor_total DESC
 			LIMIT 50
