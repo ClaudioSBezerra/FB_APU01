@@ -32,82 +32,17 @@ interface ConciliacaoItem {
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 
 const lancamentosMock: Lancamento[] = [
-  {
-    id: '1',
-    tipo: 'credito',
-    documento: 'NF-e 123456',
-    fornecedorCliente: 'Fornecedor ABC',
-    descricao: 'Compras de Insumos',
-    valorIBS: 15600,
-    valorCBS: 1500,
-    status: 'confirmado',
-    vinculado: 'Aguardando Nfps',
-  },
-  {
-    id: '2',
-    tipo: 'credito',
-    documento: 'NF-e 210431',
-    fornecedorCliente: 'Fornecedor Emprego',
-    descricao: 'Mão de Obra',
-    valorIBS: 25000,
-    valorCBS: 1500,
-    status: 'pendente',
-    vinculado: 'Aguardando Nfps',
-  },
-  {
-    id: '3',
-    tipo: 'debito',
-    documento: 'NF-e 220432',
-    fornecedorCliente: 'Fornecedor Provisório',
-    descricao: 'Pedido de Carga',
-    valorIBS: 38000,
-    valorCBS: 1000,
-    status: 'apurado',
-    vinculado: 'Aguardando Nfps',
-  },
-  {
-    id: '4',
-    tipo: 'credito',
-    documento: 'NF-e 156/708',
-    fornecedorCliente: 'Fornecedor Subtenso',
-    descricao: 'Pedido de Tempo',
-    valorIBS: 36000,
-    valorCBS: 1500,
-    status: 'pendente',
-    vinculado: 'Aguardando Nfps',
-  },
-  {
-    id: '5',
-    tipo: 'credito',
-    documento: 'NF-e 252/026',
-    fornecedorCliente: 'Fornecedor Transpo',
-    descricao: 'Pedido de Meios',
-    valorIBS: 20000,
-    valorCBS: 1500,
-    status: 'confirmado',
-    vinculado: 'Aguardando Nfps',
-  },
+  { id: '1', tipo: 'credito', documento: 'NF-e 123456',  fornecedorCliente: 'Fornecedor ABC',       descricao: 'Compras de Insumos', valorIBS: 15600, valorCBS: 1500, status: 'confirmado', vinculado: 'Aguardando Nfps' },
+  { id: '2', tipo: 'credito', documento: 'NF-e 210431',  fornecedorCliente: 'Fornecedor Emprego',    descricao: 'Mão de Obra',        valorIBS: 25000, valorCBS: 1500, status: 'pendente',   vinculado: 'Aguardando Nfps' },
+  { id: '3', tipo: 'debito',  documento: 'NF-e 220432',  fornecedorCliente: 'Fornecedor Provisório', descricao: 'Pedido de Carga',    valorIBS: 38000, valorCBS: 1000, status: 'apurado',    vinculado: 'Aguardando Nfps' },
+  { id: '4', tipo: 'credito', documento: 'NF-e 156/708', fornecedorCliente: 'Fornecedor Subtenso',   descricao: 'Pedido de Tempo',    valorIBS: 36000, valorCBS: 1500, status: 'pendente',   vinculado: 'Aguardando Nfps' },
+  { id: '5', tipo: 'credito', documento: 'NF-e 252/026', fornecedorCliente: 'Fornecedor Transpo',    descricao: 'Pedido de Meios',    valorIBS: 20000, valorCBS: 1500, status: 'confirmado', vinculado: 'Aguardando Nfps' },
 ];
 
 const conciliacaoMock: ConciliacaoItem[] = [
-  {
-    id: '1',
-    notaFiscal: 'NF-e 123456 – Fornecedor ABC',
-    pedidoSAP: 'PO-2024-0891 / PAG-0345',
-    statusCredito: 'confirmado',
-  },
-  {
-    id: '2',
-    notaFiscal: 'NF-e 252/026 – Fornecedor Transpo',
-    pedidoSAP: 'PO-2024-0892 / PAG-0346',
-    statusCredito: 'confirmado',
-  },
-  {
-    id: '3',
-    notaFiscal: 'NF-e 210431 – Fornecedor Emprego',
-    pedidoSAP: 'PO-2024-0893 / —',
-    statusCredito: 'pendente',
-  },
+  { id: '1', notaFiscal: 'NF-e 123456 – Fornecedor ABC',    pedidoSAP: 'PO-2024-0891 / PAG-0345', statusCredito: 'confirmado' },
+  { id: '2', notaFiscal: 'NF-e 252/026 – Fornecedor Transpo', pedidoSAP: 'PO-2024-0892 / PAG-0346', statusCredito: 'confirmado' },
+  { id: '3', notaFiscal: 'NF-e 210431 – Fornecedor Emprego',  pedidoSAP: 'PO-2024-0893 / —',        statusCredito: 'pendente'   },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -142,23 +77,19 @@ export default function GestaoCredIBSCBS() {
   const [concDocFiltro, setConcDocFiltro] = useState('todos');
   const [concStatusFiltro, setConcStatusFiltro] = useState('todos');
 
-  // Filtragem da tabela de monitoramento
   const filteredLancamentos = lancamentosMock.filter((l) => {
     const tabOk =
-      activeTab === 'todos' ? true :
-      activeTab === 'creditos' ? l.tipo === 'credito' :
-      activeTab === 'debitos'  ? l.tipo === 'debito'  :
+      activeTab === 'todos'      ? true :
+      activeTab === 'creditos'   ? l.tipo === 'credito' :
+      activeTab === 'debitos'    ? l.tipo === 'debito'  :
       activeTab === 'pendencias' ? l.status === 'pendente' : true;
-
     const statusOk = statusFiltro === 'todas' || l.status === statusFiltro;
-
     return tabOk && statusOk;
   });
 
   const totalIBS = filteredLancamentos.reduce((s, l) => s + l.valorIBS, 0);
   const totalCBS = filteredLancamentos.reduce((s, l) => s + l.valorCBS, 0);
 
-  // Filtragem da conciliação
   const filteredConc = conciliacaoMock.filter((c) => {
     const docOk    = concDocFiltro    === 'todos' || c.id === concDocFiltro;
     const statusOk = concStatusFiltro === 'todos' || c.statusCredito === concStatusFiltro;
@@ -171,7 +102,7 @@ export default function GestaoCredIBSCBS() {
       {/* ── Cabeçalho ── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Gestão de Créditos e Débitos IBS / CBS</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Gestão de Créditos e Débitos IBS / CBS</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             Monitoramento e conciliação de obrigações tributárias da Reforma Tributária
           </p>
@@ -191,9 +122,9 @@ export default function GestaoCredIBSCBS() {
           { label: 'Saldo Líquido Atual', value:   -90_400, color: 'bg-blue-600' },
         ].map((kpi) => (
           <Card key={kpi.label} className={`${kpi.color} text-white border-0 shadow-md`}>
-            <CardContent className="pt-4 pb-3 px-4">
-              <p className="text-[11px] text-blue-100 font-medium">{kpi.label}</p>
-              <p className={`text-xl font-bold mt-1 ${kpi.value < 0 ? 'text-red-200' : ''}`}>
+            <CardContent className="pt-3 pb-2 px-3">
+              <p className="text-[10px] text-blue-100 font-medium">{kpi.label}</p>
+              <p className={`text-base font-bold mt-0.5 ${kpi.value < 0 ? 'text-red-200' : ''}`}>
                 {fmt(kpi.value)}
               </p>
             </CardContent>
@@ -203,73 +134,72 @@ export default function GestaoCredIBSCBS() {
 
       {/* ── Card Principal ── */}
       <Card>
-        <CardContent className="pt-4 space-y-4">
+        <CardContent className="pt-3 space-y-3">
 
           {/* Filtros */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">Filtro:</span>
+            <span className="text-[11px] font-medium text-muted-foreground">Filtro:</span>
 
             <Select value={periodoFiltro} onValueChange={setPeriodoFiltro}>
-              <SelectTrigger className="h-8 w-36 text-xs">
+              <SelectTrigger className="h-7 w-32 text-[11px]">
                 <SelectValue placeholder="Período" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="maio2024">Maio 2024</SelectItem>
-                <SelectItem value="abril2024">Abril 2024</SelectItem>
-                <SelectItem value="marco2024">Março 2024</SelectItem>
+                <SelectItem value="maio2024" className="text-[11px]">Maio 2024</SelectItem>
+                <SelectItem value="abril2024" className="text-[11px]">Abril 2024</SelectItem>
+                <SelectItem value="marco2024" className="text-[11px]">Março 2024</SelectItem>
               </SelectContent>
             </Select>
 
             <Select defaultValue="matrizDF">
-              <SelectTrigger className="h-8 w-36 text-xs">
+              <SelectTrigger className="h-7 w-32 text-[11px]">
                 <SelectValue placeholder="Empresa" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="matrizDF">Matriz DF</SelectItem>
-                <SelectItem value="filialSP">Filial SP</SelectItem>
+                <SelectItem value="matrizDF" className="text-[11px]">Matriz DF</SelectItem>
+                <SelectItem value="filialSP" className="text-[11px]">Filial SP</SelectItem>
               </SelectContent>
             </Select>
 
             <Select value={statusFiltro} onValueChange={setStatusFiltro}>
-              <SelectTrigger className="h-8 w-36 text-xs">
+              <SelectTrigger className="h-7 w-32 text-[11px]">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="todas">Todas</SelectItem>
-                <SelectItem value="confirmado">Confirmado</SelectItem>
-                <SelectItem value="pendente">Pendente</SelectItem>
-                <SelectItem value="apurado">Apurado</SelectItem>
+                <SelectItem value="todas" className="text-[11px]">Todas</SelectItem>
+                <SelectItem value="confirmado" className="text-[11px]">Confirmado</SelectItem>
+                <SelectItem value="pendente" className="text-[11px]">Pendente</SelectItem>
+                <SelectItem value="apurado" className="text-[11px]">Apurado</SelectItem>
               </SelectContent>
             </Select>
 
-            <Button size="sm" className="h-8 text-xs">
+            <Button size="sm" className="h-7 text-[11px] px-2">
               <Filter className="mr-1 h-3 w-3" /> Filtrar
             </Button>
           </div>
 
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="h-8">
-              <TabsTrigger value="todos"     className="text-xs h-7">Todos</TabsTrigger>
-              <TabsTrigger value="creditos"  className="text-xs h-7">Créditos</TabsTrigger>
-              <TabsTrigger value="debitos"   className="text-xs h-7">Débitos</TabsTrigger>
-              <TabsTrigger value="pendencias" className="text-xs h-7">Pendências</TabsTrigger>
+            <TabsList className="h-7">
+              <TabsTrigger value="todos"      className="text-[11px] h-6">Todos</TabsTrigger>
+              <TabsTrigger value="creditos"   className="text-[11px] h-6">Créditos</TabsTrigger>
+              <TabsTrigger value="debitos"    className="text-[11px] h-6">Débitos</TabsTrigger>
+              <TabsTrigger value="pendencias" className="text-[11px] h-6">Pendências</TabsTrigger>
             </TabsList>
 
-            {/* Conteúdo único para todas as tabs (só muda o filtro) */}
-            <TabsContent value={activeTab} className="mt-4">
-              <p className="text-[11px] font-semibold text-muted-foreground mb-2">
+            <TabsContent value={activeTab} className="mt-3">
+              <p className="text-[10px] font-semibold text-muted-foreground mb-2">
                 Monitoramento de Créditos e Débitos
               </p>
               <div className="overflow-x-auto rounded-md border">
-                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
                       {['Tipo', 'Documento', 'Fornecedor / Cliente', 'Descrição',
                         'Valor IBS', 'Valor CBS', 'Status', 'Vínculado', ''].map((h) => (
                         <th
                           key={h}
-                          className={`px-3 py-2 text-xs font-semibold text-gray-600 ${
+                          className={`px-2 py-1.5 text-[11px] font-semibold text-gray-600 ${
                             ['Valor IBS', 'Valor CBS'].includes(h) ? 'text-right' : 'text-left'
                           }`}
                         >
@@ -281,7 +211,7 @@ export default function GestaoCredIBSCBS() {
                   <tbody className="divide-y divide-gray-100 bg-white">
                     {filteredLancamentos.length === 0 && (
                       <tr>
-                        <td colSpan={9} className="px-3 py-6 text-center text-xs text-muted-foreground">
+                        <td colSpan={9} className="px-2 py-4 text-center text-[11px] text-muted-foreground">
                           Nenhum lançamento encontrado para os filtros selecionados.
                         </td>
                       </tr>
@@ -290,34 +220,34 @@ export default function GestaoCredIBSCBS() {
                       const tipo = tipoCfg[item.tipo];
                       const st   = statusCfg[item.status];
                       return (
-                        <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-3 py-2">
+                        <tr key={item.id} className="hover:bg-gray-50 transition-colors h-8">
+                          <td className="px-2 py-1">
                             <Badge className={`${tipo.cls} text-[10px] px-1.5 py-0 font-medium`}>
                               {tipo.label}
                             </Badge>
                           </td>
-                          <td className="px-3 py-2 text-xs font-mono">{item.documento}</td>
-                          <td className="px-3 py-2 text-xs">{item.fornecedorCliente}</td>
-                          <td className="px-3 py-2 text-xs text-muted-foreground">{item.descricao}</td>
-                          <td className="px-3 py-2 text-right text-xs font-medium">{fmt(item.valorIBS)}</td>
-                          <td className="px-3 py-2 text-right text-xs font-medium">{fmt(item.valorCBS)}</td>
-                          <td className="px-3 py-2">
+                          <td className="px-2 py-1 text-[11px] font-mono">{item.documento}</td>
+                          <td className="px-2 py-1 text-[11px]">{item.fornecedorCliente}</td>
+                          <td className="px-2 py-1 text-[11px] text-muted-foreground">{item.descricao}</td>
+                          <td className="px-2 py-1 text-right text-[11px] font-medium">{fmt(item.valorIBS)}</td>
+                          <td className="px-2 py-1 text-right text-[11px] font-medium">{fmt(item.valorCBS)}</td>
+                          <td className="px-2 py-1">
                             <Badge variant="outline" className={`${st.cls} text-[10px] px-1.5 py-0`}>
                               {st.label}
                             </Badge>
                           </td>
-                          <td className="px-3 py-2 text-xs text-muted-foreground">{item.vinculado}</td>
-                          <td className="px-3 py-2">
+                          <td className="px-2 py-1 text-[11px] text-muted-foreground">{item.vinculado}</td>
+                          <td className="px-2 py-1">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-6 w-6">
+                                <Button variant="ghost" size="icon" className="h-5 w-5">
                                   <MoreVertical className="h-3 w-3" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem className="text-xs">Ver detalhes</DropdownMenuItem>
-                                <DropdownMenuItem className="text-xs">Confirmar</DropdownMenuItem>
-                                <DropdownMenuItem className="text-xs">Vincular</DropdownMenuItem>
+                                <DropdownMenuItem className="text-[11px]">Ver detalhes</DropdownMenuItem>
+                                <DropdownMenuItem className="text-[11px]">Confirmar</DropdownMenuItem>
+                                <DropdownMenuItem className="text-[11px]">Vincular</DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </td>
@@ -327,11 +257,11 @@ export default function GestaoCredIBSCBS() {
                   </tbody>
                   <tfoot className="bg-gray-50 border-t-2 border-gray-300">
                     <tr>
-                      <td colSpan={4} className="px-3 py-2 text-xs font-semibold text-right text-gray-700">
+                      <td colSpan={4} className="px-2 py-1.5 text-[11px] font-semibold text-right text-gray-700">
                         Total:
                       </td>
-                      <td className="px-3 py-2 text-right text-xs font-bold">{fmt(totalIBS)}</td>
-                      <td className="px-3 py-2 text-right text-xs font-bold">{fmt(totalCBS)}</td>
+                      <td className="px-2 py-1.5 text-right text-[11px] font-bold">{fmt(totalIBS)}</td>
+                      <td className="px-2 py-1.5 text-right text-[11px] font-bold">{fmt(totalCBS)}</td>
                       <td colSpan={3} />
                     </tr>
                   </tfoot>
@@ -347,51 +277,49 @@ export default function GestaoCredIBSCBS() {
 
         {/* Conciliação de Pagamentos (2/3) */}
         <Card className="md:col-span-2">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-semibold">Conciliação de Pagamentos</CardTitle>
+          <CardHeader className="pb-2 pt-3 px-4">
+            <CardTitle className="text-[11px] font-semibold">Conciliação de Pagamentos</CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4 space-y-3">
 
-            {/* Filtros da conciliação */}
             <div className="flex items-center gap-2">
               <Select value={concDocFiltro} onValueChange={setConcDocFiltro}>
-                <SelectTrigger className="h-7 w-52 text-xs">
+                <SelectTrigger className="h-7 w-48 text-[11px]">
                   <SelectValue placeholder="Documento" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="todos">Todos os documentos</SelectItem>
-                  <SelectItem value="1">NF-e 123456</SelectItem>
-                  <SelectItem value="2">NF-e 252/026</SelectItem>
-                  <SelectItem value="3">NF-e 210431</SelectItem>
+                  <SelectItem value="todos" className="text-[11px]">Todos os documentos</SelectItem>
+                  <SelectItem value="1" className="text-[11px]">NF-e 123456</SelectItem>
+                  <SelectItem value="2" className="text-[11px]">NF-e 252/026</SelectItem>
+                  <SelectItem value="3" className="text-[11px]">NF-e 210431</SelectItem>
                 </SelectContent>
               </Select>
 
               <Select value={concStatusFiltro} onValueChange={setConcStatusFiltro}>
-                <SelectTrigger className="h-7 w-36 text-xs">
+                <SelectTrigger className="h-7 w-32 text-[11px]">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="confirmado">Confirmado</SelectItem>
-                  <SelectItem value="pendente">Pendente</SelectItem>
+                  <SelectItem value="todos" className="text-[11px]">Todos</SelectItem>
+                  <SelectItem value="confirmado" className="text-[11px]">Confirmado</SelectItem>
+                  <SelectItem value="pendente" className="text-[11px]">Pendente</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Tabela de conciliação */}
             <div className="overflow-x-auto rounded-md border">
-              <table className="min-w-full divide-y divide-gray-200 text-xs">
+              <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Nota Fiscal de Entrada</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Pedido SAP / Pagamento</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Status do Crédito</th>
+                    <th className="px-2 py-1.5 text-left text-[11px] font-semibold text-gray-600">Nota Fiscal de Entrada</th>
+                    <th className="px-2 py-1.5 text-left text-[11px] font-semibold text-gray-600">Pedido SAP / Pagamento</th>
+                    <th className="px-2 py-1.5 text-left text-[11px] font-semibold text-gray-600">Status do Crédito</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
                   {filteredConc.length === 0 && (
                     <tr>
-                      <td colSpan={3} className="px-3 py-4 text-center text-muted-foreground">
+                      <td colSpan={3} className="px-2 py-4 text-center text-[11px] text-muted-foreground">
                         Nenhum registro encontrado.
                       </td>
                     </tr>
@@ -399,10 +327,10 @@ export default function GestaoCredIBSCBS() {
                   {filteredConc.map((c) => {
                     const sc = concStatusCfg[c.statusCredito];
                     return (
-                      <tr key={c.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-3 py-2">{c.notaFiscal}</td>
-                        <td className="px-3 py-2 font-mono">{c.pedidoSAP}</td>
-                        <td className="px-3 py-2">
+                      <tr key={c.id} className="hover:bg-gray-50 transition-colors h-8">
+                        <td className="px-2 py-1 text-[11px]">{c.notaFiscal}</td>
+                        <td className="px-2 py-1 text-[11px] font-mono">{c.pedidoSAP}</td>
+                        <td className="px-2 py-1">
                           <Badge variant="outline" className={`${sc.cls} text-[10px] px-1.5 py-0`}>
                             {sc.label}
                           </Badge>
@@ -418,13 +346,13 @@ export default function GestaoCredIBSCBS() {
 
         {/* Painel Apuração Assistida (1/3) */}
         <Card className="border-2 border-blue-100 bg-blue-50/40">
-          <CardHeader className="pb-2 pt-4 px-4">
+          <CardHeader className="pb-2 pt-3 px-4">
             <div className="flex items-start justify-between">
               <div>
-                <CardTitle className="text-xs font-semibold text-blue-900 leading-tight">
+                <CardTitle className="text-[11px] font-semibold text-blue-900 leading-tight">
                   Apuração Assistida – IBS / CBS
                 </CardTitle>
-                <p className="text-[11px] text-blue-600 mt-0.5">Maio 2024</p>
+                <p className="text-[10px] text-blue-600 mt-0.5">Maio 2024</p>
               </div>
               <div className="flex gap-1 shrink-0">
                 <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-600">
@@ -437,38 +365,35 @@ export default function GestaoCredIBSCBS() {
             </div>
           </CardHeader>
           <CardContent className="px-4 pb-4 space-y-4">
-
-            {/* Resumo */}
             <div>
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                 Resumo da Apuração
               </p>
               <div className="space-y-2">
-                <div className="flex justify-between items-center text-xs">
+                <div className="flex justify-between items-center text-[11px]">
                   <span className="text-muted-foreground">· Créditos Confirmados</span>
                   <span className="font-semibold text-green-700">{fmt(850_300)}</span>
                 </div>
-                <div className="flex justify-between items-center text-xs">
+                <div className="flex justify-between items-center text-[11px]">
                   <span className="text-muted-foreground">· Débitos Confirmados</span>
                   <span className="font-semibold text-red-700">{fmt(940_700)}</span>
                 </div>
                 <Separator className="my-1" />
-                <div className="flex justify-between items-center text-xs font-bold">
+                <div className="flex justify-between items-center text-[11px] font-bold">
                   <span>· Saldo a Receber</span>
                   <span className="text-orange-600">{fmt(90_400)}</span>
                 </div>
               </div>
             </div>
 
-            {/* Ações */}
             <div className="space-y-2">
-              <Button className="w-full h-8 text-xs bg-green-600 hover:bg-green-700 text-white font-semibold">
+              <Button className="w-full h-7 text-[11px] bg-green-600 hover:bg-green-700 text-white font-semibold">
                 Sugerir Composição
               </Button>
-              <p className="text-center text-[11px] text-blue-600 underline cursor-pointer hover:text-blue-800 transition-colors">
+              <p className="text-center text-[10px] text-blue-600 underline cursor-pointer hover:text-blue-800 transition-colors">
                 Utilizar Créditos Disponíveis
               </p>
-              <Button className="w-full h-9 text-sm bg-orange-500 hover:bg-orange-600 text-white font-bold tracking-wide">
+              <Button className="w-full h-8 text-xs bg-orange-500 hover:bg-orange-600 text-white font-bold tracking-wide">
                 APURAR
               </Button>
             </div>

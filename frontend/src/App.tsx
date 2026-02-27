@@ -17,6 +17,8 @@ import RFBApuracao from './pages/RFBApuracao';
 import GestaoCredIBSCBS from './pages/GestaoCredIBSCBS';
 import ImportarXMLsSaida from './pages/ImportarXMLsSaida';
 import ConsultaNFeSaidas from './pages/ConsultaNFeSaidas';
+import ImportarXMLsEntrada from './pages/ImportarXMLsEntrada';
+import ConsultaNFesEntradas from './pages/ConsultaNFesEntradas';
 import ConsultaInteligente from './pages/ConsultaInteligente';
 import AdminUsers from './pages/AdminUsers';
 import Login from './pages/Login';
@@ -127,7 +129,8 @@ function AppLayout() {
             } />
             
             {/* Apuração */}
-            <Route path="/apuracao/entrada" element={<ComingSoon title="Importar XMLs Entrada" />} />
+            <Route path="/apuracao/entrada" element={<ImportarXMLsEntrada />} />
+            <Route path="/apuracao/entrada/notas" element={<ConsultaNFesEntradas />} />
             <Route path="/apuracao/saida" element={<ImportarXMLsSaida />} />
             <Route path="/apuracao/saida/notas" element={<ConsultaNFeSaidas />} />
             <Route path="/apuracao/nfse" element={<ComingSoon title="Importar XMLs NFS-e" />} />
@@ -149,7 +152,7 @@ function AppLayout() {
 }
 
 function App() {
-  console.log("App Version: 5.9.0 - Importar XMLs NF-e Saída");
+  console.log("App Version: 5.9.0 - Importar XMLs NF-e Entrada/Saída");
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

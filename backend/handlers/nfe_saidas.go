@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/transform"
 )
 
 // ---------------------------------------------------------------------------
@@ -154,6 +156,18 @@ func toNullDecimal(s string) *float64 {
 	return &v
 }
 
+// nfeCharsetReader converte encodings declarados no XML (ex: windows-1252) para UTF-8.
+func nfeCharsetReader(charset string, input io.Reader) (io.Reader, error) {
+	switch strings.ToLower(strings.ReplaceAll(charset, "-", "")) {
+	case "windows1252", "cp1252":
+		return transform.NewReader(input, charmap.Windows1252.NewDecoder()), nil
+	case "iso88591", "latin1":
+		return transform.NewReader(input, charmap.ISO8859_1.NewDecoder()), nil
+	default:
+		return nil, fmt.Errorf("encoding não suportado: %s", charset)
+	}
+}
+
 // parseNFeXML lê bytes de um XML de NF-e e retorna os dados estruturados.
 func parseNFeXML(data []byte) (*nfeProc, error) {
 	// Remove namespace para simplificar o parsing
@@ -163,8 +177,11 @@ func parseNFeXML(data []byte) (*nfeProc, error) {
 	data = bytes.ReplaceAll(data,
 		[]byte(` xmlns='http://www.portalfiscal.inf.br/nfe'`), []byte(""))
 
+	dec := xml.NewDecoder(bytes.NewReader(data))
+	dec.CharsetReader = nfeCharsetReader
+
 	var proc nfeProc
-	if err := xml.Unmarshal(data, &proc); err != nil {
+	if err := dec.Decode(&proc); err != nil {
 		return nil, fmt.Errorf("erro ao parsear XML: %w", err)
 	}
 	return &proc, nil
