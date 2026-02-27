@@ -12,11 +12,27 @@ import (
 	"time"
 )
 
-// TaxComparisonData holds tax values for the email chart and table
+// TaxComparisonData holds all structured fiscal data for the email (mirrors the screen).
 type TaxComparisonData struct {
+	// Impostos (campos originais)
 	IcmsAPagar   float64
 	IbsProjetado float64
 	CbsProjetado float64
+	// Dados do período
+	FaturamentoBruto float64
+	TotalEntradas    float64
+	IcmsSaida        float64
+	IcmsEntrada      float64
+	// Alíquotas efetivas (%)
+	AliquotaEfetivaICMS         float64
+	AliquotaEfetivaIBS          float64
+	AliquotaEfetivaCBS          float64
+	AliquotaEfetivaTotalReforma float64
+	// Comparativo período anterior
+	PeriodoAnterior            string
+	FaturamentoAnterior        float64
+	IcmsAPagarAnterior         float64
+	AliquotaEfetivaICMSAnterior float64
 }
 
 // EmailConfig holds SMTP configuration
@@ -190,7 +206,9 @@ func SendPasswordResetEmail(email, resetToken string) error {
 	return nil
 }
 
-// SendAIReportEmail sends AI-generated executive summary to company managers
+// SendAIReportEmail sends AI-generated executive summary to company managers.
+// The email mirrors exactly what is displayed on screen: structured KPI data first,
+// AI narrative (commentary) at the bottom.
 func SendAIReportEmail(recipients []string, companyName, periodo, narrativaMarkdown, dadosBrutosJSON string, taxData TaxComparisonData) error {
 	config := GetEmailConfig()
 
@@ -204,104 +222,97 @@ func SendAIReportEmail(recipients []string, companyName, periodo, narrativaMarkd
 		return nil
 	}
 
-	// Use APP_URL env var for dashboard link
 	appURL := os.Getenv("APP_URL")
 	if appURL == "" {
 		appURL = "http://localhost:3000"
 	}
 
-	// Convert markdown to simple HTML for email
 	narrativaHTML := convertMarkdownToHTML(narrativaMarkdown)
-
-	// Keep markdown for plain text version (strip HTML tags)
 	narrativaPlain := stripHTMLTags(narrativaHTML)
 
-	// Generate tax comparison chart and table
-	taxChartSVG := generateTaxComparisonSVG(taxData)
-	taxTableHTML := generateTaxTableHTML(taxData)
+	// Build structured data sections (mirrors the screen)
+	kpiHTML := generateKPISectionHTML(taxData)
+	reformaHTML := generateReformaHTML(taxData)
+	cargaHTML := generateCargaTributariaHTML(taxData)
+	comparativoHTML := generateComparativoHTML(taxData, periodo)
 
-	// Plain text tax table
-	taxTablePlain := fmt.Sprintf("\nComparativo de Impostos - Reforma Tributaria:\n"+
-		"  ICMS a Recolher:    R$ %s (imposto atual)\n"+
-		"  IBS Projetado:      R$ %s (novo imposto)\n"+
-		"  CBS Projetado:      R$ %s (novo imposto)\n"+
-		"  Total IBS + CBS:    R$ %s\n",
-		formatEmailBRL(taxData.IcmsAPagar),
-		formatEmailBRL(taxData.IbsProjetado),
-		formatEmailBRL(taxData.CbsProjetado),
-		formatEmailBRL(taxData.IbsProjetado+taxData.CbsProjetado))
+	// Plain text summary
+	plainText := buildPlainTextSummary(companyName, periodo, taxData, narrativaPlain, appURL)
 
-	// Send individual emails to each recipient (same pattern as password reset)
 	for _, email := range recipients {
-		// Generate unique boundary for multipart
-		boundary := fmt.Sprintf("boundary_%d", time.Now().Unix())
+		boundary := fmt.Sprintf("boundary_%d", time.Now().UnixNano())
 
-		// Build multipart message (HTML + Plain Text for better corporate email acceptance)
-		message := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: FBTax Cloud - Resumo Executivo - %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", config.From, email, periodo, boundary)
+		message := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: FBTax Cloud - Resumo Executivo - %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n",
+			config.From, email, periodo, boundary)
 
-		// Plain text version (for corporate spam filters and text-only clients)
-		message += fmt.Sprintf("--%s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n", boundary)
-		message += fmt.Sprintf("FBTax Cloud - Resumo Executivo\n\nEmpresa: %s\nPeriodo: %s\nGerado em: %s\n\n%s\n%s\nAcesse o painel completo: %s\n\n---\n(c) 2026 FBTax Cloud - Todos os direitos reservados\n",
-			companyName, periodo, getTimeBrasil(), narrativaPlain, taxTablePlain, appURL)
-		message += fmt.Sprintf("\r\n--%s\r\n", boundary)
+		// Plain text part
+		message += fmt.Sprintf("--%s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s\r\n--%s\r\n",
+			boundary, plainText, boundary)
 
-		// HTML version (for rich display)
+		// HTML part
 		message += "Content-Type: text/html; charset=UTF-8\r\n\r\n"
 		message += fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<style>
-		body { font-family: Arial, sans-serif; line-height: 1.6; color: #333333; max-width: 600px; margin: 0 auto; }
-		.container { background-color: #f4f4f8; padding: 40px; border-radius: 8px; }
-		.header { background: #4a5568; color: white; padding: 20px; border-radius: 8px; text-align: center; }
-		.logo { font-size: 24px; font-weight: bold; }
-		.content { background: white; padding: 30px; border-radius: 8px; margin-top: 20px; }
-		h2 { color: #333; margin-bottom: 20px; }
-		h3 { color: #4a5568; margin: 25px 0 15px 0; }
-		p { margin: 0 0 15px 0; color: #666; line-height: 1.8; }
-		.info-box { background-color: #e7f3ff; border-left: 4px solid #2196f3; padding: 15px; margin: 20px 0; }
-		.tax-section { background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 25px 0; }
-		.tax-table { width: 100%%; border-collapse: collapse; margin: 15px 0; }
-		.tax-table th { background: #4a5568; color: white; padding: 10px 12px; text-align: left; font-size: 13px; }
-		.tax-table td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
-		.tax-table tr:last-child td { border-bottom: none; font-weight: bold; background: #edf2f7; }
-		.chart-container { text-align: center; margin: 20px 0; }
-		.button { display: inline-block; padding: 12px 24px; background: #2c3e50; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 20px 0; }
-		.footer { background: #f8f9fa; padding: 20px; border-radius: 8px; color: #666; font-size: 12px; margin-top: 20px; }
-	</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body{font-family:Arial,sans-serif;line-height:1.6;color:#333;max-width:640px;margin:0 auto;background:#f4f4f8}
+.wrap{padding:24px}
+.hdr{background:#2d3748;color:#fff;padding:20px 24px;border-radius:8px 8px 0 0;text-align:center}
+.hdr-logo{font-size:22px;font-weight:700;letter-spacing:.5px}
+.hdr-sub{font-size:14px;color:#cbd5e0;margin-top:4px}
+.body{background:#fff;padding:24px;border-radius:0 0 8px 8px}
+.info-box{background:#ebf8ff;border-left:4px solid #3182ce;padding:12px 16px;margin:0 0 20px;border-radius:0 6px 6px 0;font-size:13px;color:#2c5282}
+.sec{margin:20px 0}
+.sec-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#718096;border-bottom:2px solid #e2e8f0;padding-bottom:6px;margin-bottom:14px}
+.kpi-table{width:100%%;border-collapse:separate;border-spacing:8px 8px}
+.kpi-cell{border-radius:8px;padding:14px 12px;text-align:center;vertical-align:top}
+.kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
+.kpi-val{font-size:19px;font-weight:700;margin:2px 0}
+.kpi-sub{font-size:10px;margin-top:2px}
+.data-table{width:100%%;border-collapse:collapse;font-size:13px;margin:8px 0}
+.data-table th{background:#4a5568;color:#fff;padding:8px 12px;text-align:left;font-size:12px}
+.data-table td{padding:8px 12px;border-bottom:1px solid #e2e8f0}
+.data-table tr:last-child td{border-bottom:none;font-weight:700;background:#edf2f7}
+.ai-box{background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin:20px 0}
+.ai-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#a0aec0;margin-bottom:12px}
+.btn{display:inline-block;padding:12px 28px;background:#2d3748;color:#fff;text-decoration:none;border-radius:6px;font-weight:700;font-size:14px;margin:8px 0}
+.footer{text-align:center;padding:16px;color:#a0aec0;font-size:11px;margin-top:8px}
+</style>
 </head>
 <body>
-	<div class="container">
-		<div class="header">
-			<div class="logo">FBTax Cloud</div>
-			<h2 style="color: white; margin-top: 10px;">Resumo Executivo - %s</h2>
-		</div>
-		<div class="content">
-			<div class="info-box">
-				<strong>Empresa:</strong> %s<br>
-				<strong>Periodo:</strong> %s<br>
-				<strong>Gerado em:</strong> %s
-			</div>
-			%s
-			<div class="tax-section">
-				<h3 style="margin-top: 0;">Comparativo de Impostos - Reforma Tributaria</h3>
-				<div class="chart-container">
-					%s
-				</div>
-				%s
-			</div>
-			<div style="text-align: center; margin: 30px 0;">
-				<a href="%s" class="button">Acessar Painel Completo</a>
-			</div>
-		</div>
-		<div class="footer">
-			<p>&copy; 2026 FBTax Cloud - Todos os direitos reservados</p>
-		</div>
-	</div>
+<div class="wrap">
+<div class="hdr">
+  <div class="hdr-logo">FBTax Cloud</div>
+  <div class="hdr-sub">Resumo Executivo &mdash; %s</div>
+</div>
+<div class="body">
+  <div class="info-box">
+    <strong>Empresa:</strong> %s &nbsp;|&nbsp; <strong>Per&iacute;odo:</strong> %s &nbsp;|&nbsp; <strong>Gerado em:</strong> %s
+  </div>
+  %s
+  %s
+  %s
+  %s
+  <div class="ai-box">
+    <div class="ai-label">&#129302; An&aacute;lise da Intelig&ecirc;ncia Artificial</div>
+    %s
+  </div>
+  <div style="text-align:center;margin:24px 0">
+    <a href="%s/relatorios/resumo-executivo" class="btn">Acessar Painel Completo</a>
+  </div>
+</div>
+<div class="footer">&copy; 2026 FBTax Cloud &mdash; Todos os direitos reservados</div>
+</div>
 </body>
-</html>`, periodo, companyName, periodo, getTimeBrasil(), narrativaHTML, taxChartSVG, taxTableHTML, appURL)
+</html>`,
+			periodo,
+			companyName, periodo, getTimeBrasil(),
+			kpiHTML, reformaHTML, cargaHTML, comparativoHTML,
+			narrativaHTML,
+			appURL)
+
 		message += fmt.Sprintf("\r\n--%s--\r\n", boundary)
 
 		log.Printf("[Email Service] Sending AI report email to %s via %s:%d", email, config.Host, config.Port)
@@ -319,11 +330,142 @@ func SendAIReportEmail(recipients []string, companyName, periodo, narrativaMarkd
 			log.Printf("[Email Service] Failed to send AI report email to %s: %v", email, err)
 			return fmt.Errorf("falha ao enviar e-mail de relatorio IA: %w", err)
 		}
-
 		log.Printf("[Email Service] AI report email sent successfully to %s", email)
 	}
 
 	return nil
+}
+
+// generateKPISectionHTML renders the top KPI cards (faturamento, ICMS, entradas).
+func generateKPISectionHTML(d TaxComparisonData) string {
+	var sb strings.Builder
+	sb.WriteString(`<div class="sec"><div class="sec-title">Dados do Per&iacute;odo</div>`)
+	sb.WriteString(`<table class="kpi-table"><tr>`)
+
+	// Faturamento Bruto
+	sb.WriteString(fmt.Sprintf(`<td class="kpi-cell" style="background:#ebf8ff;border:1px solid #bee3f8">
+  <div class="kpi-label" style="color:#2b6cb0">Faturamento Bruto</div>
+  <div class="kpi-val" style="color:#1a365d">R$ %s</div>
+  <div class="kpi-sub" style="color:#718096">Total de Sa&iacute;das</div>
+</td>`, formatEmailBRL(d.FaturamentoBruto)))
+
+	// Total Entradas
+	sb.WriteString(fmt.Sprintf(`<td class="kpi-cell" style="background:#f0fff4;border:1px solid #9ae6b4">
+  <div class="kpi-label" style="color:#276749">Total de Entradas</div>
+  <div class="kpi-val" style="color:#1c4532">R$ %s</div>
+  <div class="kpi-sub" style="color:#718096">Compras e insumos</div>
+</td>`, formatEmailBRL(d.TotalEntradas)))
+
+	sb.WriteString(`</tr></table>`)
+
+	// ICMS breakdown
+	sb.WriteString(`<table class="data-table" style="margin-top:12px">`)
+	sb.WriteString(`<thead><tr><th>ICMS do Per&iacute;odo</th><th style="text-align:right">Valor</th></tr></thead><tbody>`)
+	sb.WriteString(fmt.Sprintf(`<tr><td>D&eacute;bito (sobre sa&iacute;das)</td><td style="text-align:right">R$ %s</td></tr>`, formatEmailBRL(d.IcmsSaida)))
+	sb.WriteString(fmt.Sprintf(`<tr><td>Cr&eacute;dito (sobre entradas)</td><td style="text-align:right">- R$ %s</td></tr>`, formatEmailBRL(d.IcmsEntrada)))
+	sb.WriteString(fmt.Sprintf(`<tr><td>ICMS a Recolher</td><td style="text-align:right">R$ %s</td></tr>`, formatEmailBRL(d.IcmsAPagar)))
+	sb.WriteString(`</tbody></table></div>`)
+	return sb.String()
+}
+
+// generateReformaHTML renders the Reforma Tributária section with SVG chart and table.
+func generateReformaHTML(d TaxComparisonData) string {
+	taxChartSVG := generateTaxComparisonSVG(d)
+	ibsCbsTotal := d.IbsProjetado + d.CbsProjetado
+	var sb strings.Builder
+	sb.WriteString(`<div class="sec"><div class="sec-title">Reforma Tribut&aacute;ria &mdash; Proje&ccedil;&atilde;o 2033</div>`)
+	sb.WriteString(`<div style="text-align:center;margin:12px 0">`)
+	sb.WriteString(taxChartSVG)
+	sb.WriteString(`</div>`)
+	sb.WriteString(`<table class="data-table"><thead><tr><th>Imposto</th><th style="text-align:right">Valor</th><th>Tipo</th></tr></thead><tbody>`)
+	sb.WriteString(fmt.Sprintf(`<tr><td>IBS Projetado</td><td style="text-align:right">R$ %s</td><td style="color:#10b981">Novo (2033)</td></tr>`, formatEmailBRL(d.IbsProjetado)))
+	sb.WriteString(fmt.Sprintf(`<tr><td>CBS Projetado</td><td style="text-align:right">R$ %s</td><td style="color:#f59e0b">Novo (2033)</td></tr>`, formatEmailBRL(d.CbsProjetado)))
+	sb.WriteString(fmt.Sprintf(`<tr><td>Total IBS + CBS</td><td style="text-align:right">R$ %s</td><td>Substituir&aacute; ICMS + PIS/COFINS</td></tr>`, formatEmailBRL(ibsCbsTotal)))
+	sb.WriteString(`</tbody></table></div>`)
+	return sb.String()
+}
+
+// generateCargaTributariaHTML renders the effective tax rate section.
+func generateCargaTributariaHTML(d TaxComparisonData) string {
+	if d.FaturamentoBruto == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString(`<div class="sec"><div class="sec-title">Carga Tribut&aacute;ria Efetiva (sobre faturamento)</div>`)
+	sb.WriteString(`<table class="data-table"><thead><tr><th>Imposto</th><th style="text-align:right">Al&iacute;quota Efetiva</th><th>Regime</th></tr></thead><tbody>`)
+	sb.WriteString(fmt.Sprintf(`<tr><td>ICMS a Recolher</td><td style="text-align:right">%.2f%%</td><td>Atual</td></tr>`, d.AliquotaEfetivaICMS))
+	sb.WriteString(fmt.Sprintf(`<tr><td>IBS Projetado</td><td style="text-align:right">%.2f%%</td><td>Proje&ccedil;&atilde;o 2033</td></tr>`, d.AliquotaEfetivaIBS))
+	sb.WriteString(fmt.Sprintf(`<tr><td>CBS Projetado</td><td style="text-align:right">%.2f%%</td><td>Proje&ccedil;&atilde;o 2033</td></tr>`, d.AliquotaEfetivaCBS))
+	sb.WriteString(fmt.Sprintf(`<tr><td>Total IBS + CBS</td><td style="text-align:right">%.2f%%</td><td>Proje&ccedil;&atilde;o 2033</td></tr>`, d.AliquotaEfetivaTotalReforma))
+	sb.WriteString(`</tbody></table></div>`)
+	return sb.String()
+}
+
+// generateComparativoHTML renders the previous period comparison section (if data available).
+func generateComparativoHTML(d TaxComparisonData, periodoAtual string) string {
+	if d.PeriodoAnterior == "" || d.FaturamentoAnterior == 0 {
+		return ""
+	}
+	varFat := ((d.FaturamentoBruto - d.FaturamentoAnterior) / d.FaturamentoAnterior) * 100
+	varIcms := 0.0
+	if d.IcmsAPagarAnterior > 0 {
+		varIcms = ((d.IcmsAPagar - d.IcmsAPagarAnterior) / d.IcmsAPagarAnterior) * 100
+	}
+	arrow := func(v float64) string {
+		if v > 0 {
+			return fmt.Sprintf(`<span style="color:#10b981">&#8593; +%.1f%%</span>`, v)
+		}
+		if v < 0 {
+			return fmt.Sprintf(`<span style="color:#e53e3e">&#8595; %.1f%%</span>`, v)
+		}
+		return "0,0%"
+	}
+	var sb strings.Builder
+	sb.WriteString(`<div class="sec"><div class="sec-title">Comparativo com Per&iacute;odo Anterior</div>`)
+	sb.WriteString(fmt.Sprintf(`<table class="data-table"><thead><tr><th>Indicador</th><th style="text-align:right">%s</th><th style="text-align:right">%s</th><th style="text-align:right">Varia&ccedil;&atilde;o</th></tr></thead><tbody>`,
+		d.PeriodoAnterior, periodoAtual))
+	sb.WriteString(fmt.Sprintf(`<tr><td>Faturamento Bruto</td><td style="text-align:right">R$ %s</td><td style="text-align:right">R$ %s</td><td style="text-align:right">%s</td></tr>`,
+		formatEmailBRL(d.FaturamentoAnterior), formatEmailBRL(d.FaturamentoBruto), arrow(varFat)))
+	sb.WriteString(fmt.Sprintf(`<tr><td>ICMS a Recolher</td><td style="text-align:right">R$ %s</td><td style="text-align:right">R$ %s</td><td style="text-align:right">%s</td></tr>`,
+		formatEmailBRL(d.IcmsAPagarAnterior), formatEmailBRL(d.IcmsAPagar), arrow(varIcms)))
+	if d.AliquotaEfetivaICMSAnterior > 0 {
+		varAliq := d.AliquotaEfetivaICMS - d.AliquotaEfetivaICMSAnterior
+		sb.WriteString(fmt.Sprintf(`<tr><td>Al&iacute;quota Efetiva ICMS</td><td style="text-align:right">%.2f%%</td><td style="text-align:right">%.2f%%</td><td style="text-align:right">%s p.p.</td></tr>`,
+			d.AliquotaEfetivaICMSAnterior, d.AliquotaEfetivaICMS, arrow(varAliq)))
+	}
+	sb.WriteString(`</tbody></table></div>`)
+	return sb.String()
+}
+
+// buildPlainTextSummary builds the plain text version of the email (for spam filters / text-only clients).
+func buildPlainTextSummary(companyName, periodo string, d TaxComparisonData, narrativaPlain, appURL string) string {
+	ibsCbsTotal := d.IbsProjetado + d.CbsProjetado
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("FBTax Cloud - Resumo Executivo\n\nEmpresa: %s\nPeriodo: %s\nGerado em: %s\n\n", companyName, periodo, getTimeBrasil()))
+	sb.WriteString("=== DADOS DO PERIODO ===\n")
+	sb.WriteString(fmt.Sprintf("Faturamento Bruto:   R$ %s\n", formatEmailBRL(d.FaturamentoBruto)))
+	sb.WriteString(fmt.Sprintf("Total de Entradas:   R$ %s\n", formatEmailBRL(d.TotalEntradas)))
+	sb.WriteString(fmt.Sprintf("ICMS Debito:         R$ %s\n", formatEmailBRL(d.IcmsSaida)))
+	sb.WriteString(fmt.Sprintf("ICMS Credito:        R$ %s\n", formatEmailBRL(d.IcmsEntrada)))
+	sb.WriteString(fmt.Sprintf("ICMS a Recolher:     R$ %s\n\n", formatEmailBRL(d.IcmsAPagar)))
+	sb.WriteString("=== REFORMA TRIBUTARIA (Projecao 2033) ===\n")
+	sb.WriteString(fmt.Sprintf("IBS Projetado:       R$ %s\n", formatEmailBRL(d.IbsProjetado)))
+	sb.WriteString(fmt.Sprintf("CBS Projetado:       R$ %s\n", formatEmailBRL(d.CbsProjetado)))
+	sb.WriteString(fmt.Sprintf("Total IBS + CBS:     R$ %s\n\n", formatEmailBRL(ibsCbsTotal)))
+	if d.FaturamentoBruto > 0 {
+		sb.WriteString("=== CARGA TRIBUTARIA EFETIVA ===\n")
+		sb.WriteString(fmt.Sprintf("ICMS efetivo:        %.2f%%\n", d.AliquotaEfetivaICMS))
+		sb.WriteString(fmt.Sprintf("IBS+CBS efetivo:     %.2f%%\n\n", d.AliquotaEfetivaTotalReforma))
+	}
+	if d.PeriodoAnterior != "" && d.FaturamentoAnterior > 0 {
+		varFat := ((d.FaturamentoBruto - d.FaturamentoAnterior) / d.FaturamentoAnterior) * 100
+		sb.WriteString(fmt.Sprintf("=== COMPARATIVO COM %s ===\n", d.PeriodoAnterior))
+		sb.WriteString(fmt.Sprintf("Faturamento anterior: R$ %s (variacao: %+.1f%%)\n\n", formatEmailBRL(d.FaturamentoAnterior), varFat))
+	}
+	sb.WriteString("=== ANALISE DA IA ===\n")
+	sb.WriteString(narrativaPlain)
+	sb.WriteString(fmt.Sprintf("\n\nAcesse o painel completo: %s/relatorios/resumo-executivo\n\n---\n(c) 2026 FBTax Cloud - Todos os direitos reservados\n", appURL))
+	return sb.String()
 }
 
 // convertMarkdownToHTML converts basic markdown to HTML for email rendering

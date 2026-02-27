@@ -478,9 +478,21 @@ func GetExecutiveSummaryHandler(db *sql.DB) http.HandlerFunc {
 					recipients[i] = m.Email
 				}
 				taxData := services.TaxComparisonData{
-					IcmsAPagar:   resumo.IcmsAPagar,
-					IbsProjetado: resumo.IbsProjetado,
-					CbsProjetado: resumo.CbsProjetado,
+					IcmsAPagar:                  resumo.IcmsAPagar,
+					IbsProjetado:                resumo.IbsProjetado,
+					CbsProjetado:                resumo.CbsProjetado,
+					FaturamentoBruto:            resumo.FaturamentoBruto,
+					TotalEntradas:               resumo.TotalEntradas,
+					IcmsSaida:                   resumo.IcmsSaida,
+					IcmsEntrada:                 resumo.IcmsEntrada,
+					AliquotaEfetivaICMS:         resumo.AliquotaEfetivaICMS,
+					AliquotaEfetivaIBS:          resumo.AliquotaEfetivaIBS,
+					AliquotaEfetivaCBS:          resumo.AliquotaEfetivaCBS,
+					AliquotaEfetivaTotalReforma: resumo.AliquotaEfetivaTotalReforma,
+					PeriodoAnterior:             resumo.PeriodoAnterior,
+					FaturamentoAnterior:         resumo.FaturamentoAnterior,
+					IcmsAPagarAnterior:          resumo.IcmsAPagarAnterior,
+					AliquotaEfetivaICMSAnterior: resumo.AliquotaEfetivaICMSAnterior,
 				}
 				errEmail := services.SendAIReportEmail(recipients, resumo.CompanyName, periodo, narrativa, dadosBrutos, taxData)
 				if errEmail != nil {

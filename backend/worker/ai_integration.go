@@ -125,11 +125,20 @@ func TriggerAIReportGeneration(db *sql.DB, companyID, periodo, jobID string) err
 		recipients = append(recipients, m.Email)
 	}
 
-	//7. Send email with tax comparison data
+	//7. Send email with full structured data (mirrors the screen)
 	taxData := services.TaxComparisonData{
-		IcmsAPagar:   resumo.IcmsAPagar,
-		IbsProjetado: resumo.IbsProjetado,
-		CbsProjetado: resumo.CbsProjetado,
+		IcmsAPagar:                  resumo.IcmsAPagar,
+		IbsProjetado:                resumo.IbsProjetado,
+		CbsProjetado:                resumo.CbsProjetado,
+		FaturamentoBruto:            resumo.FaturamentoBruto,
+		TotalEntradas:               resumo.TotalEntradas,
+		IcmsSaida:                   resumo.IcmsSaida,
+		IcmsEntrada:                 resumo.IcmsEntrada,
+		AliquotaEfetivaICMS:         resumo.AliquotaEfetivaICMS,
+		AliquotaEfetivaIBS:          resumo.AliquotaEfetivaIBS,
+		AliquotaEfetivaCBS:          resumo.AliquotaEfetivaCBS,
+		AliquotaEfetivaTotalReforma: resumo.AliquotaEfetivaTotalReforma,
+		// Previous period not available in worker context; fields remain zero
 	}
 	err = services.SendAIReportEmail(recipients, resumo.CompanyName, periodo, narrative, dadosBrutosJSON, taxData)
 	if err != nil {
