@@ -441,9 +441,61 @@ func GetExecutiveSummaryHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		// dispatchEmail salva o relatório e envia e-mail em background sempre que
+		// forceRegen=true — independente de a IA ter respondido ou não.
+		dispatchEmail := func(narrativa string) {
+			if !forceRegen || narrativa == "" {
+				return
+			}
+			go func() {
+				dadosBrutos := buildDadosBrutosJSON(resumo)
+				titulo := fmt.Sprintf("%s | %s (regenerado)", resumo.CompanyName, resumo.Periodo)
+				_, errSave := db.Exec(`
+					INSERT INTO ai_reports (company_id, periodo, titulo, resumo, dados_brutos, gerado_automaticamente)
+					VALUES ($1, $2, $3, $4, $5, false)
+				`, companyID, periodo, titulo, narrativa, dadosBrutos)
+				if errSave != nil {
+					fmt.Printf("[Regenerate] Error saving report: %v\n", errSave)
+				}
+
+				var managers []struct{ Email string }
+				rows, errMgr := db.Query(`SELECT email FROM managers WHERE company_id = $1 AND ativo = true`, companyID)
+				if errMgr == nil {
+					defer rows.Close()
+					for rows.Next() {
+						var m struct{ Email string }
+						if rows.Scan(&m.Email) == nil {
+							managers = append(managers, m)
+						}
+					}
+				}
+				if len(managers) == 0 {
+					fmt.Printf("[Regenerate] No active managers found for company %s\n", companyID)
+					return
+				}
+				recipients := make([]string, len(managers))
+				for i, m := range managers {
+					recipients[i] = m.Email
+				}
+				taxData := services.TaxComparisonData{
+					IcmsAPagar:   resumo.IcmsAPagar,
+					IbsProjetado: resumo.IbsProjetado,
+					CbsProjetado: resumo.CbsProjetado,
+				}
+				errEmail := services.SendAIReportEmail(recipients, resumo.CompanyName, periodo, narrativa, dadosBrutos, taxData)
+				if errEmail != nil {
+					fmt.Printf("[Regenerate] Error sending email: %v\n", errEmail)
+				} else {
+					fmt.Printf("[Regenerate] Email sent to %d managers: %v\n", len(recipients), recipients)
+				}
+			}()
+		}
+
 		// Generate AI narrative
 		if aiClient == nil || !aiClient.IsAvailable() {
+			fmt.Printf("[Regenerate] AI client unavailable — using fallback narrative\n")
 			response.Narrativa = buildFallbackNarrative(resumo)
+			dispatchEmail(response.Narrativa)
 			json.NewEncoder(w).Encode(response)
 			return
 		}
@@ -452,7 +504,7 @@ func GetExecutiveSummaryHandler(db *sql.DB) http.HandlerFunc {
 		// GenerateFast: 1 tentativa, 25s timeout — worker trata retries em background
 		aiResp, err := aiClient.GenerateFast(executiveSummarySystem, dataPrompt, services.ModelFlash, 4096)
 		if err != nil {
-			fmt.Printf("AI generation error (falling back): %v\n", err)
+			fmt.Printf("[Regenerate] AI generation error (falling back): %v\n", err)
 			// Re-check cache — worker may have saved a report while we were waiting
 			var workerNarrativa string
 			errRecheck := db.QueryRow(`
@@ -467,59 +519,14 @@ func GetExecutiveSummaryHandler(db *sql.DB) http.HandlerFunc {
 			} else {
 				response.Narrativa = buildFallbackNarrative(resumo)
 			}
+			dispatchEmail(response.Narrativa)
 			json.NewEncoder(w).Encode(response)
 			return
 		}
 
 		response.Narrativa = aiResp.Text
 		response.Model = aiResp.Model
-
-		// If force regeneration, save report and send email to managers
-		if forceRegen && response.Narrativa != "" {
-			go func() {
-				// Save to ai_reports
-				dadosBrutos := buildDadosBrutosJSON(resumo)
-				titulo := fmt.Sprintf("%s | %s (regenerado)", resumo.CompanyName, resumo.Periodo)
-				_, errSave := db.Exec(`
-					INSERT INTO ai_reports (company_id, periodo, titulo, resumo, dados_brutos, gerado_automaticamente)
-					VALUES ($1, $2, $3, $4, $5, false)
-				`, companyID, periodo, titulo, response.Narrativa, dadosBrutos)
-				if errSave != nil {
-					fmt.Printf("[Regenerate] Error saving report: %v\n", errSave)
-				}
-
-				// Send email to active managers
-				var managers []struct{ Email string }
-				rows, errMgr := db.Query(`SELECT email FROM managers WHERE company_id = $1 AND ativo = true`, companyID)
-				if errMgr == nil {
-					defer rows.Close()
-					for rows.Next() {
-						var m struct{ Email string }
-						if rows.Scan(&m.Email) == nil {
-							managers = append(managers, m)
-						}
-					}
-				}
-				if len(managers) > 0 {
-					recipients := make([]string, len(managers))
-					for i, m := range managers {
-						recipients[i] = m.Email
-					}
-					taxData := services.TaxComparisonData{
-						IcmsAPagar:   resumo.IcmsAPagar,
-						IbsProjetado: resumo.IbsProjetado,
-						CbsProjetado: resumo.CbsProjetado,
-					}
-					errEmail := services.SendAIReportEmail(recipients, resumo.CompanyName, periodo, response.Narrativa, dadosBrutos, taxData)
-					if errEmail != nil {
-						fmt.Printf("[Regenerate] Error sending email: %v\n", errEmail)
-					} else {
-						fmt.Printf("[Regenerate] Email sent to %d managers\n", len(recipients))
-					}
-				}
-			}()
-		}
-
+		dispatchEmail(response.Narrativa)
 		json.NewEncoder(w).Encode(response)
 	}
 }
