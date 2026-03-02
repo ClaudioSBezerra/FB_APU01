@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, Clock, FileText, Loader2, Upload, XCircle, Trash2, FolderOpen } from 'lucide-react';
+import { CheckCircle, Clock, FileText, Loader2, Upload, XCircle, Trash2, FolderOpen, ShieldCheck, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { UploadProgressDisplay, UploadProgressType } from '@/components/UploadProgress';
 import { useAuth } from '@/contexts/AuthContext';
@@ -702,10 +702,19 @@ export default function ImportarEFD() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5" />
-              Processamentos Recentes
+              Histórico de Importações
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {/* Banner informativo */}
+            <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5 mb-3 text-xs text-blue-800">
+              <ShieldCheck className="h-4 w-4 mt-0.5 shrink-0 text-blue-600" />
+              <span>
+                <strong>Armazenamento seguro:</strong> os arquivos TXT são excluídos do servidor imediatamente após o processamento.
+                Esta lista exibe apenas o <strong>histórico de registros</strong> — nenhum dado bruto permanece no storage.
+              </span>
+            </div>
+
             {jobs.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <p>Nenhum processamento recente.</p>
@@ -719,13 +728,14 @@ export default function ImportarEFD() {
                       {job.status === 'processing' && <Loader2 className="h-4 w-4 text-blue-500 animate-spin flex-shrink-0" />}
                       {job.status === 'error' && <XCircle className="h-4 w-4 text-red-500 flex-shrink-0" />}
                       {job.status === 'pending' && <Clock className="h-4 w-4 text-gray-500 flex-shrink-0" />}
-                      
+                      {job.status === 'cancelled' && <XCircle className="h-4 w-4 text-orange-400 flex-shrink-0" />}
+
                       <div className="flex flex-col flex-1 min-w-0">
                         <div className="flex justify-between items-center mb-1 gap-2">
                           <span className="text-sm font-medium truncate flex-1 min-w-0" title={job.filename}>{job.filename}</span>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <span className="text-xs text-muted-foreground whitespace-nowrap">
-                              {new Date(job.created_at).toLocaleString()}
+                              {new Date(job.created_at).toLocaleString('pt-BR')}
                             </span>
                             {job.status === 'processing' && (
                               <Button
@@ -740,7 +750,7 @@ export default function ImportarEFD() {
                             )}
                           </div>
                         </div>
-                        
+
                         {job.status === 'processing' && job.message && (
                           <div className="space-y-1">
                             <div className="flex justify-between text-xs text-muted-foreground">
@@ -751,8 +761,8 @@ export default function ImportarEFD() {
                               const percent = match ? parseFloat(match[1]) : 0;
                               return (
                                 <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
-                                  <div 
-                                    className="h-full bg-primary transition-all duration-500 ease-in-out" 
+                                  <div
+                                    className="h-full bg-primary transition-all duration-500 ease-in-out"
                                     style={{ width: `${percent}%` }}
                                   />
                                 </div>
@@ -760,19 +770,31 @@ export default function ImportarEFD() {
                             })()}
                           </div>
                         )}
-                        
+
                         {job.status !== 'processing' && (
-                           <span className="text-xs text-muted-foreground truncate" title={job.message}>
-                             {job.message || 'Aguardando...'}
-                           </span>
+                          <span className="text-xs text-muted-foreground truncate" title={job.message}>
+                            {job.message || 'Aguardando...'}
+                          </span>
+                        )}
+
+                        {/* Indicador de storage limpo para jobs concluídos */}
+                        {job.status === 'completed' && (
+                          <span className="flex items-center gap-1 mt-1 text-[10px] text-green-600 font-medium">
+                            <ShieldCheck className="h-3 w-3" />
+                            Arquivo excluído do servidor — somente histórico
+                          </span>
                         )}
                       </div>
                     </div>
                     <Badge variant={
-                      job.status === 'completed' ? 'default' : 
-                      job.status === 'error' ? 'destructive' : 'secondary'
+                      job.status === 'completed' ? 'default' :
+                      job.status === 'error' ? 'destructive' :
+                      job.status === 'cancelled' ? 'outline' : 'secondary'
                     }>
-                      {job.status}
+                      {job.status === 'completed' ? 'Concluído' :
+                       job.status === 'processing' ? 'Processando' :
+                       job.status === 'error' ? 'Erro' :
+                       job.status === 'cancelled' ? 'Cancelado' : 'Aguardando'}
                     </Badge>
                   </div>
                 ))}
