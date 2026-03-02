@@ -239,7 +239,7 @@ func getApuracaoResumoForAI(db *sql.DB, companyID, periodo string) (*AIResumo, e
 
 	for rows.Next() {
 		var op AIOperacaoResumo
-		if err := rows.Scan(&op.TipoOperacao, &op.Tipo, &op.Valor, &op.Icms); err != nil {
+		if err := rows.Scan(&op.Tipo, &op.TipoOperacao, &op.Valor, &op.Icms); err != nil {
 			return nil, fmt.Errorf("scan operation: %w", err)
 		}
 		resumo.Operacoes = append(resumo.Operacoes, op)
