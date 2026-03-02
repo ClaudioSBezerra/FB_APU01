@@ -390,35 +390,65 @@ REGRAS:
 - Mantenha entre 300-500 palavras.
 - Comece DIRETO com "## Resumo Executivo" sem nenhum texto antes.`
 
+// fmtBRL formats a float64 as Brazilian currency string (e.g. 1.234.567,89)
+func fmtBRL(v float64) string {
+	if v == 0 {
+		return "0,00"
+	}
+	neg := v < 0
+	if neg {
+		v = -v
+	}
+	intPart := int64(v)
+	dec := int64(math.Round((v-float64(intPart))*100))
+	s := fmt.Sprintf("%d", intPart)
+	var parts []string
+	for i := len(s); i > 0; i -= 3 {
+		start := i - 3
+		if start < 0 {
+			start = 0
+		}
+		parts = append([]string{s[start:i]}, parts...)
+	}
+	result := strings.Join(parts, ".") + fmt.Sprintf(",%02d", dec)
+	if neg {
+		return "-" + result
+	}
+	return result
+}
+
 // buildFallbackNarrative generates a basic report when AI is unavailable
 func buildFallbackNarrative(r *AIResumo) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("## Resumo Executivo - %s | %s\n\n", r.CompanyName, r.Periodo))
-	sb.WriteString(fmt.Sprintf("**Faturamento Bruto (Saidas):** R$ %.2f\n\n", r.FaturamentoBruto))
-	sb.WriteString(fmt.Sprintf("**Total de Entradas:** R$ %.2f\n\n", r.TotalEntradas))
-	sb.WriteString("### ICMS do Periodo\n\n")
-	sb.WriteString(fmt.Sprintf("- **ICMS Debito (Saidas):** R$ %.2f\n", r.IcmsSaida))
-	sb.WriteString(fmt.Sprintf("- **ICMS Credito (Entradas):** R$ %.2f\n", r.IcmsEntrada))
-	sb.WriteString(fmt.Sprintf("- **ICMS a Recolher:** R$ %.2f\n\n", r.IcmsAPagar))
+	sb.WriteString(fmt.Sprintf("## Resumo Executivo — %s | %s\n\n", r.CompanyName, r.Periodo))
 
-	sb.WriteString("### Novos Impostos - Reforma Tributaria (Projecao 2033)\n\n")
-	sb.WriteString("| Imposto | Valor | Aliquota Efetiva |\n")
+	sb.WriteString("### Dados do Período\n\n")
+	sb.WriteString(fmt.Sprintf("- **Faturamento Bruto (Saídas):** R$ %s\n", fmtBRL(r.FaturamentoBruto)))
+	sb.WriteString(fmt.Sprintf("- **Total de Entradas:** R$ %s\n\n", fmtBRL(r.TotalEntradas)))
+
+	sb.WriteString("### ICMS do Período\n\n")
+	sb.WriteString(fmt.Sprintf("- **Débito (sobre saídas):** R$ %s\n", fmtBRL(r.IcmsSaida)))
+	sb.WriteString(fmt.Sprintf("- **Crédito (sobre entradas):** R$ %s\n", fmtBRL(r.IcmsEntrada)))
+	sb.WriteString(fmt.Sprintf("- **ICMS a Recolher:** R$ %s\n\n", fmtBRL(r.IcmsAPagar)))
+
+	sb.WriteString("### Reforma Tributária — Projeção 2033\n\n")
+	sb.WriteString("| Imposto | Valor | Alíquota Efetiva |\n")
 	sb.WriteString("|---------|-------|------------------|\n")
-	sb.WriteString(fmt.Sprintf("| ICMS a Recolher | R$ %.2f | %.2f%% |\n", r.IcmsAPagar, r.AliquotaEfetivaICMS))
-	sb.WriteString(fmt.Sprintf("| IBS Projetado | R$ %.2f | %.2f%% |\n", r.IbsProjetado, r.AliquotaEfetivaIBS))
-	sb.WriteString(fmt.Sprintf("| CBS Projetado | R$ %.2f | %.2f%% |\n", r.CbsProjetado, r.AliquotaEfetivaCBS))
-	sb.WriteString(fmt.Sprintf("| **Total IBS + CBS** | **R$ %.2f** | **%.2f%%** |\n\n", r.IbsProjetado+r.CbsProjetado, r.AliquotaEfetivaTotalReforma))
+	sb.WriteString(fmt.Sprintf("| ICMS a Recolher | R$ %s | %.2f%% |\n", fmtBRL(r.IcmsAPagar), r.AliquotaEfetivaICMS))
+	sb.WriteString(fmt.Sprintf("| IBS Projetado | R$ %s | %.2f%% |\n", fmtBRL(r.IbsProjetado), r.AliquotaEfetivaIBS))
+	sb.WriteString(fmt.Sprintf("| CBS Projetado | R$ %s | %.2f%% |\n", fmtBRL(r.CbsProjetado), r.AliquotaEfetivaCBS))
+	sb.WriteString(fmt.Sprintf("| **Total IBS + CBS** | **R$ %s** | **%.2f%%** |\n\n", fmtBRL(r.IbsProjetado+r.CbsProjetado), r.AliquotaEfetivaTotalReforma))
 
 	if len(r.Operacoes) > 0 {
-		sb.WriteString("### Detalhamento por Operacao\n\n")
+		sb.WriteString("### Detalhamento por Tipo de Operação\n\n")
 		for _, op := range r.Operacoes {
-			sb.WriteString(fmt.Sprintf("- %s (%s): R$ %.2f | ICMS: R$ %.2f\n", op.TipoOperacao, op.Tipo, op.Valor, op.Icms))
+			sb.WriteString(fmt.Sprintf("- **%s** (%s): R$ %s | ICMS: R$ %s\n",
+				op.TipoOperacao, op.Tipo, fmtBRL(op.Valor), fmtBRL(op.Icms)))
 		}
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString(fmt.Sprintf("*Total de registros processados: %d*\n\n", r.TotalNFes))
-	sb.WriteString("*Relatorio gerado automaticamente pelo FBTax Cloud. Narrativa com IA sera incluida quando disponivel.*")
+	sb.WriteString(fmt.Sprintf("*%d registros processados. Narrativa com IA será incluída automaticamente quando disponível.*", r.TotalNFes))
 	return sb.String()
 }
 

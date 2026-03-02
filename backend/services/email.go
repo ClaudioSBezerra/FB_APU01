@@ -702,7 +702,7 @@ func convertMarkdownToHTML(markdown string) string {
 				result.WriteString("<ul>")
 				inList = true
 			}
-			text := strings.TrimPrefix(trimmed, "- ")
+			text := applyInlineBold(strings.TrimPrefix(trimmed, "- "))
 			result.WriteString(fmt.Sprintf("<li>%s</li>", text))
 			continue
 		}
@@ -715,7 +715,7 @@ func convertMarkdownToHTML(markdown string) string {
 					result.WriteString("<ol>")
 					inList = true
 				}
-				text := strings.TrimSpace(trimmed[dotIdx+1:])
+				text := applyInlineBold(strings.TrimSpace(trimmed[dotIdx+1:]))
 				result.WriteString(fmt.Sprintf("<li>%s</li>", text))
 				continue
 			}
