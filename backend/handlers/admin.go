@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -72,6 +74,23 @@ func ResetCompanyDataHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		log.Printf("ResetCompanyData: User %s deleting data for CompanyID %s", userID, req.CompanyID)
+
+		// Segurança: deletar arquivos físicos antes de remover os registros do banco
+		fileRows, fileErr := db.Query("SELECT filename FROM import_jobs WHERE company_id = $1 AND filename != ''", req.CompanyID)
+		if fileErr == nil {
+			defer fileRows.Close()
+			for fileRows.Next() {
+				var fname string
+				if fileRows.Scan(&fname) == nil && fname != "" {
+					fpath := filepath.Join("uploads", fname)
+					if err := os.Remove(fpath); err != nil && !os.IsNotExist(err) {
+						log.Printf("ResetCompanyData: Warning: could not delete file %s: %v", fpath, err)
+					} else if err == nil {
+						log.Printf("ResetCompanyData: Deleted file %s from storage", fpath)
+					}
+				}
+			}
+		}
 
 		// Execute Deletion
 		res, err := db.Exec("DELETE FROM import_jobs WHERE company_id = $1", req.CompanyID)

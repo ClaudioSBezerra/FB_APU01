@@ -131,27 +131,34 @@ func processNextJob(db *sql.DB, workerID int) {
 
 	summary, err := processFile(db, id, filename)
 
+	// Helper: delete file from storage (best-effort, always executed)
+	deleteUploadFile := func() {
+		filePath := filepath.Join("uploads", filename)
+		if removeErr := os.Remove(filePath); removeErr != nil && !os.IsNotExist(removeErr) {
+			fmt.Printf("Worker #%d: Warning: could not delete file %s: %v\n", workerID, filePath, removeErr)
+		} else if removeErr == nil {
+			fmt.Printf("Worker #%d: File %s deleted from storage.\n", workerID, filePath)
+		}
+	}
+
 	if err != nil {
 		// Check if it was a cancellation
 		if strings.Contains(err.Error(), "cancelled by user") {
 			fmt.Printf("Worker #%d: Job %s cancelled by user\n", workerID, id)
-			db.Exec("UPDATE import_jobs SET status = 'cancelled', message = 'Cancelado pelo usuário', updated_at = NOW() WHERE id = $2", id)
+			db.Exec("UPDATE import_jobs SET status = 'cancelled', message = 'Cancelado pelo usuário', updated_at = NOW() WHERE id = $1", id)
 		} else {
 			fmt.Printf("Worker #%d: Job %s failed: %v\n", workerID, id, err)
 			db.Exec("UPDATE import_jobs SET status = 'error', message = $1, updated_at = NOW() WHERE id = $2", err.Error(), id)
 		}
+		// Segurança: deletar arquivo mesmo em caso de falha/cancelamento
+		deleteUploadFile()
 	} else {
 		// Report Success
 		fmt.Printf("Worker #%d: Job %s completed: %s\n", workerID, id, summary)
 		db.Exec("UPDATE import_jobs SET status = 'completed', message = $1, updated_at = NOW() WHERE id = $2", summary, id)
 
 		// DELETE FILE FROM STORAGE (Cleanup)
-		filePath := filepath.Join("uploads", filename)
-		if err := os.Remove(filePath); err != nil {
-			fmt.Printf("Worker #%d: Warning: Failed to delete file %s: %v\n", workerID, filePath, err)
-		} else {
-			fmt.Printf("Worker #%d: File %s deleted from storage.\n", workerID, filePath)
-		}
+		deleteUploadFile()
 
 		// Trigger View Refresh immediately after success
 		// OPTIMIZATION: Check if there are other jobs in the queue.
