@@ -39,6 +39,42 @@ func StartWorker(db *sql.DB) {
 	// STARTUP CLEANUP: Finalize any jobs that were being cancelled
 	db.Exec("UPDATE import_jobs SET status = 'cancelled', message = 'Cancelado (servidor reiniciado)', updated_at = NOW() WHERE status = 'cancelling'")
 
+	// ORPHAN FILE CLEANUP: Delete any files in uploads/ that have no active job (pending/processing).
+	// This handles files left by: pre-fix versions, DB resets, crashes, or manual admin actions.
+	go func() {
+		uploadsDir := "uploads"
+		entries, err := os.ReadDir(uploadsDir)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				fmt.Printf("Worker Startup: could not read uploads dir: %v\n", err)
+			}
+			return
+		}
+		deleted := 0
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			fname := entry.Name()
+			// Keep file only if there is a pending or processing job for it
+			var count int
+			db.QueryRow(
+				"SELECT COUNT(*) FROM import_jobs WHERE filename = $1 AND status IN ('pending', 'processing')",
+				fname,
+			).Scan(&count)
+			if count == 0 {
+				fpath := filepath.Join(uploadsDir, fname)
+				if err := os.Remove(fpath); err == nil {
+					fmt.Printf("Worker Startup: orphan file deleted: %s\n", fname)
+					deleted++
+				}
+			}
+		}
+		if deleted > 0 {
+			fmt.Printf("Worker Startup: %d orphan file(s) removed from uploads/\n", deleted)
+		}
+	}()
+
 	// CRASH RECOVERY: Reset any 'processing' jobs to 'pending' on startup
 	// This ensures that if the server crashed, interrupted jobs are resumed automatically
 	res, err := db.Exec("UPDATE import_jobs SET status = 'pending', message = message || ' [Recovered]' WHERE status = 'processing'")
