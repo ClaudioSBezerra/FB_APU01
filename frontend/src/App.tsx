@@ -154,7 +154,7 @@ function AppLayout() {
 }
 
 function App() {
-  console.log("App Version: 5.9.0 - NF-e Entradas + Créditos em Risco + Email Estruturado");
+  console.log("App Version: 5.9.1 - Bugfixes: Sidebar Flat, File Cleanup, Email Scan/Formatting");
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

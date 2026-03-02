@@ -24,8 +24,9 @@ import (
 )
 
 // Version information for backend deployment validation
+// Force rebuild: 2026-03-02 - v5.9.1 - Bugfixes: Sidebar, File Cleanup, Email Scan, Formatting
 const (
-	BackendVersion = "5.9.0"
+	BackendVersion = "5.9.1"
 	FeatureSet     = "Z.AI GLM Integration, AI Executive Reports, Email Estruturado, NF-e Entradas, Creditos em Risco, Tax Reform Projection, Simples Nacional Dashboard, Apelidos de Filiais"
 )
 
