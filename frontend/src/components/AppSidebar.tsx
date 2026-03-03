@@ -106,7 +106,7 @@ const sections: NavSection[] = [
   },
   {
     id: "consultar",
-    title: "Apuração Assistida — Consultar",
+    title: "Apuração Assistida",
     dot: "bg-violet-400",
     items: [
       { title: "Entradas Mod. 55",        url: "/apuracao/entrada/notas",     icon: FileText },
@@ -115,6 +115,8 @@ const sections: NavSection[] = [
       { title: "Serviços — Saídas",       url: "#",                                   icon: FileText, disabled: true },
       { title: "CT-e — Entradas",         url: "/apuracao/cte-entrada/notas",         icon: FileText },
       { title: "Créditos em Risco",       url: "/apuracao/creditos-perdidos",  icon: ShieldAlert, danger: true },
+      { title: "Apuração IBS — mês",      url: "/rfb/apuracao-ibs",            icon: BarChart3 },
+      { title: "Apuração CBS — mês",      url: "/rfb/apuracao-cbs",            icon: BarChart3 },
     ],
   },
   {
@@ -123,8 +125,6 @@ const sections: NavSection[] = [
     dot: "bg-orange-400",
     items: [
       { title: "Gestão Créditos IBS/CBS",       url: "/rfb/gestao-creditos",         icon: BarChart3 },
-      { title: "Apuração IBS — mês",            url: "/rfb/apuracao-ibs",            icon: BarChart3 },
-      { title: "Apuração CBS — mês",            url: "/rfb/apuracao-cbs",            icon: BarChart3 },
       { title: "Credenciais API RFB",            url: "/rfb/credenciais",             icon: Globe },
       { title: "Débitos CBS — mês corrente",     url: "/rfb/apuracao",                icon: Download },
       { title: "Créditos CBS — mês corrente",    url: "/rfb/creditos-cbs",            icon: CreditCard,  disabled: true },
