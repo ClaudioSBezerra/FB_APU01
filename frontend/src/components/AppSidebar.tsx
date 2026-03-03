@@ -9,7 +9,6 @@ import {
   Upload,
   Globe,
   Download,
-  Database,
   LogOut,
   Store,
   Sparkles,
@@ -150,9 +149,11 @@ export function AppSidebar() {
       {/* ── Header ── */}
       <SidebarHeader className="border-b pb-2">
         <div className="flex items-center gap-2.5 px-3 py-2">
-          <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shrink-0">
-            <Database className="size-4" />
-          </div>
+          <img
+            src="/favicon-fc.png"
+            alt="Ferreira Costa"
+            className="size-8 rounded-lg shrink-0 object-cover"
+          />
           <div className="grid flex-1 text-left leading-tight">
             <span className="font-bold text-sm truncate">FBTax Cloud</span>
             <span className="text-[10px] text-muted-foreground truncate">Tax Reform System</span>
