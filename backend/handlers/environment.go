@@ -280,9 +280,23 @@ func CreateCompanyHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		err := db.QueryRow(
-			"INSERT INTO companies (group_id, name, trade_name) VALUES ($1, $2, $3) RETURNING id, created_at",
-			c.GroupID, c.Name, c.TradeName,
+		// Resolve owner: use group's environment owner (first user linked to the environment)
+		var ownerID *string
+		err := db.QueryRow(`
+			SELECT ue.user_id
+			FROM enterprise_groups eg
+			JOIN user_environments ue ON ue.environment_id = eg.environment_id
+			WHERE eg.id = $1
+			ORDER BY ue.created_at ASC
+			LIMIT 1
+		`, c.GroupID).Scan(&ownerID)
+		if err != nil {
+			ownerID = nil // no owner found, leave NULL (still visible via group query)
+		}
+
+		err = db.QueryRow(
+			"INSERT INTO companies (group_id, name, trade_name, owner_id) VALUES ($1, $2, $3, $4) RETURNING id, created_at",
+			c.GroupID, c.Name, c.TradeName, ownerID,
 		).Scan(&c.ID, &c.CreatedAt)
 
 		if err != nil {

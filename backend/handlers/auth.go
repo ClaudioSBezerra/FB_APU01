@@ -265,14 +265,22 @@ func GetUserCompaniesHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Query companies where user is Owner OR Member (via Environment)
+		// Query companies where user:
+		// 1. Is the direct owner (owner_id)
+		// 2. Is linked to the environment via user_environments
+		// 3. The company is in the same group as a company the user owns (ex: FCM no mesmo grupo FCOSTA)
 		rows, err := db.Query(`
-			SELECT DISTINCT c.id, c.name, c.trade_name, (c.owner_id = $1) as is_owner, e.name as env_name, eg.name as group_name
+			SELECT DISTINCT c.id, c.name, COALESCE(c.trade_name, ''), (c.owner_id = $1) as is_owner,
+			       COALESCE(e.name, '') as env_name, COALESCE(eg.name, '') as group_name
 			FROM companies c
 			LEFT JOIN enterprise_groups eg ON c.group_id = eg.id
 			LEFT JOIN environments e ON eg.environment_id = e.id
 			LEFT JOIN user_environments ue ON e.id = ue.environment_id
-			WHERE c.owner_id = $1 OR ue.user_id = $1
+			WHERE c.owner_id = $1
+			   OR ue.user_id = $1
+			   OR c.group_id IN (
+			       SELECT group_id FROM companies WHERE owner_id = $1
+			   )
 			ORDER BY is_owner DESC, c.name ASC
 		`, userID)
 
