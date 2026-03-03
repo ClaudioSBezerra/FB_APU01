@@ -270,7 +270,7 @@ func GetUserCompaniesHandler(db *sql.DB) http.HandlerFunc {
 		// 2. Is linked to the environment via user_environments
 		// 3. The company is in the same group as a company the user owns (ex: FCM no mesmo grupo FCOSTA)
 		rows, err := db.Query(`
-			SELECT DISTINCT c.id, c.name, COALESCE(c.trade_name, ''), (c.owner_id = $1) as is_owner,
+			SELECT DISTINCT c.id, c.name, COALESCE(c.trade_name, ''), COALESCE(c.owner_id = $1, false) as is_owner,
 			       COALESCE(e.name, '') as env_name, COALESCE(eg.name, '') as group_name
 			FROM companies c
 			LEFT JOIN enterprise_groups eg ON c.group_id = eg.id
