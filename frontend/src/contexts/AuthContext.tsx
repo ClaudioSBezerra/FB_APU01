@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 
 interface User {
   id: string;
@@ -16,6 +16,7 @@ interface AuthContextType {
   company: string | null;
   companyId: string | null;
   cnpj: string | null;
+  loading: boolean;
   login: (data: any) => void;
   logout: () => void;
   switchCompany: (id: string, name: string, cnpj: string) => void;
@@ -32,6 +33,31 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [company, setCompany] = useState<string | null>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [cnpj, setCnpj] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Refs para o interceptor de fetch (sem stale closure)
+  const tokenRef = useRef<string | null>(null);
+  const companyIdRef = useRef<string | null>(null);
+
+  // Mantém refs atualizados com o estado mais recente
+  useEffect(() => { tokenRef.current = token; }, [token]);
+  useEffect(() => { companyIdRef.current = companyId; }, [companyId]);
+
+  // Interceptor global de fetch: injeta Authorization e X-Company-ID em todas as chamadas
+  useEffect(() => {
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const headers = new Headers(init.headers || {});
+      if (!headers.has('Authorization') && tokenRef.current) {
+        headers.set('Authorization', `Bearer ${tokenRef.current}`);
+      }
+      if (companyIdRef.current) {
+        headers.set('X-Company-ID', companyIdRef.current);
+      }
+      return originalFetch(input, { ...init, headers });
+    };
+    return () => { window.fetch = originalFetch; };
+  }, []);
 
   useEffect(() => {
     // Restore session from localStorage
@@ -45,11 +71,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     if (storedToken && storedUser) {
       setToken(storedToken);
+      tokenRef.current = storedToken;
       setUser(JSON.parse(storedUser));
       setEnvironment(storedEnv);
       setGroup(storedGroup);
       setCompany(storedCompany);
       setCompanyId(storedCompanyId);
+      companyIdRef.current = storedCompanyId;
       setCnpj(storedCnpj);
 
       // Refresh user profile from server to ensure role and trial status are up to date
@@ -59,7 +87,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       .then(res => {
         if (res.ok) return res.json();
         if (res.status === 401) {
-          // Token expired or invalid
           localStorage.clear();
           window.location.href = '/login';
           throw new Error('Session expired');
@@ -70,7 +97,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(userData);
         localStorage.setItem('user', JSON.stringify(userData));
       })
-      .catch(err => console.error("Session refresh error:", err));
+      .catch(err => console.error("Session refresh error:", err))
+      .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
     }
   }, []);
 
@@ -116,18 +146,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      token, 
-      environment, 
-      group, 
+    <AuthContext.Provider value={{
+      user,
+      token,
+      environment,
+      group,
       company,
       companyId,
       cnpj,
-      login, 
+      loading,
+      login,
       logout,
       switchCompany,
-      isAuthenticated: !!user 
+      isAuthenticated: !!user
     }}>
       {children}
     </AuthContext.Provider>
