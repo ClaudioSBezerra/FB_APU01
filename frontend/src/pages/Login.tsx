@@ -54,13 +54,13 @@ const Login = () => {
         <Card className="w-full shadow-lg">
           <CardHeader className="flex flex-row items-center gap-4 space-y-0 pb-6">
             <div className="flex-shrink-0">
-              <img 
-                src="/logo.png" 
-                alt="Logo da Empresa" 
+              <img
+                src="/logo-ferreira-costa.png"
+                alt="Ferreira Costa Home Center"
                 className="h-16 w-auto object-contain"
                 onError={(e) => {
-                  e.currentTarget.style.display = 'none'; // Hide if missing
-                }} 
+                  e.currentTarget.style.display = 'none';
+                }}
               />
             </div>
             <div className="flex flex-col space-y-1.5">
