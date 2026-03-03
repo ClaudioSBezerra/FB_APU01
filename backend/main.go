@@ -559,6 +559,9 @@ func main() {
 	// Apuração Assistida — Créditos IBS/CBS em Risco
 	http.HandleFunc("/api/apuracao/creditos-perdidos", withAuth(handlers.CreditosPerdidosHandler, ""))
 
+	// Painel Apuração IBS/CBS
+	http.HandleFunc("/api/apuracao/painel", withAuth(handlers.ApuracaoPainelHandler, ""))
+
 	// Managers Endpoints (Gestores para relatorios IA)
 	http.HandleFunc("/api/managers", withAuth(handlers.ListManagersHandler, ""))
 	http.HandleFunc("/api/managers/create", withAuth(handlers.CreateManagerHandler, ""))

@@ -15,6 +15,8 @@ import Managers from './pages/Managers';
 import RFBCredentials from './pages/RFBCredentials';
 import RFBApuracao from './pages/RFBApuracao';
 import GestaoCredIBSCBS from './pages/GestaoCredIBSCBS';
+import PainelApuracaoIBS from './pages/PainelApuracaoIBS';
+import PainelApuracaoCBS from './pages/PainelApuracaoCBS';
 import ImportarXMLsSaida from './pages/ImportarXMLsSaida';
 import ConsultaNFeSaidas from './pages/ConsultaNFeSaidas';
 import ImportarXMLsEntrada from './pages/ImportarXMLsEntrada';
@@ -145,6 +147,8 @@ function AppLayout() {
             <Route path="/rfb/credenciais" element={<RFBCredentials />} />
             <Route path="/rfb/apuracao" element={<RFBApuracao />} />
             <Route path="/rfb/gestao-creditos" element={<GestaoCredIBSCBS />} />
+            <Route path="/rfb/apuracao-ibs" element={<PainelApuracaoIBS />} />
+            <Route path="/rfb/apuracao-cbs" element={<PainelApuracaoCBS />} />
             <Route path="/rfb/creditos-cbs" element={<ComingSoon title="Créditos CBS mês corrente" />} />
             <Route path="/rfb/pagamentos-cbs" element={<ComingSoon title="Pagamentos CBS mês corrente" />} />
             <Route path="/rfb/pagamentos-fornecedores" element={<ComingSoon title="Pagamentos CBS a Fornecedores" />} />

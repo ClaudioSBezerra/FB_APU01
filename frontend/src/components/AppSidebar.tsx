@@ -123,6 +123,8 @@ const sections: NavSection[] = [
     dot: "bg-orange-400",
     items: [
       { title: "Gestão Créditos IBS/CBS",       url: "/rfb/gestao-creditos",         icon: BarChart3 },
+      { title: "Apuração IBS — mês",            url: "/rfb/apuracao-ibs",            icon: BarChart3 },
+      { title: "Apuração CBS — mês",            url: "/rfb/apuracao-cbs",            icon: BarChart3 },
       { title: "Credenciais API RFB",            url: "/rfb/credenciais",             icon: Globe },
       { title: "Débitos CBS — mês corrente",     url: "/rfb/apuracao",                icon: Download },
       { title: "Créditos CBS — mês corrente",    url: "/rfb/creditos-cbs",            icon: CreditCard,  disabled: true },
