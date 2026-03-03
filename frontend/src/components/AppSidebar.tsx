@@ -20,6 +20,7 @@ import {
   Tag,
   ShieldAlert,
   Search,
+  ChevronDown,
 } from "lucide-react"
 import {
   Sidebar,
@@ -33,13 +34,13 @@ import {
   SidebarRail,
   SidebarHeader,
   SidebarFooter,
-  SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { Link, useLocation } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/AuthContext"
 import { CompanySwitcher } from "@/components/CompanySwitcher"
 import { cn } from "@/lib/utils"
+import { useState } from "react"
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -140,6 +141,15 @@ export function AppSidebar() {
   const { user, company, logout } = useAuth()
   const isAdmin = user?.role === "admin"
 
+  // Estado de expansão de cada seção (todas abertas por padrão)
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(sections.map((s) => [s.id, true]))
+  )
+
+  function toggleSection(id: string) {
+    setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
+
   function isActive(url: string) {
     if (url === "#") return false
     return location.pathname === url.split("?")[0]
@@ -159,7 +169,6 @@ export function AppSidebar() {
             <span className="font-bold text-sm truncate">FBTax Cloud</span>
             <span className="text-[10px] text-muted-foreground truncate">Tax Reform System</span>
           </div>
-          <SidebarTrigger className="ml-auto h-6 w-6 shrink-0" />
         </div>
         {isAdmin && (
           <div className="px-3 pb-1">
@@ -176,17 +185,29 @@ export function AppSidebar() {
           )
           if (visibleItems.length === 0) return null
 
+          const isOpen = openSections[section.id] ?? true
+
           return (
             <SidebarGroup key={section.id} className={idx > 0 ? "pt-0" : ""}>
               {/* Separador entre seções */}
               {idx > 0 && <div className="border-t mx-2 mb-2 mt-1" />}
 
-              {/* Label da seção */}
-              <SidebarGroupLabel className="flex items-center gap-1.5 px-3 py-1 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/80">
+              {/* Label da seção — clicável para colapsar */}
+              <SidebarGroupLabel
+                className="flex items-center gap-1.5 px-3 py-1 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/80 cursor-pointer hover:text-muted-foreground select-none"
+                onClick={() => toggleSection(section.id)}
+              >
                 <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", section.dot)} />
                 {section.title}
+                <ChevronDown
+                  className={cn(
+                    "ml-auto h-3 w-3 shrink-0 transition-transform duration-200",
+                    !isOpen && "-rotate-90"
+                  )}
+                />
               </SidebarGroupLabel>
 
+              {isOpen && (
               <SidebarGroupContent>
                 <SidebarMenu>
                   {visibleItems.map((item) => (
@@ -230,6 +251,7 @@ export function AppSidebar() {
                   ))}
                 </SidebarMenu>
               </SidebarGroupContent>
+              )}
             </SidebarGroup>
           )
         })}
