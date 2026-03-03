@@ -58,11 +58,33 @@ type credPerdSimples struct {
 	PorFornecedor     []credPerdSimplesForn `json:"por_fornecedor"`
 }
 
+type credPerdTransportadora struct {
+	EmitCNPJ      string  `json:"emit_cnpj"`
+	EmitNome      string  `json:"emit_nome"`
+	QtdCTes       int     `json:"qtd_ctes"`
+	ValorTotal    float64 `json:"valor_total"`
+	IBSEstimado   float64 `json:"ibs_estimado"`
+	CBSEstimado   float64 `json:"cbs_estimado"`
+	TotalEstimado float64 `json:"total_estimado"`
+}
+
+type credPerdCTe struct {
+	TotalCTes         int                      `json:"total_ctes"`
+	TotalUniverse     int                      `json:"total_universe"`
+	PercSemCredito    float64                  `json:"perc_sem_credito"`
+	ValorTotal        float64                  `json:"valor_total"`
+	IBSEstimado       float64                  `json:"ibs_estimado"`
+	CBSEstimado       float64                  `json:"cbs_estimado"`
+	TotalEstimado     float64                  `json:"total_estimado"`
+	PorTransportadora []credPerdTransportadora `json:"por_transportadora"`
+}
+
 type CreditosPerdidosResponse struct {
-	Aliquotas          credPerdAliquota `json:"aliquotas"`
-	NFeSemCredito      credPerdNFe      `json:"nfe_sem_credito"`
-	SimplesNacional    credPerdSimples  `json:"simples_nacional"`
-	TotalCreditoEmRisco float64         `json:"total_credito_em_risco"`
+	Aliquotas           credPerdAliquota `json:"aliquotas"`
+	NFeSemCredito       credPerdNFe      `json:"nfe_sem_credito"`
+	SimplesNacional     credPerdSimples  `json:"simples_nacional"`
+	CteSemCredito       credPerdCTe      `json:"cte_sem_credito"`
+	TotalCreditoEmRisco float64          `json:"total_credito_em_risco"`
 }
 
 // ---------------------------------------------------------------------------
@@ -229,8 +251,73 @@ func CreditosPerdidosHandler(db *sql.DB) http.HandlerFunc {
 			PorFornecedor:     simplesFornList,
 		}
 
+		// ── 3. CT-e sem IBS/CBS ──────────────────────────────────────────────
+		var cteTotalUniverse int
+		db.QueryRow(`SELECT COUNT(*) FROM cte_entradas WHERE company_id = $1`, companyID).Scan(&cteTotalUniverse)
+
+		cteRows, err := db.Query(`
+			SELECT
+				emit_cnpj,
+				COALESCE(emit_nome, ''),
+				COUNT(*)        AS qtd_ctes,
+				SUM(v_prest)    AS valor_total
+			FROM cte_entradas
+			WHERE company_id = $1
+			  AND (v_ibs IS NULL OR v_ibs = 0)
+			  AND (v_cbs IS NULL OR v_cbs = 0)
+			GROUP BY emit_cnpj, emit_nome
+			ORDER BY valor_total DESC
+			LIMIT 50
+		`, companyID)
+		if err != nil {
+			log.Printf("CreditosPerdidos cte query error: %v", err)
+		}
+
+		var cteTranspList []credPerdTransportadora
+		var cteTotalCTes int
+		var cteValorTotal float64
+
+		if cteRows != nil {
+			defer cteRows.Close()
+			for cteRows.Next() {
+				var t credPerdTransportadora
+				if err := cteRows.Scan(&t.EmitCNPJ, &t.EmitNome, &t.QtdCTes, &t.ValorTotal); err != nil {
+					continue
+				}
+				t.IBSEstimado = t.ValorTotal * (ibsRate / 100.0)
+				t.CBSEstimado = t.ValorTotal * (cbsRate / 100.0)
+				t.TotalEstimado = t.IBSEstimado + t.CBSEstimado
+				cteTranspList = append(cteTranspList, t)
+				cteTotalCTes += t.QtdCTes
+				cteValorTotal += t.ValorTotal
+			}
+		}
+		if cteTranspList == nil {
+			cteTranspList = []credPerdTransportadora{}
+		}
+
+		ctePercSem := 0.0
+		if cteTotalUniverse > 0 {
+			ctePercSem = float64(cteTotalCTes) / float64(cteTotalUniverse) * 100.0
+		}
+		cteIBS := cteValorTotal * (ibsRate / 100.0)
+		cteCBS := cteValorTotal * (cbsRate / 100.0)
+
+		resp.CteSemCredito = credPerdCTe{
+			TotalCTes:         cteTotalCTes,
+			TotalUniverse:     cteTotalUniverse,
+			PercSemCredito:    ctePercSem,
+			ValorTotal:        cteValorTotal,
+			IBSEstimado:       cteIBS,
+			CBSEstimado:       cteCBS,
+			TotalEstimado:     cteIBS + cteCBS,
+			PorTransportadora: cteTranspList,
+		}
+
 		// ── Total combinado ──────────────────────────────────────────────────
-		resp.TotalCreditoEmRisco = resp.NFeSemCredito.TotalEstimado + resp.SimplesNacional.TotalPerdido
+		resp.TotalCreditoEmRisco = resp.NFeSemCredito.TotalEstimado +
+			resp.SimplesNacional.TotalPerdido +
+			resp.CteSemCredito.TotalEstimado
 
 		json.NewEncoder(w).Encode(resp)
 	}

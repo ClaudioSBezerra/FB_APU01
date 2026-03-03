@@ -552,6 +552,10 @@ func main() {
 	http.HandleFunc("/api/nfe-entradas/upload", withAuth(handlers.NfeEntradasUploadHandler, ""))
 	http.HandleFunc("/api/nfe-entradas", withAuth(handlers.NfeEntradasListHandler, ""))
 
+	// Apuração Assistida — CT-e Entradas
+	http.HandleFunc("/api/cte-entradas/upload", withAuth(handlers.CteEntradasUploadHandler, ""))
+	http.HandleFunc("/api/cte-entradas", withAuth(handlers.CteEntradasListHandler, ""))
+
 	// Apuração Assistida — Créditos IBS/CBS em Risco
 	http.HandleFunc("/api/apuracao/creditos-perdidos", withAuth(handlers.CreditosPerdidosHandler, ""))
 

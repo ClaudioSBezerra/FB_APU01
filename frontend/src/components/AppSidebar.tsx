@@ -98,9 +98,9 @@ const sections: NavSection[] = [
     items: [
       { title: "Entradas Mod. 55",        url: "/apuracao/entrada",  icon: Upload },
       { title: "Saídas Mod. 55/65",       url: "/apuracao/saida",    icon: Upload },
-      { title: "Serviços — Entradas",     url: "#",                   icon: Upload, disabled: true },
-      { title: "Serviços — Saídas",       url: "#",                   icon: Upload, disabled: true },
-      { title: "CT-e — Entradas",         url: "#",                   icon: Upload, disabled: true },
+      { title: "Serviços — Entradas",     url: "#",                       icon: Upload, disabled: true },
+      { title: "Serviços — Saídas",       url: "#",                       icon: Upload, disabled: true },
+      { title: "CT-e — Entradas",         url: "/apuracao/cte-entrada",   icon: Upload },
     ],
   },
   {
@@ -110,9 +110,9 @@ const sections: NavSection[] = [
     items: [
       { title: "Entradas Mod. 55",        url: "/apuracao/entrada/notas",     icon: FileText },
       { title: "Saídas Mod. 55/65",       url: "/apuracao/saida/notas",       icon: FileText },
-      { title: "Serviços — Entradas",     url: "#",                            icon: FileText, disabled: true },
-      { title: "Serviços — Saídas",       url: "#",                            icon: FileText, disabled: true },
-      { title: "CT-e — Entradas",         url: "#",                            icon: FileText, disabled: true },
+      { title: "Serviços — Entradas",     url: "#",                                   icon: FileText, disabled: true },
+      { title: "Serviços — Saídas",       url: "#",                                   icon: FileText, disabled: true },
+      { title: "CT-e — Entradas",         url: "/apuracao/cte-entrada/notas",         icon: FileText },
       { title: "Créditos em Risco",       url: "/apuracao/creditos-perdidos",  icon: ShieldAlert, danger: true },
     ],
   },

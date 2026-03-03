@@ -58,10 +58,32 @@ interface SimplesNacional {
   por_fornecedor: FornSimples[];
 }
 
+interface FornCTe {
+  emit_cnpj: string;
+  emit_nome: string;
+  qtd_ctes: number;
+  valor_total: number;
+  ibs_estimado: number;
+  cbs_estimado: number;
+  total_estimado: number;
+}
+
+interface CTeSemCredito {
+  total_ctes: number;
+  total_universe: number;
+  perc_sem_credito: number;
+  valor_total: number;
+  ibs_estimado: number;
+  cbs_estimado: number;
+  total_estimado: number;
+  por_transportadora: FornCTe[];
+}
+
 interface CreditosPerdidosData {
   aliquotas: Aliquotas;
   nfe_sem_credito: NFeSemCredito;
   simples_nacional: SimplesNacional;
+  cte_sem_credito: CTeSemCredito;
   total_credito_em_risco: number;
 }
 
@@ -111,10 +133,13 @@ export default function ApuracaoCredPerdidos() {
 
   const nfe = data?.nfe_sem_credito;
   const simples = data?.simples_nacional;
+  const cte = data?.cte_sem_credito;
   const aliq = data?.aliquotas;
   const totalRisco = data?.total_credito_em_risco ?? 0;
 
-  const temDados = (nfe?.total_notas ?? 0) > 0 || (simples?.total_fornecedores ?? 0) > 0;
+  const temDados = (nfe?.total_notas ?? 0) > 0 ||
+                   (simples?.total_fornecedores ?? 0) > 0 ||
+                   (cte?.total_ctes ?? 0) > 0;
 
   return (
     <div className="space-y-6">
@@ -168,6 +193,15 @@ export default function ApuracaoCredPerdidos() {
                   <p className="text-[10px] text-muted-foreground">Simples Nacional (EFD)</p>
                   <p className="text-lg font-bold text-amber-600">{fmtBRL(simples?.total_perdido ?? 0)}</p>
                 </div>
+                {(cte?.total_ctes ?? 0) > 0 && (
+                  <>
+                    <div className="w-px bg-border hidden md:block" />
+                    <div className="text-center">
+                      <p className="text-[10px] text-muted-foreground">CT-e sem IBS/CBS</p>
+                      <p className="text-lg font-bold text-violet-600">{fmtBRL(cte?.total_estimado ?? 0)}</p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </CardContent>
@@ -327,15 +361,88 @@ export default function ApuracaoCredPerdidos() {
         </Card>
       )}
 
+      {/* ── Seção 3: CT-e sem IBS+CBS ────────────────────────────────────── */}
+      {(cte?.total_ctes ?? 0) > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-violet-500" />
+                  CT-e de Entrada sem IBS+CBS declarado
+                </CardTitle>
+                <CardDescription className="text-[11px] mt-0.5">
+                  Transportadoras que emitiram CT-e sem as tags de IBS/CBS —
+                  provavelmente ainda não se adaptaram à Reforma Tributária.
+                </CardDescription>
+              </div>
+              <div className="flex gap-3 flex-wrap">
+                <div className="text-center">
+                  <p className="text-[10px] text-muted-foreground">CT-es sem crédito</p>
+                  <p className="font-bold text-violet-600">
+                    {cte?.total_ctes} <span className="text-[10px] font-normal text-muted-foreground">/ {cte?.total_universe}</span>
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-muted-foreground">% do total</p>
+                  <p className="font-bold text-violet-600">{fmtPct(cte?.perc_sem_credito ?? 0)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-muted-foreground">Valor total do frete</p>
+                  <p className="font-bold">{fmtBRL(cte?.valor_total ?? 0)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-muted-foreground">IBS + CBS estimado</p>
+                  <p className="font-bold text-violet-600">{fmtBRL(cte?.total_estimado ?? 0)}</p>
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="py-1.5 px-3 text-[11px]">Transportadora</TableHead>
+                    <TableHead className="py-1.5 px-3 text-[11px]">CNPJ</TableHead>
+                    <TableHead className="py-1.5 px-3 text-[11px] text-center">CT-es</TableHead>
+                    <TableHead className="py-1.5 px-3 text-[11px] text-right">Valor Total Frete</TableHead>
+                    <TableHead className="py-1.5 px-3 text-[11px] text-right">IBS Est.</TableHead>
+                    <TableHead className="py-1.5 px-3 text-[11px] text-right">CBS Est.</TableHead>
+                    <TableHead className="py-1.5 px-3 text-[11px] text-right font-semibold text-violet-600">Total em Risco</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(cte?.por_transportadora ?? []).map((t, i) => (
+                    <TableRow key={i} className="h-8">
+                      <TableCell className="py-1 px-3 text-[11px] font-medium">{t.emit_nome || '—'}</TableCell>
+                      <TableCell className="py-1 px-3 text-[10px] font-mono text-muted-foreground">{fmtCNPJ(t.emit_cnpj)}</TableCell>
+                      <TableCell className="py-1 px-3 text-[11px] text-center">
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{t.qtd_ctes}</Badge>
+                      </TableCell>
+                      <TableCell className="py-1 px-3 text-[11px] text-right">{fmtBRL(t.valor_total)}</TableCell>
+                      <TableCell className="py-1 px-3 text-[11px] text-right text-blue-600">{fmtBRL(t.ibs_estimado)}</TableCell>
+                      <TableCell className="py-1 px-3 text-[11px] text-right text-purple-600">{fmtBRL(t.cbs_estimado)}</TableCell>
+                      <TableCell className="py-1 px-3 text-[11px] text-right font-semibold text-violet-600">{fmtBRL(t.total_estimado)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ── Nota metodológica ────────────────────────────────────────────── */}
       {temDados && (
         <Card className="bg-muted/30 border-dashed">
           <CardContent className="py-3 px-4">
             <p className="text-[11px] text-muted-foreground leading-relaxed">
-              <strong>Metodologia:</strong> Os valores de IBS e CBS são estimativas calculadas sobre o valor total das notas
-              (v_NF) aplicando as alíquotas de {aliq?.ano} (IBS {fmtPct(aliq?.ibs ?? 0)} + CBS {fmtPct(aliq?.cbs ?? 0)}).
+              <strong>Metodologia:</strong> Os valores de IBS e CBS são estimativas calculadas sobre o valor total das notas/fretes
+              aplicando as alíquotas de {aliq?.ano} (IBS {fmtPct(aliq?.ibs ?? 0)} + CBS {fmtPct(aliq?.cbs ?? 0)}).
               NF-e sem IBS/CBS: fornecedores que não preencheram as tags IBSCBSTot no XML.
               Simples Nacional: fornecedores cadastrados no módulo de Simples Nacional, cujos dados vêm dos SPEDs importados.
+              CT-e sem IBS/CBS: transportadoras que não preencheram as tags IBSCBSTot no XML do Conhecimento de Transporte.
               Esses valores representam o crédito que <strong>não será aproveitado</strong> na apuração de IBS/CBS.
             </p>
           </CardContent>

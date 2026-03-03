@@ -19,6 +19,8 @@ import ImportarXMLsSaida from './pages/ImportarXMLsSaida';
 import ConsultaNFeSaidas from './pages/ConsultaNFeSaidas';
 import ImportarXMLsEntrada from './pages/ImportarXMLsEntrada';
 import ConsultaNFesEntradas from './pages/ConsultaNFesEntradas';
+import ImportarXMLsCTe from './pages/ImportarXMLsCTe';
+import ConsultaCTesEntradas from './pages/ConsultaCTesEntradas';
 import ApuracaoCredPerdidos from './pages/ApuracaoCredPerdidos';
 import ConsultaInteligente from './pages/ConsultaInteligente';
 import AdminUsers from './pages/AdminUsers';
@@ -134,6 +136,8 @@ function AppLayout() {
             <Route path="/apuracao/entrada/notas" element={<ConsultaNFesEntradas />} />
             <Route path="/apuracao/saida" element={<ImportarXMLsSaida />} />
             <Route path="/apuracao/saida/notas" element={<ConsultaNFeSaidas />} />
+            <Route path="/apuracao/cte-entrada" element={<ImportarXMLsCTe />} />
+            <Route path="/apuracao/cte-entrada/notas" element={<ConsultaCTesEntradas />} />
             <Route path="/apuracao/creditos-perdidos" element={<ApuracaoCredPerdidos />} />
             <Route path="/apuracao/nfse" element={<ComingSoon title="Importar XMLs NFS-e" />} />
             
