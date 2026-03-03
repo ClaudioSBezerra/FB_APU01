@@ -52,20 +52,18 @@ const Login = () => {
     <div className="flex items-center justify-center min-h-screen bg-gray-100 px-4">
       <div className="w-full max-w-[450px]">
         <Card className="w-full shadow-lg">
-          <CardHeader className="flex flex-row items-center gap-4 space-y-0 pb-6">
-            <div className="flex-shrink-0">
-              <img
-                src="/logo-ferreira-costa.png"
-                alt="Ferreira Costa Home Center"
-                className="h-16 w-auto object-contain"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
-            </div>
-            <div className="flex flex-col space-y-1.5">
-              <CardTitle className="text-xl font-bold">Acesse sua conta</CardTitle>
-              <CardDescription>Entre com suas credenciais para continuar</CardDescription>
+          <CardHeader className="flex flex-col items-center gap-2 space-y-0 pt-6 pb-4">
+            <img
+              src="/logo-ferreira-costa.png"
+              alt="Ferreira Costa Home Center"
+              className="h-16 w-auto object-contain"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+            <div className="flex flex-col items-center space-y-0.5 text-center">
+              <CardTitle className="text-base font-semibold">Acesse sua conta</CardTitle>
+              <CardDescription className="text-xs">Entre com suas credenciais para continuar</CardDescription>
             </div>
           </CardHeader>
           <CardContent>
@@ -76,10 +74,10 @@ const Login = () => {
                 <AlertDescription>{errorMsg}</AlertDescription>
               </Alert>
             )}
-            
-            <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">E-mail</Label>
+
+            <form onSubmit={handleLogin} className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="email" className="text-sm">E-mail</Label>
               <Input
                 id="email"
                 type="email"
@@ -87,27 +85,29 @@ const Login = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="seu@email.com"
+                className="text-sm"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="password" className="text-sm">Senha</Label>
               <Input
                 id="password"
                 type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                className="text-sm"
               />
             </div>
             <div className="flex justify-end">
-              <Link to="/forgot-password" className="text-sm text-blue-600 hover:underline">
+              <Link to="/forgot-password" className="text-xs text-blue-600 hover:underline">
                 Esqueci minha senha
               </Link>
             </div>
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full text-sm" disabled={isLoading}>
               {isLoading ? "Entrando..." : "Entrar"}
             </Button>
-            <div className="text-center text-sm text-gray-500 mt-4">
+            <div className="text-center text-xs text-gray-500 mt-2">
               Não tem uma conta?{" "}
               <Link to="/register" className="text-blue-600 hover:underline">
                 Crie grátis
