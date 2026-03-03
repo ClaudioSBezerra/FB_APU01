@@ -57,7 +57,9 @@ interface NavItem {
 interface NavSection {
   id: string;
   title: string;
-  dot: string;   // Tailwind bg-* color for the dot indicator
+  emoji?: string; // Emoji symbol displayed before the section title
+  image?: string; // Image URL (used instead of emoji when set)
+  border: string; // Tailwind border-l-* color for the tarja accent
   items: NavItem[];
 }
 
@@ -68,7 +70,8 @@ const sections: NavSection[] = [
   {
     id: "config",
     title: "Configurações e Tabelas",
-    dot: "bg-slate-400",
+    emoji: "⚙️",
+    border: "border-slate-400",
     items: [
       { title: "Tabela de Alíquotas",    url: "/config/aliquotas",        icon: Table },
       { title: "Tabela CFOP",             url: "/config/cfop",              icon: Table },
@@ -82,7 +85,8 @@ const sections: NavSection[] = [
   {
     id: "simulador",
     title: "Simulador da Reforma Tributária",
-    dot: "bg-emerald-400",
+    emoji: "📊",
+    border: "border-emerald-400",
     items: [
       { title: "Importar SPEDs",              url: "/importar-efd",                    icon: FileSpreadsheet },
       { title: "Operações Comerciais",         url: "/mercadorias",                     icon: ShoppingCart },
@@ -95,7 +99,8 @@ const sections: NavSection[] = [
   {
     id: "importar",
     title: "Apuração Assistida — Importar",
-    dot: "bg-violet-400",
+    emoji: "📥",
+    border: "border-violet-400",
     items: [
       { title: "Entradas Mod. 55",        url: "/apuracao/entrada",  icon: Upload },
       { title: "Saídas Mod. 55/65",       url: "/apuracao/saida",    icon: Upload },
@@ -107,7 +112,8 @@ const sections: NavSection[] = [
   {
     id: "consultar",
     title: "Apuração Assistida",
-    dot: "bg-violet-400",
+    emoji: "💰",
+    border: "border-violet-400",
     items: [
       { title: "Entradas Mod. 55",        url: "/apuracao/entrada/notas",     icon: FileText },
       { title: "Saídas Mod. 55/65",       url: "/apuracao/saida/notas",       icon: FileText },
@@ -122,7 +128,8 @@ const sections: NavSection[] = [
   {
     id: "rfb",
     title: "Receita Federal",
-    dot: "bg-orange-400",
+    image: "/leao-rfb.png",
+    border: "border-orange-400",
     items: [
       { title: "Gestão Créditos IBS/CBS",       url: "/rfb/gestao-creditos",         icon: BarChart3 },
       { title: "Credenciais API RFB",            url: "/rfb/credenciais",             icon: Globe },
@@ -145,7 +152,7 @@ export function AppSidebar() {
 
   // Estado de expansão de cada seção (todas abertas por padrão)
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(sections.map((s) => [s.id, true]))
+    () => Object.fromEntries(sections.map((s) => [s.id, false]))
   )
 
   function toggleSection(id: string) {
@@ -172,16 +179,11 @@ export function AppSidebar() {
             <span className="text-[10px] text-muted-foreground truncate">Tax Reform System</span>
           </div>
         </div>
-        {isAdmin && (
-          <div className="px-3 pb-1">
-            <CompanySwitcher />
-          </div>
-        )}
       </SidebarHeader>
 
       {/* ── Conteúdo ── */}
       <SidebarContent>
-        {sections.map((section, idx) => {
+        {sections.map((section) => {
           const visibleItems = section.items.filter(
             (item) => !item.adminOnly || isAdmin
           )
@@ -190,16 +192,24 @@ export function AppSidebar() {
           const isOpen = openSections[section.id] ?? true
 
           return (
-            <SidebarGroup key={section.id} className={idx > 0 ? "pt-0" : ""}>
-              {/* Separador entre seções */}
-              {idx > 0 && <div className="border-t mx-2 mb-2 mt-1" />}
-
-              {/* Label da seção — clicável para colapsar */}
+            <SidebarGroup key={section.id} className="pt-0 pb-0">
+              {/* Label da seção — colado à esquerda, itálico e negrito com borda lateral colorida */}
               <SidebarGroupLabel
-                className="flex items-center gap-1.5 px-3 py-1 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/80 cursor-pointer hover:text-muted-foreground select-none"
+                className={cn(
+                  "flex items-center gap-1.5 mt-2 mb-0.5 px-2.5 py-1 mr-2",
+                  "text-[10px] uppercase tracking-wider font-bold italic",
+                  "text-sidebar-foreground cursor-pointer select-none",
+                  "hover:text-sidebar-foreground/80 transition-colors",
+                  "border-l-2",
+                  section.border,
+                )}
                 onClick={() => toggleSection(section.id)}
               >
-                <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", section.dot)} />
+                {section.image ? (
+                  <img src={section.image} alt="" className="h-5 w-auto shrink-0 object-contain" />
+                ) : (
+                  <span className="shrink-0 text-sm not-italic">{section.emoji}</span>
+                )}
                 {section.title}
                 <ChevronDown
                   className={cn(
@@ -217,7 +227,7 @@ export function AppSidebar() {
                       {item.disabled ? (
                         /* Item desabilitado (em desenvolvimento) */
                         <SidebarMenuButton
-                          className="h-8 px-3 opacity-45 pointer-events-none"
+                          className="h-8 px-3 opacity-40 pointer-events-none"
                           tooltip={`${item.title} (em desenvolvimento)`}
                         >
                           <item.icon className="h-4 w-4 shrink-0" />
@@ -271,6 +281,11 @@ export function AppSidebar() {
               <span className="self-start bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded text-[9px] font-medium">
                 Vence: {new Date(user.trial_ends_at).toLocaleDateString("pt-BR")}
               </span>
+              {isAdmin && (
+                <div className="mt-1 pt-1 border-t border-muted-foreground/20">
+                  <CompanySwitcher compact />
+                </div>
+              )}
               <Button
                 variant="ghost"
                 size="sm"

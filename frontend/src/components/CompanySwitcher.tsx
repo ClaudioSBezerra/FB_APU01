@@ -24,7 +24,7 @@ interface Company {
   is_default: boolean;
 }
 
-export function CompanySwitcher() {
+export function CompanySwitcher({ compact = false }: { compact?: boolean }) {
   const { token, companyId, switchCompany } = useAuth();
   const [open, setOpen] = useState(false);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -55,22 +55,36 @@ export function CompanySwitcher() {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-full justify-between"
-        >
-          {selectedCompany ? (
-            <div className="flex items-center gap-2 truncate">
-              <Building2 className="h-4 w-4 shrink-0 opacity-50" />
-              <span className="truncate">{selectedCompany.name}</span>
-            </div>
-          ) : (
-            "Selecione a empresa..."
-          )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
+        {compact ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            role="combobox"
+            aria-expanded={open}
+            className="w-full justify-start h-7 px-1 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Building2 className="h-3 w-3 shrink-0" />
+            <span>Trocar Empresa</span>
+            <ChevronsUpDown className="ml-auto h-3 w-3 shrink-0 opacity-40" />
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="w-full justify-between"
+          >
+            {selectedCompany ? (
+              <div className="flex items-center gap-2 truncate">
+                <Building2 className="h-4 w-4 shrink-0 opacity-50" />
+                <span className="truncate">{selectedCompany.name}</span>
+              </div>
+            ) : (
+              "Selecione a empresa..."
+            )}
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        )}
       </PopoverTrigger>
       <PopoverContent className="w-[200px] p-0">
         <Command>
