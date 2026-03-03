@@ -33,6 +33,7 @@ import {
   SidebarRail,
   SidebarHeader,
   SidebarFooter,
+  SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { Link, useLocation } from "react-router-dom"
 import { Button } from "@/components/ui/button"
@@ -158,6 +159,7 @@ export function AppSidebar() {
             <span className="font-bold text-sm truncate">FBTax Cloud</span>
             <span className="text-[10px] text-muted-foreground truncate">Tax Reform System</span>
           </div>
+          <SidebarTrigger className="ml-auto h-6 w-6 shrink-0" />
         </div>
         {isAdmin && (
           <div className="px-3 pb-1">
