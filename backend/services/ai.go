@@ -102,9 +102,15 @@ func (c *AIClient) GenerateFastRaw(system, userPrompt, model string, maxTokens i
 
 	resp, err := c.doRequestRaw(reqBody)
 	if err != nil {
-		if strings.Contains(err.Error(), "429") && reqBody.Model == ModelFlash {
+		errStr := err.Error()
+		if strings.Contains(errStr, "429") && reqBody.Model == ModelFlash {
 			fmt.Printf("[AI Raw] Rate limited on %s, single attempt with %s\n", ModelFlash, ModelFlashFallback)
 			reqBody.Model = ModelFlashFallback
+			resp, err = c.doRequestRaw(reqBody)
+		} else if isTransientNetworkError(errStr) {
+			// TLS timeout, connection reset, dial error — retry once after short backoff
+			fmt.Printf("[AI Raw] Transient network error (%s), retrying in 3s...\n", errStr)
+			time.Sleep(3 * time.Second)
 			resp, err = c.doRequestRaw(reqBody)
 		}
 	}
@@ -445,6 +451,18 @@ func cleanExtractedLines(lines []string) string {
 		sb.WriteString("\n")
 	}
 	return strings.TrimSpace(sb.String())
+}
+
+// isTransientNetworkError returns true for connection-level errors worth retrying.
+func isTransientNetworkError(errStr string) bool {
+	transient := []string{"TLS handshake", "tls:", "timeout", "connection reset", "connection refused", "dial ", "EOF", "i/o timeout"}
+	lower := strings.ToLower(errStr)
+	for _, kw := range transient {
+		if strings.Contains(lower, strings.ToLower(kw)) {
+			return true
+		}
+	}
+	return false
 }
 
 // IsAvailable checks if the AI client is configured.
