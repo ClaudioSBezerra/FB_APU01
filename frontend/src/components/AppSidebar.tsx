@@ -21,6 +21,11 @@ import {
   ShieldAlert,
   Search,
   ChevronDown,
+  Settings,
+  TrendingUp,
+  FolderInput,
+  Calculator,
+  Landmark,
 } from "lucide-react"
 import {
   Sidebar,
@@ -56,9 +61,7 @@ interface NavItem {
 interface NavSection {
   id: string;
   title: string;
-  emoji?: string; // Emoji symbol displayed before the section title
-  image?: string; // Image URL (used instead of emoji when set)
-  border: string; // Tailwind border-l-* color for the tarja accent
+  sectionIcon: React.ElementType;
   items: NavItem[];
 }
 
@@ -69,8 +72,7 @@ const sections: NavSection[] = [
   {
     id: "config",
     title: "Configurações e Tabelas",
-    emoji: "⚙️",
-    border: "border-slate-400",
+    sectionIcon: Settings,
     items: [
       { title: "Tabela de Alíquotas",    url: "/config/aliquotas",        icon: Table },
       { title: "Tabela CFOP",             url: "/config/cfop",              icon: Table },
@@ -84,8 +86,7 @@ const sections: NavSection[] = [
   {
     id: "simulador",
     title: "Simulador da Reforma Tributária",
-    emoji: "📊",
-    border: "border-emerald-400",
+    sectionIcon: TrendingUp,
     items: [
       { title: "Importar SPEDs",              url: "/importar-efd",                    icon: FileSpreadsheet },
       { title: "Operações Comerciais",         url: "/mercadorias",                     icon: ShoppingCart },
@@ -98,8 +99,7 @@ const sections: NavSection[] = [
   {
     id: "importar",
     title: "Apuração Assistida — Importar",
-    emoji: "📥",
-    border: "border-violet-400",
+    sectionIcon: FolderInput,
     items: [
       { title: "Entradas Mod. 55",        url: "/apuracao/entrada",  icon: Upload },
       { title: "Saídas Mod. 55/65",       url: "/apuracao/saida",    icon: Upload },
@@ -111,8 +111,7 @@ const sections: NavSection[] = [
   {
     id: "consultar",
     title: "Apuração Assistida",
-    emoji: "💰",
-    border: "border-violet-400",
+    sectionIcon: Calculator,
     items: [
       { title: "Entradas Mod. 55",        url: "/apuracao/entrada/notas",     icon: FileText },
       { title: "Saídas Mod. 55/65",       url: "/apuracao/saida/notas",       icon: FileText },
@@ -127,8 +126,7 @@ const sections: NavSection[] = [
   {
     id: "rfb",
     title: "Receita Federal",
-    image: "/leao-rfb.png",
-    border: "border-orange-400",
+    sectionIcon: Landmark,
     items: [
       { title: "Gestão Créditos IBS/CBS",       url: "/rfb/gestao-creditos",         icon: BarChart3 },
       { title: "Credenciais API RFB",            url: "/rfb/credenciais",             icon: Globe },
@@ -202,11 +200,7 @@ export function AppSidebar() {
                 )}
                 onClick={() => toggleSection(section.id)}
               >
-                {section.image ? (
-                  <img src={section.image} alt="" className="h-5 w-auto shrink-0 object-contain" />
-                ) : (
-                  <span className="shrink-0 text-sm not-italic">{section.emoji}</span>
-                )}
+                <section.sectionIcon className="h-3.5 w-3.5 shrink-0 opacity-70" />
                 {section.title}
                 <ChevronDown
                   className={cn(
