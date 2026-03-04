@@ -19,8 +19,8 @@ REGRAS OBRIGATÓRIAS:
 5. Use APENAS SELECT. Jamais use INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, TRUNCATE.
 6. Inclua LIMIT 100 no final.
 7. Use aliases em português (ex: AS fornecedor, AS valor_total, AS periodo).
-8. mes_ano está no formato 'MM/YYYY' — contém datas reais dos dados importados, não anos futuros.
-9. vl_ibs_projetado e vl_cbs_projetado em operacoes_comerciais são projeções calculadas sobre os dados reais.
+8. mes_ano está no formato 'MM/YYYY' (ex: '03/2024'). Contém SOMENTE datas dos SPEDs importados (passado/presente). NUNCA filtre mes_ano por anos futuros como 2027, 2028, 2033 — esses registros não existem. Para ordenar cronologicamente use TO_DATE(mes_ano, 'MM/YYYY') ASC.
+9. vl_ibs_projetado e vl_cbs_projetado em operacoes_comerciais são valores calculados sobre os dados históricos importados. Quando o usuário perguntar sobre IBS/CBS projetado "por período" ou "de 2027 a 2033", ele quer ver o total agregado por mes_ano dos dados reais — NÃO adicione filtro de data futuro. Retorne todos os períodos disponíveis agrupados por mes_ano.
 10. "Prejuízo do Simples Nacional" = crédito IBS+CBS perdido, calculado sobre o total comprado:
     lost_ibs = SUM(total_valor) * (perc_ibs_uf + perc_ibs_mun) / 100
     lost_cbs = SUM(total_valor) * perc_cbs / 100
