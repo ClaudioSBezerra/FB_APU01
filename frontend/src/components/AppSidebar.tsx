@@ -31,7 +31,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar"
@@ -192,16 +191,14 @@ export function AppSidebar() {
           const isOpen = openSections[section.id] ?? true
 
           return (
-            <SidebarGroup key={section.id} className="pt-0 pb-0">
-              {/* Label da seção — colado à esquerda, itálico e negrito com borda lateral colorida */}
+            <SidebarGroup key={section.id} className="pt-0 pb-0 pl-0">
+              {/* Label da seção — colado à esquerda, itálico e negrito */}
               <SidebarGroupLabel
                 className={cn(
-                  "flex items-center gap-1.5 mt-2 mb-0.5 px-2.5 py-1 mr-2",
+                  "flex items-center gap-1.5 mt-2 mb-0.5 pl-1 pr-2 py-1",
                   "text-[10px] uppercase tracking-wider font-bold italic",
                   "text-sidebar-foreground cursor-pointer select-none",
                   "hover:text-sidebar-foreground/80 transition-colors",
-                  "border-l-2",
-                  section.border,
                 )}
                 onClick={() => toggleSection(section.id)}
               >
@@ -300,7 +297,6 @@ export function AppSidebar() {
         )}
       </SidebarFooter>
 
-      <SidebarRail />
     </Sidebar>
   )
 }
