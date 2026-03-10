@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -39,6 +40,7 @@ func GetSimplesDashboardHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		mesAno := r.URL.Query().Get("mes_ano")
+		filiaisParam := r.URL.Query().Get("filiais")
 		projectionYearStr := r.URL.Query().Get("projection_year")
 		projectionYear := 2033
 		if projectionYearStr != "" {
@@ -48,35 +50,40 @@ func GetSimplesDashboardHandler(db *sql.DB) http.HandlerFunc {
 			projectionYear = 2033
 		}
 
-		// Query logic
-		var query string
-		var args []interface{}
+		// Build query dynamically
+		args := []interface{}{companyID}
+		queryBase := `
+			SELECT
+				fornecedor_nome,
+				fornecedor_cnpj,
+				SUM(total_valor) as total_valor,
+				SUM(total_icms) as total_icms
+			FROM mv_operacoes_simples
+			WHERE company_id = $1`
 
 		if mesAno != "" {
-			query = `
-				SELECT 
-					fornecedor_nome,
-					fornecedor_cnpj,
-					SUM(total_valor) as total_valor,
-					SUM(total_icms) as total_icms
-				FROM mv_operacoes_simples
-				WHERE company_id = $1 AND mes_ano = $2
-				GROUP BY fornecedor_nome, fornecedor_cnpj
-			`
-			args = append(args, companyID, mesAno)
-		} else {
-			query = `
-				SELECT 
-					fornecedor_nome,
-					fornecedor_cnpj,
-					SUM(total_valor) as total_valor,
-					SUM(total_icms) as total_icms
-				FROM mv_operacoes_simples
-				WHERE company_id = $1
-				GROUP BY fornecedor_nome, fornecedor_cnpj
-			`
-			args = append(args, companyID)
+			args = append(args, mesAno)
+			queryBase += fmt.Sprintf(" AND mes_ano = $%d", len(args))
 		}
+
+		if filiaisParam != "" {
+			var cnpjs []string
+			for _, c := range strings.Split(filiaisParam, ",") {
+				if t := strings.TrimSpace(c); t != "" {
+					cnpjs = append(cnpjs, t)
+				}
+			}
+			if len(cnpjs) > 0 {
+				placeholders := make([]string, len(cnpjs))
+				for i, c := range cnpjs {
+					args = append(args, c)
+					placeholders[i] = fmt.Sprintf("$%d", len(args))
+				}
+				queryBase += fmt.Sprintf(" AND filial_cnpj IN (%s)", strings.Join(placeholders, ", "))
+			}
+		}
+
+		query := queryBase + "\n\t\t\tGROUP BY fornecedor_nome, fornecedor_cnpj"
 
 		rows, err := db.Query(query, args...)
 		if err != nil {
@@ -88,9 +95,9 @@ func GetSimplesDashboardHandler(db *sql.DB) http.HandlerFunc {
 		// Fetch Aliquots for Selected Year (Default 2033) for "Lost Credit" Calculation
 		var ibsRate, cbsRate, reducIcms float64
 		err = db.QueryRow(`
-			SELECT perc_ibs_uf + perc_ibs_mun, perc_cbs, perc_reduc_icms 
-			FROM tabela_aliquotas 
-			WHERE ano = $1 
+			SELECT perc_ibs_uf + perc_ibs_mun, perc_cbs, perc_reduc_icms
+			FROM tabela_aliquotas
+			WHERE ano = $1
 			LIMIT 1
 		`, projectionYear).Scan(&ibsRate, &cbsRate, &reducIcms)
 

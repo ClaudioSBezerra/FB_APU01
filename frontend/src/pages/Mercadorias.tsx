@@ -53,15 +53,16 @@ interface TaxRate {
 }
 
 import { useAuth } from '@/contexts/AuthContext';
+import { useFiliais } from '@/contexts/FilialContext';
 
 const Mercadorias = () => {
   const { token, companyId } = useAuth();
+  const { isSelected: isFilialSelected, selectedFiliais } = useFiliais();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  
+
   // Tax Reform Simulation Range: 2027-2033
   const [selectedYear, setSelectedYear] = useState<string>("2027");
-  const [selectedFilial, setSelectedFilial] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [selectedMovimento, setSelectedMovimento] = useState<string>("all");
   const [selectedTipoCfop, setSelectedTipoCfop] = useState<string>("all");
@@ -275,10 +276,6 @@ const Mercadorias = () => {
     }).format(value);
   };
 
-  const uniqueFiliais = Array.from(new Set(data.map(item => JSON.stringify({ nome: item.filial_nome, cnpj: item.filial_cnpj }))))
-    .map(str => JSON.parse(str))
-    .sort((a, b) => a.nome.localeCompare(b.nome));
-
   const uniqueMonths = Array.from(new Set(data.map(item => item.mes_ano))).sort((a, b) => {
     const [ma, ya] = a.split('/').map(Number);
     const [mb, yb] = b.split('/').map(Number);
@@ -304,7 +301,7 @@ const Mercadorias = () => {
 
   // Filter data
   const filteredData = data.filter(item => {
-    const matchFilial = selectedFilial === "all" || item.filial_cnpj === selectedFilial;
+    const matchFilial = isFilialSelected(item.filial_cnpj);
     const matchMonth = selectedMonth === "all" || item.mes_ano === selectedMonth;
     const matchMovimento = selectedMovimento === 'all'
       || (selectedMovimento === 'entrada' && item.tipo === 'ENTRADA')
@@ -681,19 +678,13 @@ const Mercadorias = () => {
 
       {/* Tabela Detalhada */}
       <div className="flex gap-2 items-center flex-wrap mb-1">
-        <Select value={selectedFilial} onValueChange={setSelectedFilial}>
-          <SelectTrigger className="w-[300px] h-8 bg-white">
-            <SelectValue placeholder="Filial: Todas" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Filial: Todas</SelectItem>
-            {uniqueFiliais.map((f) => (
-              <SelectItem key={f.cnpj} value={f.cnpj}>
-                {formatCnpjComApelido(f.cnpj, apelidos)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {selectedFiliais.length > 0 && (
+          <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-md">
+            Filial: {selectedFiliais.length === 1
+              ? formatCnpjComApelido(selectedFiliais[0], apelidos)
+              : `${selectedFiliais.length} filiais`}
+          </span>
+        )}
 
         <Select value={selectedMonth} onValueChange={setSelectedMonth}>
           <SelectTrigger className="w-[130px] h-8 bg-white">

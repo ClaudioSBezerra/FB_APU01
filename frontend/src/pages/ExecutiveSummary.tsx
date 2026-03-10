@@ -382,7 +382,7 @@ export default function ExecutiveSummary() {
     if (selectedPeriod) {
       fetchSummary(selectedPeriod);
     }
-  }, [selectedPeriod, companyId]);
+  }, [selectedPeriod, companyId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePeriodChange = (value: string) => {
     setSelectedPeriod(value);

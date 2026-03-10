@@ -43,6 +43,7 @@ import { Link, useLocation } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/AuthContext"
 import { CompanySwitcher } from "@/components/CompanySwitcher"
+import { FilialSelector } from "@/components/FilialSelector"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 
@@ -272,11 +273,10 @@ export function AppSidebar() {
               <span className="self-start bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded text-[9px] font-medium">
                 Vence: {new Date(user.trial_ends_at).toLocaleDateString("pt-BR")}
               </span>
-              {isAdmin && (
-                <div className="mt-1 pt-1 border-t border-muted-foreground/20">
-                  <CompanySwitcher compact />
-                </div>
-              )}
+              <div className="mt-1 pt-1 border-t border-muted-foreground/20 flex flex-col gap-0.5">
+                <FilialSelector />
+                {isAdmin && <CompanySwitcher compact />}
+              </div>
               <Button
                 variant="ghost"
                 size="sm"

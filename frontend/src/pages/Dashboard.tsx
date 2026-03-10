@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFiliais } from '@/contexts/FilialContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,7 @@ interface ProjectionPoint {
 
 export default function Dashboard() {
   const { token } = useAuth();
+  const { selectedFiliais } = useFiliais();
   const [data, setData] = useState<ProjectionPoint[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string>(''); // Format: MM/YYYY
@@ -43,7 +45,10 @@ export default function Dashboard() {
   const fetchData = async (mesAno?: string) => {
     setLoading(true);
     try {
-      const query = mesAno ? `?mes_ano=${mesAno}` : '';
+      const params = new URLSearchParams();
+      if (mesAno) params.set('mes_ano', mesAno);
+      if (selectedFiliais.length > 0) params.set('filiais', selectedFiliais.join(','));
+      const query = params.size > 0 ? `?${params.toString()}` : '';
       const response = await fetch(`/api/dashboard/projection${query}`, {
         headers: {
           Authorization: `Bearer ${token || localStorage.getItem('token')}`
@@ -63,8 +68,8 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchData(selectedMonth === 'all' ? undefined : selectedMonth || undefined);
+  }, [selectedFiliais]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFilterChange = (value: string) => {
     setSelectedMonth(value);

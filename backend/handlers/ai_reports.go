@@ -7,11 +7,23 @@ import (
 	"math"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"fb_apu01/services"
 
 	"github.com/golang-jwt/jwt/v5"
+)
+
+// insightCache stores AI-generated insights per company to avoid hitting the AI on every page load.
+type cachedInsight struct {
+	response  InsightResponse
+	expiresAt time.Time
+}
+
+var (
+	insightCacheMap = map[string]*cachedInsight{}
+	insightCacheMu  sync.Mutex
 )
 
 // ApuracaoResumo holds aggregated fiscal data for AI prompt generation.
@@ -72,8 +84,24 @@ type InsightResponse struct {
 	Cached   bool   `json:"cached"`
 }
 
+// buildFilialClause builds " AND filial_cnpj IN ($N, ...)" for optional filtering.
+// nextIdx is the 1-based index of the next query parameter.
+func buildFilialClause(filiais []string, nextIdx int) (string, []interface{}) {
+	if len(filiais) == 0 {
+		return "", nil
+	}
+	placeholders := make([]string, len(filiais))
+	args := make([]interface{}, len(filiais))
+	for i, c := range filiais {
+		placeholders[i] = fmt.Sprintf("$%d", nextIdx+i)
+		args[i] = c
+	}
+	return " AND filial_cnpj IN (" + strings.Join(placeholders, ", ") + ")", args
+}
+
 // getApuracaoResumo aggregates fiscal data from materialized views.
-func getApuracaoResumo(db *sql.DB, companyID, periodo string) (*ApuracaoResumo, error) {
+// filiais restricts results to specific filial CNPJs (nil/empty = all filiais).
+func getApuracaoResumo(db *sql.DB, companyID, periodo string, filiais []string) (*ApuracaoResumo, error) {
 	resumo := &ApuracaoResumo{Periodo: periodo}
 
 	// Get company info (cnpj may not exist in all schemas)
@@ -86,6 +114,8 @@ func getApuracaoResumo(db *sql.DB, companyID, periodo string) (*ApuracaoResumo, 
 	}
 
 	// Aggregate current period from MV
+	filialClause, filialArgs := buildFilialClause(filiais, 3)
+	currentArgs := append([]interface{}{companyID, periodo}, filialArgs...)
 	rows, err := db.Query(`
 		SELECT
 			mv.tipo,
@@ -93,9 +123,9 @@ func getApuracaoResumo(db *sql.DB, companyID, periodo string) (*ApuracaoResumo, 
 			COALESCE(SUM(mv.valor_contabil), 0) as valor,
 			COALESCE(SUM(mv.vl_icms_origem), 0) as icms
 		FROM mv_mercadorias_agregada mv
-		WHERE mv.company_id = $1 AND mv.mes_ano = $2
+		WHERE mv.company_id = $1 AND mv.mes_ano = $2`+filialClause+`
 		GROUP BY mv.tipo, mv.tipo_operacao
-	`, companyID, periodo)
+	`, currentArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("query current period: %w", err)
 	}
@@ -122,26 +152,29 @@ func getApuracaoResumo(db *sql.DB, companyID, periodo string) (*ApuracaoResumo, 
 	}
 
 	// Count NFes for current period
+	nfClause, nfArgs := buildFilialClause(filiais, 3)
+	nfQueryArgs := append([]interface{}{companyID, periodo}, nfArgs...)
 	db.QueryRow(`
 		SELECT COUNT(DISTINCT mv.filial_cnpj || mv.mes_ano || mv.tipo_operacao)
 		FROM mv_mercadorias_agregada mv
-		WHERE mv.company_id = $1 AND mv.mes_ano = $2
-	`, companyID, periodo).Scan(&resumo.TotalNFes)
+		WHERE mv.company_id = $1 AND mv.mes_ano = $2`+nfClause, nfQueryArgs...).Scan(&resumo.TotalNFes)
 
 	// Previous period comparison
 	prevPeriodo := calcPreviousPeriod(periodo)
 	resumo.PeriodoAnterior = prevPeriodo
 
 	var prevEntradas, prevSaidas, prevIcmsEntrada, prevIcmsSaida float64
+	prevClause, prevArgs := buildFilialClause(filiais, 3)
+	prevQueryArgs := append([]interface{}{companyID, prevPeriodo}, prevArgs...)
 	prevRows, err := db.Query(`
 		SELECT
 			mv.tipo,
 			COALESCE(SUM(mv.valor_contabil), 0) as valor,
 			COALESCE(SUM(mv.vl_icms_origem), 0) as icms
 		FROM mv_mercadorias_agregada mv
-		WHERE mv.company_id = $1 AND mv.mes_ano = $2
+		WHERE mv.company_id = $1 AND mv.mes_ano = $2`+prevClause+`
 		GROUP BY mv.tipo
-	`, companyID, prevPeriodo)
+	`, prevQueryArgs...)
 	if err == nil {
 		defer prevRows.Close()
 		for prevRows.Next() {
@@ -173,15 +206,17 @@ func getApuracaoResumo(db *sql.DB, companyID, periodo string) (*ApuracaoResumo, 
 
 	// Calculate IBS/CBS projections using same logic as Dashboard (year 2033 = full reform)
 	// Uses mv_mercadorias_agregada with NET calculation (Debit - Credit), excludes CFOP T and O
+	ibsClause, ibsArgs := buildFilialClause(filiais, 3)
+	ibsQueryArgs := append([]interface{}{companyID, periodo}, ibsArgs...)
 	ibsCbsRows, err := db.Query(`
 		SELECT
 			tipo,
 			COALESCE(SUM(CASE WHEN tipo_cfop NOT IN ('T', 'O') THEN valor_contabil ELSE 0 END), 0) as taxable_valor,
 			COALESCE(SUM(CASE WHEN tipo_cfop NOT IN ('T', 'O') THEN vl_icms_origem ELSE 0 END), 0) as taxable_icms
 		FROM mv_mercadorias_agregada
-		WHERE company_id = $1 AND mes_ano = $2
+		WHERE company_id = $1 AND mes_ano = $2`+ibsClause+`
 		GROUP BY tipo
-	`, companyID, periodo)
+	`, ibsQueryArgs...)
 	if err == nil {
 		defer ibsCbsRows.Close()
 		// Use 2033 rates (full reform implementation)
@@ -386,6 +421,16 @@ func GetExecutiveSummaryHandler(db *sql.DB) http.HandlerFunc {
 		// Check if force regeneration requested (skip cache)
 		forceRegen := r.URL.Query().Get("force") == "true"
 
+		// Parse optional filial filter (comma-separated CNPJs)
+		var filiais []string
+		if fp := r.URL.Query().Get("filiais"); fp != "" {
+			for _, c := range strings.Split(fp, ",") {
+				if t := strings.TrimSpace(c); t != "" {
+					filiais = append(filiais, t)
+				}
+			}
+		}
+
 		// Check if we already have a saved report for this company/period (to save tokens)
 		var savedNarrativa string
 		var savedModel string
@@ -403,7 +448,7 @@ func GetExecutiveSummaryHandler(db *sql.DB) http.HandlerFunc {
 
 		// If found saved report, aggregate data and return cached version
 		if !forceRegen && savedNarrativa != "" {
-			resumo, err = getApuracaoResumo(db, companyID, periodo)
+			resumo, err = getApuracaoResumo(db, companyID, periodo, filiais)
 			if err != nil {
 				http.Error(w, "Error aggregating data: "+err.Error(), http.StatusInternalServerError)
 				return
@@ -422,7 +467,7 @@ func GetExecutiveSummaryHandler(db *sql.DB) http.HandlerFunc {
 
 		// No saved report found - generate new one
 		// Aggregate data
-		resumo, err = getApuracaoResumo(db, companyID, periodo)
+		resumo, err = getApuracaoResumo(db, companyID, periodo, filiais)
 		if err != nil {
 			http.Error(w, "Error aggregating data: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -605,17 +650,27 @@ func GetDailyInsightHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		now := time.Now()
-		periodo := fmt.Sprintf("%02d/%04d", now.Month(), now.Year())
-
-		resumo, err := getApuracaoResumo(db, companyID, periodo)
-		if err != nil {
-			http.Error(w, "Error aggregating data: "+err.Error(), http.StatusInternalServerError)
+		// Check cache first (1-hour TTL per company)
+		insightCacheMu.Lock()
+		if cached, ok := insightCacheMap[companyID]; ok && time.Now().Before(cached.expiresAt) {
+			resp := cached.response
+			resp.Cached = true
+			insightCacheMu.Unlock()
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
+		insightCacheMu.Unlock()
 
-		// No data: return generic insight
-		if resumo.FaturamentoBruto == 0 && resumo.TotalEntradas == 0 && resumo.TotalJobs == 0 {
+		// Use most recent period with data instead of current calendar month
+		var periodo string
+		err = db.QueryRow(`
+			SELECT mes_ano
+			FROM mv_mercadorias_agregada
+			WHERE company_id = $1
+			ORDER BY TO_DATE(mes_ano, 'MM/YYYY') DESC
+			LIMIT 1
+		`, companyID).Scan(&periodo)
+		if err != nil || periodo == "" {
 			json.NewEncoder(w).Encode(InsightResponse{
 				Texto:    "Importe seus arquivos SPED EFD para comecar a receber insights fiscais personalizados com inteligencia artificial.",
 				Tipo:     "info",
@@ -625,9 +680,19 @@ func GetDailyInsightHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		resumo, err := getApuracaoResumo(db, companyID, periodo, nil)
+		if err != nil {
+			http.Error(w, "Error aggregating data: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		// If no AI client, generate deterministic insight
 		if aiClient == nil || !aiClient.IsAvailable() {
-			json.NewEncoder(w).Encode(buildFallbackInsight(resumo))
+			resp := buildFallbackInsight(resumo)
+			insightCacheMu.Lock()
+			insightCacheMap[companyID] = &cachedInsight{response: resp, expiresAt: time.Now().Add(time.Hour)}
+			insightCacheMu.Unlock()
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
@@ -635,7 +700,11 @@ func GetDailyInsightHandler(db *sql.DB) http.HandlerFunc {
 		aiResp, err := aiClient.GenerateFast(insightSystem, dataPrompt, services.ModelFlash, 256)
 		if err != nil {
 			fmt.Printf("AI insight error (falling back): %v\n", err)
-			json.NewEncoder(w).Encode(buildFallbackInsight(resumo))
+			resp := buildFallbackInsight(resumo)
+			insightCacheMu.Lock()
+			insightCacheMap[companyID] = &cachedInsight{response: resp, expiresAt: time.Now().Add(time.Hour)}
+			insightCacheMu.Unlock()
+			json.NewEncoder(w).Encode(resp)
 			return
 		}
 
@@ -650,11 +719,12 @@ func GetDailyInsightHandler(db *sql.DB) http.HandlerFunc {
 			}
 		}
 
-		json.NewEncoder(w).Encode(InsightResponse{
-			Texto:  texto,
-			Tipo:   tipo,
-			Cached: false,
-		})
+		resp := InsightResponse{Texto: texto, Tipo: tipo}
+		insightCacheMu.Lock()
+		insightCacheMap[companyID] = &cachedInsight{response: resp, expiresAt: time.Now().Add(time.Hour)}
+		insightCacheMu.Unlock()
+
+		json.NewEncoder(w).Encode(resp)
 	}
 }
 

@@ -24,10 +24,10 @@ import (
 )
 
 // Version information for backend deployment validation
-// Force rebuild: 2026-03-02 - v5.9.1 - Bugfixes: Sidebar, File Cleanup, Email Scan, Formatting
+// Force rebuild: 2026-03-10 - v5.9.2 - Filtro multi-filial global + fix insight diário
 const (
-	BackendVersion = "5.9.1"
-	FeatureSet     = "Z.AI GLM Integration, AI Executive Reports, Email Estruturado, NF-e Entradas, Creditos em Risco, Tax Reform Projection, Simples Nacional Dashboard, Apelidos de Filiais"
+	BackendVersion = "5.9.2"
+	FeatureSet     = "Z.AI GLM Integration, AI Executive Reports, Email Estruturado, NF-e Entradas, Creditos em Risco, Tax Reform Projection, Simples Nacional Dashboard, Apelidos de Filiais, Filtro Multi-Filial Global"
 )
 
 func GetVersionInfo() string {
@@ -371,6 +371,9 @@ func main() {
 			handlers.AuthMiddleware(h, role)(w, r)
 		}
 	}
+
+	// Filiais Endpoint (global branch selector)
+	http.HandleFunc("/api/filiais", withAuth(handlers.GetFiliaisHandler, ""))
 
 	// Report Endpoints
 	http.HandleFunc("/api/reports/mercadorias", withAuth(handlers.GetMercadoriasReportHandler, ""))

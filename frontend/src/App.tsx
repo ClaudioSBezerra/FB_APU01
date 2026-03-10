@@ -35,6 +35,7 @@ import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/s
 import { AppSidebar } from '@/components/AppSidebar';
 import { Separator } from '@/components/ui/separator';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { FilialProvider } from './contexts/FilialContext';
 
 const queryClient = new QueryClient();
 
@@ -178,7 +179,9 @@ function App() {
             <Route path="/reset-senha" element={<ResetPassword />} />
             <Route path="/*" element={
               <ProtectedRoute>
-                <AppLayout />
+                <FilialProvider>
+                  <AppLayout />
+                </FilialProvider>
               </ProtectedRoute>
             } />
           </Routes>

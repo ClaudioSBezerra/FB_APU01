@@ -16,6 +16,7 @@ import {
 import { Download, RefreshCcw, DollarSign, AlertCircle } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from '@/contexts/AuthContext';
+import { useFiliais } from '@/contexts/FilialContext';
 
 interface SimplesSupplierData {
   fornecedor_nome: string;
@@ -41,6 +42,7 @@ const truncateName = (name: string, maxLength: number = 50) => {
 
 export default function OperacoesSimplesNacional() {
   const { token, companyId } = useAuth();
+  const { selectedFiliais } = useFiliais();
   const [data, setData] = useState<SimplesSupplierData[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
@@ -53,12 +55,15 @@ export default function OperacoesSimplesNacional() {
 
     setLoading(true);
     try {
-      let url = `/api/dashboard/simples-nacional?projection_year=${projectionYear}`;
+      const params = new URLSearchParams({ projection_year: projectionYear });
       if (selectedMonth && selectedMonth !== "all") {
-        url += `&mes_ano=${selectedMonth}`;
+        params.set("mes_ano", selectedMonth);
+      }
+      if (selectedFiliais.length > 0) {
+        params.set("filiais", selectedFiliais.join(","));
       }
 
-      const res = await fetch(url, {
+      const res = await fetch(`/api/dashboard/simples-nacional?${params.toString()}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -80,7 +85,7 @@ export default function OperacoesSimplesNacional() {
     } finally {
       setLoading(false);
     }
-  }, [token, companyId, selectedMonth, projectionYear]);
+  }, [token, companyId, selectedMonth, projectionYear, selectedFiliais]);
 
   useEffect(() => {
     fetchData();

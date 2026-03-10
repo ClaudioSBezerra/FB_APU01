@@ -3,7 +3,9 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -38,39 +40,55 @@ func GetDashboardProjectionHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		mesAno := r.URL.Query().Get("mes_ano")
-		
+		filiaisParam := r.URL.Query().Get("filiais")
+
 		// 1. Get Base Data (Current Reality) Split by Type (Entrada vs Saida)
 		// We also need to separate "Taxable" base (Excluding T and O) for IBS/CBS calculation
 		var queryBase string
 		var args []interface{}
-		
+
 		if mesAno != "" {
 			queryBase = `
-				SELECT 
+				SELECT
 					tipo,
 					COALESCE(SUM(valor_contabil), 0) as total_valor,
 					COALESCE(SUM(vl_icms_origem), 0) as total_icms,
 					COALESCE(SUM(CASE WHEN tipo_cfop NOT IN ('T', 'O') THEN valor_contabil ELSE 0 END), 0) as taxable_valor,
 					COALESCE(SUM(CASE WHEN tipo_cfop NOT IN ('T', 'O') THEN vl_icms_origem ELSE 0 END), 0) as taxable_icms
 				FROM mv_mercadorias_agregada
-				WHERE mes_ano = $1 AND company_id = $2
-				GROUP BY tipo
-			`
+				WHERE mes_ano = $1 AND company_id = $2`
 			args = append(args, mesAno, companyID)
 		} else {
 			queryBase = `
-				SELECT 
+				SELECT
 					tipo,
 					COALESCE(SUM(valor_contabil), 0) as total_valor,
 					COALESCE(SUM(vl_icms_origem), 0) as total_icms,
 					COALESCE(SUM(CASE WHEN tipo_cfop NOT IN ('T', 'O') THEN valor_contabil ELSE 0 END), 0) as taxable_valor,
 					COALESCE(SUM(CASE WHEN tipo_cfop NOT IN ('T', 'O') THEN vl_icms_origem ELSE 0 END), 0) as taxable_icms
 				FROM mv_mercadorias_agregada
-				WHERE company_id = $1
-				GROUP BY tipo
-			`
+				WHERE company_id = $1`
 			args = append(args, companyID)
 		}
+
+		// Optionally restrict to specific filiais
+		if filiaisParam != "" {
+			var cnpjs []string
+			for _, c := range strings.Split(filiaisParam, ",") {
+				if t := strings.TrimSpace(c); t != "" {
+					cnpjs = append(cnpjs, t)
+				}
+			}
+			if len(cnpjs) > 0 {
+				placeholders := make([]string, len(cnpjs))
+				for i, c := range cnpjs {
+					args = append(args, c)
+					placeholders[i] = fmt.Sprintf("$%d", len(args))
+				}
+				queryBase += fmt.Sprintf(" AND filial_cnpj IN (%s)", strings.Join(placeholders, ", "))
+			}
+		}
+		queryBase += "\n\t\t\t\tGROUP BY tipo"
 
 		rowsBase, err := db.Query(queryBase, args...)
 		if err != nil {
