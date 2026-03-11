@@ -52,6 +52,8 @@ export function CompanySwitcher({ compact = false }: { compact?: boolean }) {
     }
   }, [token, companyId]);
 
+  if (companies.length <= 1) return null;
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>

@@ -224,14 +224,16 @@ func GetEffectiveCompanyID(db *sql.DB, userID, requestedCompanyID string) (strin
 		return "", err
 	}
 
-	// Strategy B: Check via User Environment
+	// Strategy B: Check via User Environment — prioriza preferred_company_id
 	err = db.QueryRowContext(ctx, `
 		SELECT c.id
 		FROM user_environments ue
 		JOIN enterprise_groups eg ON eg.environment_id = ue.environment_id
 		JOIN companies c ON c.group_id = eg.id
 		WHERE ue.user_id = $1
-		ORDER BY c.created_at DESC
+		ORDER BY
+			(ue.preferred_company_id IS NOT NULL AND ue.preferred_company_id = c.id) DESC,
+			c.created_at DESC
 		LIMIT 1
 	`, userID).Scan(&companyID)
 
@@ -511,7 +513,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 
 		if err == sql.ErrNoRows {
 			// Strategy B: If not owner, check via User Environment (team members).
-			// Prioritize company owned by user; fall back to oldest company in group.
+			// Prioridade: preferred_company_id > owner > primeiro do grupo.
 			log.Printf("[Login] User %s owns no company, checking memberships...", req.Email)
 			err = db.QueryRowContext(ctx, `
 				SELECT e.name, eg.name, c.name, c.id
@@ -520,7 +522,10 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 				JOIN enterprise_groups eg ON eg.environment_id = e.id
 				JOIN companies c ON c.group_id = eg.id
 				WHERE ue.user_id = $1
-				ORDER BY (c.owner_id = $1) DESC, c.created_at ASC
+				ORDER BY
+					(ue.preferred_company_id IS NOT NULL AND ue.preferred_company_id = c.id) DESC,
+					(c.owner_id = $1) DESC,
+					c.created_at ASC
 				LIMIT 1
 			`, user.ID).Scan(&envName, &groupName, &companyName, &companyID)
 		}

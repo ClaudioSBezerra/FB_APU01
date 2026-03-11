@@ -549,20 +549,19 @@ func ReassignUserHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Insert new environment link
-		_, err = tx.Exec("INSERT INTO user_environments (user_id, environment_id, role) VALUES ($1, $2, 'user')", req.UserID, req.EnvironmentID)
+		// Insert new environment link com preferred_company_id se fornecido
+		if req.CompanyID != "" {
+			_, err = tx.Exec(`
+				INSERT INTO user_environments (user_id, environment_id, role, preferred_company_id)
+				VALUES ($1, $2, 'user', $3)
+			`, req.UserID, req.EnvironmentID, req.CompanyID)
+		} else {
+			_, err = tx.Exec("INSERT INTO user_environments (user_id, environment_id, role) VALUES ($1, $2, 'user')", req.UserID, req.EnvironmentID)
+		}
 		if err != nil {
 			log.Printf("ReassignUser: Error inserting new env link: %v", err)
 			http.Error(w, "Failed to link to new environment", http.StatusInternalServerError)
 			return
-		}
-
-		// If company_id provided, set owner_id
-		if req.CompanyID != "" {
-			_, err = tx.Exec("UPDATE companies SET owner_id = $1 WHERE id = $2", req.UserID, req.CompanyID)
-			if err != nil {
-				log.Printf("ReassignUser: Error setting new company owner: %v", err)
-			}
 		}
 
 		if err := tx.Commit(); err != nil {

@@ -275,7 +275,7 @@ export function AppSidebar() {
               </span>
               <div className="mt-1 pt-1 border-t border-muted-foreground/20 flex flex-col gap-0.5">
                 <FilialSelector />
-                {isAdmin && <CompanySwitcher compact />}
+                <CompanySwitcher compact />
               </div>
               <Button
                 variant="ghost"
