@@ -14,6 +14,7 @@ const FEATURES = [
   "Importação e análise de SPEDs EFD",
   "Simulador de impacto do IBS e CBS",
   "Integração direta com a Receita Federal",
+  "Acompanhamento inteligente de riscos de créditos",
 ];
 
 const Login = () => {
@@ -72,74 +73,72 @@ const Login = () => {
           style={{ background: "radial-gradient(circle, #2d1b2e 0%, #111827 100%)" }}
         />
 
-        {/* Conteúdo principal */}
+        {/* ── Conteúdo principal ── */}
         <div className="relative z-10">
-          {/* Logo */}
-          <div className="flex items-center gap-2.5 mb-14">
-            <img
-              src="/favicon-fc.png"
-              alt="FBTax Cloud"
-              className="w-9 h-9 rounded-lg object-cover"
-            />
-            <span className="text-white font-bold text-lg tracking-tight">FBTax Cloud</span>
+          {/* Logo Ferreira Costa — fundo vermelho da marca */}
+          <div className="mb-12">
+            <div
+              className="inline-block rounded-2xl px-5 py-3"
+              style={{ background: "#DA0812" }}
+            >
+              <img
+                src="/logo-ferreira-costa.png"
+                alt="Ferreira Costa Home Center"
+                className="h-14 w-auto object-contain"
+              />
+            </div>
           </div>
 
           {/* Badge */}
           <span
-            className="inline-block px-3 py-1 rounded-full text-[11px] uppercase tracking-widest font-semibold"
+            className="inline-block px-4 py-1.5 rounded-full text-sm uppercase tracking-widest font-semibold"
             style={{
               background: "rgba(255,255,255,0.08)",
               color: "#e5e7eb",
-              border: "1px solid rgba(255,255,255,0.12)",
+              border: "1px solid rgba(255,255,255,0.15)",
             }}
           >
-            Reforma Tributária 2026
+            Gestão da Reforma Tributária
           </span>
 
           {/* Título */}
-          <h1 className="text-white text-4xl font-bold leading-tight mt-5">
+          <h1 className="text-white text-5xl font-bold leading-tight mt-5">
             Apuração Assistida
             <br />
             IBS/CBS
           </h1>
 
           {/* Subtítulo */}
-          <p className="mt-4 text-sm leading-relaxed" style={{ color: "#9ca3af" }}>
+          <p className="mt-5 text-base leading-relaxed" style={{ color: "#9ca3af" }}>
             Controle total sobre créditos, débitos e impactos da Reforma Tributária na sua empresa.
           </p>
         </div>
 
-        {/* Features — rodapé do painel */}
-        <ul className="relative z-10 space-y-3">
-          {FEATURES.map((feature) => (
-            <li key={feature} className="flex items-center gap-2.5 text-sm" style={{ color: "#d1d5db" }}>
-              <span
-                className="w-1.5 h-1.5 rounded-full shrink-0"
-                style={{ background: "#ef4444" }}
-              />
-              {feature}
-            </li>
-          ))}
-        </ul>
+        {/* ── Rodapé do painel ── */}
+        <div className="relative z-10 space-y-5">
+          {/* Bullets de features */}
+          <ul className="space-y-3">
+            {FEATURES.map((feature) => (
+              <li key={feature} className="flex items-center gap-3 text-sm" style={{ color: "#d1d5db" }}>
+                <span
+                  className="w-1.5 h-1.5 rounded-full shrink-0"
+                  style={{ background: "#ef4444" }}
+                />
+                {feature}
+              </li>
+            ))}
+          </ul>
+
+        </div>
       </div>
 
       {/* ── Painel direito — formulário de login (inalterado) ── */}
       <div className="flex-1 flex items-center justify-center bg-gray-100 px-4">
         <div className="w-full max-w-[450px]">
           <Card className="w-full shadow-lg">
-            <CardHeader className="flex flex-col items-center gap-2 space-y-0 pt-6 pb-4">
-              <img
-                src="/logo-ferreira-costa.png"
-                alt="Ferreira Costa Home Center"
-                className="h-16 w-auto object-contain"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
-              <div className="flex flex-col items-center space-y-0.5 text-center">
-                <CardTitle className="text-base font-semibold">Acesse sua conta</CardTitle>
-                <CardDescription className="text-xs">Entre com suas credenciais para continuar</CardDescription>
-              </div>
+            <CardHeader className="flex flex-col items-center gap-1 space-y-0 pt-6 pb-4">
+              <CardTitle className="text-base font-semibold">Acesse sua conta</CardTitle>
+              <CardDescription className="text-xs">Entre com suas credenciais para continuar</CardDescription>
             </CardHeader>
             <CardContent>
               {errorMsg && (

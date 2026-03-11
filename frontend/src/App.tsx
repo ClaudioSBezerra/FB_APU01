@@ -167,7 +167,7 @@ function AppLayout() {
 }
 
 function App() {
-  console.log("App Version: 5.9.8 - feat: login split-screen com painel esquerdo moderno");
+  console.log("App Version: 5.9.9 - feat: login split-screen painel esquerdo FC finalizado");
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
