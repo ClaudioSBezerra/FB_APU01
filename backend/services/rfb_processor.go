@@ -119,19 +119,18 @@ func ProcessarDownloadRFB(db *sql.DB, rfbClient *RFBClient, requestID string) er
 		return fmt.Errorf("failed to download: %w", err)
 	}
 
-	// 4. Save raw JSON (skip if > 200 MB — PostgreSQL JSONB limit is ~268 MB)
-	const maxRawJSONBytes = 200 * 1024 * 1024
-	if len(rawJSON) <= maxRawJSONBytes {
-		_, err = db.Exec(`
-			UPDATE rfb_requests SET raw_json = $1, updated_at = CURRENT_TIMESTAMP
-			WHERE id = $2
-		`, rawJSON, requestID)
-		if err != nil {
-			log.Printf("[RFB Processor] WARNING: Failed to save raw JSON for request %s: %v", requestID, err)
-		}
+	// 4. Save raw JSON as TEXT immediately — data is preserved even if parse fails.
+	// Column is TEXT (not JSONB), so no size limit applies.
+	log.Printf("[RFB Processor] Saving raw JSON (%d MB) for request %s", len(rawJSON)/1024/1024, requestID)
+	_, err = db.Exec(`
+		UPDATE rfb_requests SET raw_json = $1, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2
+	`, string(rawJSON), requestID)
+	if err != nil {
+		// Non-fatal: log but continue — debits can still be parsed and inserted
+		log.Printf("[RFB Processor] WARNING: Failed to save raw JSON for request %s: %v", requestID, err)
 	} else {
-		log.Printf("[RFB Processor] Skipping raw_json storage for request %s: too large (%d MB > 200 MB limit)",
-			requestID, len(rawJSON)/1024/1024)
+		log.Printf("[RFB Processor] Raw JSON saved successfully for request %s", requestID)
 	}
 
 	// 5. Parse JSON
@@ -241,6 +240,104 @@ func insertDebito(db *sql.DB, requestID, companyID, tipoApuracao string, d RFBDe
 		d.ValorCBSTotal, d.ValorCBSExtinto, d.ValorCBSNaoExtinto,
 		d.SituacaoDebito, formasExtincao, eventos)
 	return err
+}
+
+// ReprocessarRawJSON re-parses the raw JSON already stored in the DB without
+// calling the RFB API again. Useful when download succeeded but parse failed.
+func ReprocessarRawJSON(db *sql.DB, requestID string) error {
+	log.Printf("[RFB Reprocess] Starting reprocess for request %s", requestID)
+
+	var companyID string
+	var rawJSON *string
+	err := db.QueryRow(`
+		SELECT company_id, raw_json FROM rfb_requests WHERE id = $1
+	`, requestID).Scan(&companyID, &rawJSON)
+	if err != nil {
+		return fmt.Errorf("failed to fetch request: %w", err)
+	}
+	if rawJSON == nil || *rawJSON == "" {
+		return fmt.Errorf("no raw_json stored for request %s — cannot reprocess without raw data", requestID)
+	}
+
+	log.Printf("[RFB Reprocess] Raw JSON found (%d MB), parsing...", len(*rawJSON)/1024/1024)
+
+	// Delete existing debits before reprocessing
+	_, err = db.Exec(`DELETE FROM rfb_debitos WHERE request_id = $1`, requestID)
+	if err != nil {
+		log.Printf("[RFB Reprocess] WARNING: failed to delete existing debits: %v", err)
+	}
+
+	updateRequestStatus(db, requestID, "reprocessing")
+
+	var apuracao RFBApuracaoJSON
+	if err := json.Unmarshal([]byte(*rawJSON), &apuracao); err != nil {
+		updateRequestError(db, requestID, "PARSE_ERROR", "Falha ao reprocessar JSON: "+err.Error())
+		return fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	var totalCorrente, totalAjuste, totalExtemporaneo int
+	var valorTotal, valorExtinto, valorNaoExtinto float64
+	var dataApuracao string
+
+	if apuracao.ApuracaoCorrente != nil {
+		for _, d := range apuracao.ApuracaoCorrente.Debitos {
+			if err := insertDebito(db, requestID, companyID, "corrente", d); err != nil {
+				log.Printf("[RFB Reprocess] Error inserting corrente debit: %v", err)
+			}
+			totalCorrente++
+			valorTotal += d.ValorCBSTotal
+			valorExtinto += d.ValorCBSExtinto
+			valorNaoExtinto += d.ValorCBSNaoExtinto
+			if dataApuracao == "" && d.DataApuracao != "" {
+				dataApuracao = d.DataApuracao
+			}
+		}
+	}
+	if apuracao.ApuracaoAjuste != nil {
+		for _, d := range apuracao.ApuracaoAjuste.Debitos {
+			if err := insertDebito(db, requestID, companyID, "ajuste", d); err != nil {
+				log.Printf("[RFB Reprocess] Error inserting ajuste debit: %v", err)
+			}
+			totalAjuste++
+			valorTotal += d.ValorCBSTotal
+			valorExtinto += d.ValorCBSExtinto
+			valorNaoExtinto += d.ValorCBSNaoExtinto
+		}
+	}
+	if apuracao.DebitosExtemporaneos != nil {
+		for _, d := range apuracao.DebitosExtemporaneos.Debitos {
+			if err := insertDebito(db, requestID, companyID, "extemporaneo", d); err != nil {
+				log.Printf("[RFB Reprocess] Error inserting extemporaneo debit: %v", err)
+			}
+			totalExtemporaneo++
+			valorTotal += d.ValorCBSTotal
+			valorExtinto += d.ValorCBSExtinto
+			valorNaoExtinto += d.ValorCBSNaoExtinto
+		}
+	}
+
+	totalDebitos := totalCorrente + totalAjuste + totalExtemporaneo
+
+	_, err = db.Exec(`
+		INSERT INTO rfb_resumo (request_id, company_id, data_apuracao, total_debitos,
+			valor_cbs_total, valor_cbs_extinto, valor_cbs_nao_extinto,
+			total_corrente, total_ajuste, total_extemporaneo)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		ON CONFLICT (company_id, data_apuracao)
+		DO UPDATE SET request_id = $1, total_debitos = $4,
+			valor_cbs_total = $5, valor_cbs_extinto = $6, valor_cbs_nao_extinto = $7,
+			total_corrente = $8, total_ajuste = $9, total_extemporaneo = $10
+	`, requestID, companyID, dataApuracao, totalDebitos,
+		valorTotal, valorExtinto, valorNaoExtinto,
+		totalCorrente, totalAjuste, totalExtemporaneo)
+	if err != nil {
+		log.Printf("[RFB Reprocess] Error upserting summary: %v", err)
+	}
+
+	updateRequestStatus(db, requestID, "completed")
+	log.Printf("[RFB Reprocess] Request %s completed: %d debits (%d corrente, %d ajuste, %d extemporaneo), CBS total: %.2f",
+		requestID, totalDebitos, totalCorrente, totalAjuste, totalExtemporaneo, valorTotal)
+	return nil
 }
 
 func updateRequestStatus(db *sql.DB, requestID, status string) {

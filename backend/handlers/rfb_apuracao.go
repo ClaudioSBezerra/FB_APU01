@@ -246,6 +246,61 @@ func DownloadManualHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+// ReprocessHandler re-parses the raw JSON already stored in the DB for a request.
+// Useful when download succeeded but JSON parse failed (e.g. datetime format issue).
+func ReprocessHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+
+		companyID, err := GetEffectiveCompanyID(db, userID, r.Header.Get("X-Company-ID"))
+		if err != nil {
+			http.Error(w, "Error getting company: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		var req struct {
+			RequestID string `json:"request_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		// Verify ownership
+		var exists bool
+		err = db.QueryRow(`SELECT EXISTS(SELECT 1 FROM rfb_requests WHERE id = $1 AND company_id = $2)`,
+			req.RequestID, companyID).Scan(&exists)
+		if err != nil || !exists {
+			http.Error(w, "Solicitação não encontrada", http.StatusNotFound)
+			return
+		}
+
+		go func() {
+			if err := services.ReprocessarRawJSON(db, req.RequestID); err != nil {
+				log.Printf("[RFB Reprocess] Error: %v", err)
+			}
+		}()
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "reprocessing",
+			"message": "Reprocessamento iniciado a partir do JSON salvo.",
+		})
+	}
+}
+
 // RFBWebhookHandler receives callbacks from the RFB API (PUBLIC - no JWT auth)
 func RFBWebhookHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
