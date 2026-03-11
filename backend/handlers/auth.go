@@ -510,7 +510,8 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 		`, user.ID).Scan(&envName, &groupName, &companyName, &companyID)
 
 		if err == sql.ErrNoRows {
-			// Strategy B: If not owner, check via User Environment (Slower but necessary for team members)
+			// Strategy B: If not owner, check via User Environment (team members).
+			// Prioritize company owned by user; fall back to oldest company in group.
 			log.Printf("[Login] User %s owns no company, checking memberships...", req.Email)
 			err = db.QueryRowContext(ctx, `
 				SELECT e.name, eg.name, c.name, c.id
@@ -519,7 +520,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 				JOIN enterprise_groups eg ON eg.environment_id = e.id
 				JOIN companies c ON c.group_id = eg.id
 				WHERE ue.user_id = $1
-				ORDER BY c.created_at DESC
+				ORDER BY (c.owner_id = $1) DESC, c.created_at ASC
 				LIMIT 1
 			`, user.ID).Scan(&envName, &groupName, &companyName, &companyID)
 		}

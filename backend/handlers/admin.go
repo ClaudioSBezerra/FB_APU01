@@ -344,9 +344,9 @@ func CreateUserHandler(db *sql.DB) http.HandlerFunc {
 				log.Printf("Error linking user to environment: %v", err)
 			}
 
-			// If company_id provided, set owner_id
+			// If company_id provided, always set owner_id (admin explicitly chose the company)
 			if req.CompanyID != "" {
-				_, err = db.Exec("UPDATE companies SET owner_id = $1 WHERE id = $2 AND owner_id IS NULL", userID, req.CompanyID)
+				_, err = db.Exec("UPDATE companies SET owner_id = $1 WHERE id = $2", userID, req.CompanyID)
 				if err != nil {
 					log.Printf("Error setting company owner: %v", err)
 				}
@@ -391,7 +391,8 @@ type AdminUser struct {
 func ListUsersHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rows, err := db.Query(`
-			SELECT u.id, u.email, u.full_name, u.is_verified, u.trial_ends_at, u.role, u.created_at,
+			SELECT DISTINCT ON (u.id)
+			       u.id, u.email, u.full_name, u.is_verified, u.trial_ends_at, u.role, u.created_at,
 			       e.id, e.name,
 			       eg.id, eg.name,
 			       c.id, c.name
@@ -399,8 +400,8 @@ func ListUsersHandler(db *sql.DB) http.HandlerFunc {
 			LEFT JOIN user_environments ue ON u.id = ue.user_id
 			LEFT JOIN environments e ON ue.environment_id = e.id
 			LEFT JOIN enterprise_groups eg ON eg.environment_id = e.id
-			LEFT JOIN companies c ON c.group_id = eg.id AND (c.owner_id = u.id OR c.owner_id IS NULL)
-			ORDER BY u.created_at DESC
+			LEFT JOIN companies c ON c.group_id = eg.id AND c.owner_id = u.id
+			ORDER BY u.id, u.created_at DESC
 		`)
 		if err != nil {
 			log.Printf("ListUsers error: %v", err)
