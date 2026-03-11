@@ -804,3 +804,65 @@ func ResetPasswordHandler(db *sql.DB) http.HandlerFunc {
 		})
 	}
 }
+
+// ChangePasswordHandler allows an authenticated user to change their own password
+func ChangePasswordHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Não autorizado"})
+			return
+		}
+		userID := claims["user_id"].(string)
+
+		var req struct {
+			CurrentPassword string `json:"current_password"`
+			NewPassword     string `json:"new_password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Requisição inválida"})
+			return
+		}
+
+		if len(req.NewPassword) < 6 {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "A nova senha deve ter no mínimo 6 caracteres"})
+			return
+		}
+
+		var hash string
+		err := db.QueryRow("SELECT password_hash FROM users WHERE id = $1", userID).Scan(&hash)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Usuário não encontrado"})
+			return
+		}
+
+		if !CheckPasswordHash(req.CurrentPassword, hash) {
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Senha atual incorreta"})
+			return
+		}
+
+		newHash, err := HashPassword(req.NewPassword)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Erro ao processar senha"})
+			return
+		}
+
+		_, err = db.Exec("UPDATE users SET password_hash = $1 WHERE id = $2", newHash, userID)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Erro ao salvar senha"})
+			return
+		}
+
+		log.Printf("[ChangePassword] Password changed for user %s", userID)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Senha alterada com sucesso"})
+	}
+}

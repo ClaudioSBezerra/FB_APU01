@@ -429,6 +429,7 @@ func main() {
 	http.HandleFunc("/api/auth/me", withAuth(handlers.GetMeHandler, ""))
 	http.HandleFunc("/api/auth/forgot-password", withDB(handlers.ForgotPasswordHandler))
 	http.HandleFunc("/api/auth/reset-password", withDB(handlers.ResetPasswordHandler))
+	http.HandleFunc("/api/auth/change-password", withAuth(handlers.ChangePasswordHandler, ""))
 	http.HandleFunc("/api/user/hierarchy", withAuth(handlers.GetUserHierarchyHandler, ""))
 	http.HandleFunc("/api/user/companies", withAuth(handlers.GetUserCompaniesHandler, ""))
 

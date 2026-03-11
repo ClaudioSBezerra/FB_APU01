@@ -26,6 +26,7 @@ import {
   FolderInput,
   Calculator,
   Landmark,
+  KeyRound,
 } from "lucide-react"
 import {
   Sidebar,
@@ -41,11 +42,21 @@ import {
 } from "@/components/ui/sidebar"
 import { Link, useLocation } from "react-router-dom"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { useAuth } from "@/contexts/AuthContext"
 import { CompanySwitcher } from "@/components/CompanySwitcher"
 import { FilialSelector } from "@/components/FilialSelector"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
+import { toast } from "sonner"
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -145,13 +156,51 @@ const sections: NavSection[] = [
 // ---------------------------------------------------------------------------
 export function AppSidebar() {
   const location = useLocation()
-  const { user, company, logout } = useAuth()
+  const { user, company, logout, token } = useAuth()
   const isAdmin = user?.role === "admin"
 
   // Estado de expansão de cada seção (todas abertas por padrão)
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(
     () => Object.fromEntries(sections.map((s) => [s.id, false]))
   )
+
+  // Estado do dialog de troca de senha
+  const [pwDialog, setPwDialog] = useState(false)
+  const [pwCurrent, setPwCurrent] = useState("")
+  const [pwNew, setPwNew] = useState("")
+  const [pwConfirm, setPwConfirm] = useState("")
+  const [pwLoading, setPwLoading] = useState(false)
+
+  async function handleChangePassword() {
+    if (pwNew !== pwConfirm) {
+      toast.error("A nova senha e a confirmação não coincidem")
+      return
+    }
+    if (pwNew.length < 6) {
+      toast.error("A nova senha deve ter no mínimo 6 caracteres")
+      return
+    }
+    setPwLoading(true)
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ current_password: pwCurrent, new_password: pwNew }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || "Erro ao alterar senha")
+        return
+      }
+      toast.success("Senha alterada com sucesso")
+      setPwDialog(false)
+      setPwCurrent(""); setPwNew(""); setPwConfirm("")
+    } catch {
+      toast.error("Erro de conexão")
+    } finally {
+      setPwLoading(false)
+    }
+  }
 
   function toggleSection(id: string) {
     setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }))
@@ -163,6 +212,7 @@ export function AppSidebar() {
   }
 
   return (
+    <>
     <Sidebar collapsible="icon">
       {/* ── Header ── */}
       <SidebarHeader className="border-b pb-2">
@@ -270,9 +320,18 @@ export function AppSidebar() {
                 {company || "Empresa não identificada"}
               </p>
               <p className="text-xs font-medium truncate leading-tight">{user.full_name}</p>
-              <span className="self-start bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded text-[9px] font-medium">
-                Vence: {new Date(user.trial_ends_at).toLocaleDateString("pt-BR")}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded text-[9px] font-medium">
+                  Vence: {new Date(user.trial_ends_at).toLocaleDateString("pt-BR")}
+                </span>
+                <button
+                  onClick={() => setPwDialog(true)}
+                  title="Trocar senha"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <KeyRound className="h-3 w-3" />
+                </button>
+              </div>
               <div className="mt-1 pt-1 border-t border-muted-foreground/20 flex flex-col gap-0.5">
                 <FilialSelector />
                 <CompanySwitcher compact />
@@ -292,5 +351,35 @@ export function AppSidebar() {
       </SidebarFooter>
 
     </Sidebar>
+
+    <Dialog open={pwDialog} onOpenChange={(o) => { setPwDialog(o); if (!o) { setPwCurrent(""); setPwNew(""); setPwConfirm("") } }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Trocar Senha</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4 py-2">
+          <div className="grid gap-1.5">
+            <Label htmlFor="pw-current">Senha atual</Label>
+            <Input id="pw-current" type="password" value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="pw-new">Nova senha</Label>
+            <Input id="pw-new" type="password" value={pwNew} onChange={(e) => setPwNew(e.target.value)} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="pw-confirm">Confirmar nova senha</Label>
+            <Input id="pw-confirm" type="password" value={pwConfirm} onChange={(e) => setPwConfirm(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleChangePassword()} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setPwDialog(false)}>Cancelar</Button>
+          <Button onClick={handleChangePassword} disabled={pwLoading || !pwCurrent || !pwNew || !pwConfirm}>
+            {pwLoading ? "Salvando..." : "Salvar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
