@@ -307,19 +307,10 @@ export default function AdminUsers() {
     setPromoteDialogOpen(true);
   };
 
-  const handlePromote = () => {
-    if (selectedUser) {
-      promoteMutation.mutate({
-        userId: selectedUser.id,
-        role: newRole,
-        extendDays: extendDays,
-        isOfficial: isOfficial
-      });
-    }
-  };
-
-  const handleReassign = () => {
-    if (selectedUser && reassignEnvId) {
+  const handleSave = () => {
+    if (!selectedUser) return;
+    if (showReassign && reassignEnvId) {
+      // Salva hierarquia e permissões juntos; fecha o dialog no onSuccess do promote
       reassignMutation.mutate({
         user_id: selectedUser.id,
         environment_id: reassignEnvId,
@@ -327,6 +318,12 @@ export default function AdminUsers() {
         company_id: reassignCompanyId,
       });
     }
+    promoteMutation.mutate({
+      userId: selectedUser.id,
+      role: newRole,
+      extendDays: extendDays,
+      isOfficial: isOfficial
+    });
   };
 
   const handleDelete = (userId: string) => {
@@ -571,22 +568,14 @@ export default function AdminUsers() {
                     onGroupChange={setReassignGroupId}
                     onCompanyChange={setReassignCompanyId}
                   />
-                  <Button
-                    className="mt-3 w-full"
-                    size="sm"
-                    onClick={handleReassign}
-                    disabled={!reassignEnvId || reassignMutation.isPending}
-                  >
-                    {reassignMutation.isPending ? "Salvando..." : "Confirmar Nova Hierarquia"}
-                  </Button>
                 </div>
               )}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPromoteDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handlePromote} disabled={promoteMutation.isPending}>
-              {promoteMutation.isPending ? "Salvando..." : "Salvar Alterações"}
+            <Button onClick={handleSave} disabled={promoteMutation.isPending || reassignMutation.isPending || (showReassign && !reassignEnvId)}>
+              {(promoteMutation.isPending || reassignMutation.isPending) ? "Salvando..." : "Salvar Alterações"}
             </Button>
           </DialogFooter>
         </DialogContent>
