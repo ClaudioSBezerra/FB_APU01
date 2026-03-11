@@ -167,7 +167,7 @@ function AppLayout() {
 }
 
 function App() {
-  console.log("App Version: 5.9.5 - Fix: preferência empresa pós-logout + botão único salvar hierarquia usuário");
+  console.log("App Version: 5.9.6 - Fix: ambiente prr-rtc para credenciais RFB de Produção Restrita");
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

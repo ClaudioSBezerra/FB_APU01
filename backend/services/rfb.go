@@ -18,6 +18,7 @@ type RFBClient struct {
 	baseURL    string // e.g. https://api.receitafederal.gov.br
 	tokenURL   string // e.g. https://api.receitafederal.gov.br/token
 	webhookURL string // e.g. https://fbtax.cloud/api/rfb/webhook
+	pathPrefix string // "rtc" (producao) or "prr-rtc" (producao_restrita / beta)
 }
 
 // RFB API response types
@@ -55,6 +56,18 @@ func NewRFBClient() *RFBClient {
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		tokenURL:   tokenURL,
 		webhookURL: webhookURL,
+		pathPrefix: "rtc",
+	}
+}
+
+// SetAmbiente configures the API path prefix based on the registered environment.
+// "producao_restrita" (beta credentials from credencial-api-beta) uses "prr-rtc".
+// All other values default to "rtc" (regular production).
+func (c *RFBClient) SetAmbiente(ambiente string) {
+	if ambiente == "producao_restrita" {
+		c.pathPrefix = "prr-rtc"
+	} else {
+		c.pathPrefix = "rtc"
 	}
 }
 
@@ -102,8 +115,8 @@ func (c *RFBClient) GetToken(clientID, clientSecret string) (string, error) {
 // cnpjBase must be 8 digits (company root CNPJ).
 // Returns the tiquete (ticket) for later download.
 func (c *RFBClient) SolicitarApuracao(token, cnpjBase string) (string, error) {
-	endpoint := fmt.Sprintf("%s/rtc/apuracao-cbs/v1/%s", c.baseURL, cnpjBase)
-	log.Printf("[RFB] Requesting CBS assessment: POST %s (webhook: %s)", endpoint, c.webhookURL)
+	endpoint := fmt.Sprintf("%s/%s/apuracao-cbs/v1/%s", c.baseURL, c.pathPrefix, cnpjBase)
+	log.Printf("[RFB] Requesting CBS assessment: POST %s (webhook: %s, prefix: %s)", endpoint, c.webhookURL, c.pathPrefix)
 
 	payload := map[string]string{
 		"urlRetorno": c.webhookURL,
@@ -150,8 +163,8 @@ func (c *RFBClient) SolicitarApuracao(token, cnpjBase string) (string, error) {
 // DownloadArquivo downloads the CBS assessment JSON file using the ticket.
 // Returns the raw JSON bytes. Note: each ticket can only be downloaded ONCE.
 func (c *RFBClient) DownloadArquivo(token, tiquete string) ([]byte, error) {
-	endpoint := fmt.Sprintf("%s/rtc/download/v1/%s", c.baseURL, tiquete)
-	log.Printf("[RFB] Downloading assessment file: GET %s", endpoint)
+	endpoint := fmt.Sprintf("%s/%s/download/v1/%s", c.baseURL, c.pathPrefix, tiquete)
+	log.Printf("[RFB] Downloading assessment file: GET %s (prefix: %s)", endpoint, c.pathPrefix)
 
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {

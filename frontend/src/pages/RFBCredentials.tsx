@@ -11,6 +11,7 @@ interface RFBCredential {
   cnpj_matriz: string;
   client_id: string;
   client_secret: string;
+  ambiente: string;
   ativo: boolean;
   created_at: string;
   updated_at: string;
@@ -35,12 +36,13 @@ export default function RFBCredentials() {
     cnpj_matriz: '',
     client_id: '',
     client_secret: '',
+    ambiente: 'producao_restrita',
   });
 
   const fetchCredential = async () => {
     try {
       const token = localStorage.getItem('token');
-      const companyId = localStorage.getItem('selectedCompanyId');
+      const companyId = localStorage.getItem('companyId');
       const response = await fetch('/api/rfb/credentials', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -55,6 +57,7 @@ export default function RFBCredentials() {
             cnpj_matriz: formatCNPJ(data.credential.cnpj_matriz),
             client_id: data.credential.client_id,
             client_secret: '',
+            ambiente: data.credential.ambiente || 'producao_restrita',
           });
           setEditing(false);
         } else {
@@ -80,7 +83,7 @@ export default function RFBCredentials() {
 
     try {
       const token = localStorage.getItem('token');
-      const companyId = localStorage.getItem('selectedCompanyId');
+      const companyId = localStorage.getItem('companyId');
       const response = await fetch('/api/rfb/credentials', {
         method: 'POST',
         headers: {
@@ -92,6 +95,7 @@ export default function RFBCredentials() {
           cnpj_matriz: formData.cnpj_matriz.replace(/\D/g, ''),
           client_id: formData.client_id,
           client_secret: formData.client_secret,
+          ambiente: formData.ambiente,
         }),
       });
 
@@ -115,7 +119,7 @@ export default function RFBCredentials() {
 
     try {
       const token = localStorage.getItem('token');
-      const companyId = localStorage.getItem('selectedCompanyId');
+      const companyId = localStorage.getItem('companyId');
       const response = await fetch('/api/rfb/credentials', {
         method: 'DELETE',
         headers: {
@@ -127,7 +131,7 @@ export default function RFBCredentials() {
       if (response.ok) {
         setMessage({ type: 'success', text: 'Credenciais excluídas com sucesso!' });
         setCredential(null);
-        setFormData({ cnpj_matriz: '', client_id: '', client_secret: '' });
+        setFormData({ cnpj_matriz: '', client_id: '', client_secret: '', ambiente: 'producao_restrita' });
         setEditing(true);
       } else {
         setMessage({ type: 'error', text: 'Erro ao excluir credenciais' });
@@ -143,6 +147,7 @@ export default function RFBCredentials() {
       cnpj_matriz: credential ? formatCNPJ(credential.cnpj_matriz) : '',
       client_id: credential?.client_id || '',
       client_secret: '',
+      ambiente: credential?.ambiente || 'producao_restrita',
     });
   };
 
@@ -237,6 +242,35 @@ export default function RFBCredentials() {
                   </p>
                 )}
               </div>
+              <div>
+                <Label>Ambiente *</Label>
+                <div className="mt-2 flex flex-col gap-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="ambiente"
+                      value="producao_restrita"
+                      checked={formData.ambiente === 'producao_restrita'}
+                      onChange={() => setFormData({ ...formData, ambiente: 'producao_restrita' })}
+                      className="h-4 w-4"
+                    />
+                    <span className="text-sm font-medium">Produção Restrita</span>
+                    <span className="text-xs text-muted-foreground">(credenciais via credencial-api-beta — <code className="bg-muted px-1 rounded">prr-rtc</code>)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="ambiente"
+                      value="producao"
+                      checked={formData.ambiente === 'producao'}
+                      onChange={() => setFormData({ ...formData, ambiente: 'producao' })}
+                      className="h-4 w-4"
+                    />
+                    <span className="text-sm font-medium">Produção</span>
+                    <span className="text-xs text-muted-foreground">(acesso irrestrito — <code className="bg-muted px-1 rounded">rtc</code>)</span>
+                  </label>
+                </div>
+              </div>
               <div className="flex gap-2 pt-2">
                 <Button type="submit" disabled={saving}>
                   <Save className="mr-2 h-4 w-4" />
@@ -263,6 +297,14 @@ export default function RFBCredentials() {
                 <div>
                   <Label className="text-muted-foreground">Client Secret</Label>
                   <p className="text-sm font-medium mt-1">{credential?.client_secret}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground">Ambiente</Label>
+                  <p className="text-sm font-medium mt-1">
+                    {credential?.ambiente === 'producao_restrita'
+                      ? 'Produção Restrita (prr-rtc)'
+                      : 'Produção (rtc)'}
+                  </p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground">Última atualização</Label>

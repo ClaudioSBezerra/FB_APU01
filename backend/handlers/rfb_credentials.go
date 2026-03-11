@@ -16,6 +16,7 @@ type RFBCredential struct {
 	CNPJMatriz   string    `json:"cnpj_matriz"`
 	ClientID     string    `json:"client_id"`
 	ClientSecret string    `json:"client_secret"`
+	Ambiente     string    `json:"ambiente"`
 	Ativo        bool      `json:"ativo"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
@@ -42,10 +43,10 @@ func GetRFBCredentialHandler(db *sql.DB) http.HandlerFunc {
 
 		var cred RFBCredential
 		err = db.QueryRow(`
-			SELECT id, company_id, cnpj_matriz, client_id, client_secret, ativo, created_at, updated_at
+			SELECT id, company_id, cnpj_matriz, client_id, client_secret, COALESCE(ambiente, 'producao'), ativo, created_at, updated_at
 			FROM rfb_credentials
 			WHERE company_id = $1
-		`, companyID).Scan(&cred.ID, &cred.CompanyID, &cred.CNPJMatriz, &cred.ClientID, &cred.ClientSecret, &cred.Ativo, &cred.CreatedAt, &cred.UpdatedAt)
+		`, companyID).Scan(&cred.ID, &cred.CompanyID, &cred.CNPJMatriz, &cred.ClientID, &cred.ClientSecret, &cred.Ambiente, &cred.Ativo, &cred.CreatedAt, &cred.UpdatedAt)
 
 		if err == sql.ErrNoRows {
 			json.NewEncoder(w).Encode(map[string]interface{}{
@@ -97,6 +98,7 @@ func SaveRFBCredentialHandler(db *sql.DB) http.HandlerFunc {
 			CNPJMatriz   string `json:"cnpj_matriz"`
 			ClientID     string `json:"client_id"`
 			ClientSecret string `json:"client_secret"`
+			Ambiente     string `json:"ambiente"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -107,6 +109,9 @@ func SaveRFBCredentialHandler(db *sql.DB) http.HandlerFunc {
 		req.CNPJMatriz = strings.TrimSpace(req.CNPJMatriz)
 		req.ClientID = strings.TrimSpace(req.ClientID)
 		req.ClientSecret = strings.TrimSpace(req.ClientSecret)
+		if req.Ambiente != "producao_restrita" {
+			req.Ambiente = "producao"
+		}
 
 		// Remove formatting chars from CNPJ
 		req.CNPJMatriz = strings.ReplaceAll(req.CNPJMatriz, ".", "")
@@ -129,12 +134,12 @@ func SaveRFBCredentialHandler(db *sql.DB) http.HandlerFunc {
 		// UPSERT - insert or update on conflict
 		var id string
 		err = db.QueryRow(`
-			INSERT INTO rfb_credentials (company_id, cnpj_matriz, client_id, client_secret, ativo)
-			VALUES ($1, $2, $3, $4, true)
+			INSERT INTO rfb_credentials (company_id, cnpj_matriz, client_id, client_secret, ambiente, ativo)
+			VALUES ($1, $2, $3, $4, $5, true)
 			ON CONFLICT (company_id)
-			DO UPDATE SET cnpj_matriz = $2, client_id = $3, client_secret = $4, ativo = true, updated_at = CURRENT_TIMESTAMP
+			DO UPDATE SET cnpj_matriz = $2, client_id = $3, client_secret = $4, ambiente = $5, ativo = true, updated_at = CURRENT_TIMESTAMP
 			RETURNING id
-		`, companyID, req.CNPJMatriz, req.ClientID, req.ClientSecret).Scan(&id)
+		`, companyID, req.CNPJMatriz, req.ClientID, req.ClientSecret, req.Ambiente).Scan(&id)
 		if err != nil {
 			http.Error(w, "Error saving credential: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -143,9 +148,9 @@ func SaveRFBCredentialHandler(db *sql.DB) http.HandlerFunc {
 		// Fetch saved credential
 		var cred RFBCredential
 		err = db.QueryRow(`
-			SELECT id, company_id, cnpj_matriz, client_id, client_secret, ativo, created_at, updated_at
+			SELECT id, company_id, cnpj_matriz, client_id, client_secret, COALESCE(ambiente, 'producao'), ativo, created_at, updated_at
 			FROM rfb_credentials WHERE id = $1
-		`, id).Scan(&cred.ID, &cred.CompanyID, &cred.CNPJMatriz, &cred.ClientID, &cred.ClientSecret, &cred.Ativo, &cred.CreatedAt, &cred.UpdatedAt)
+		`, id).Scan(&cred.ID, &cred.CompanyID, &cred.CNPJMatriz, &cred.ClientID, &cred.ClientSecret, &cred.Ambiente, &cred.Ativo, &cred.CreatedAt, &cred.UpdatedAt)
 		if err != nil {
 			http.Error(w, "Credential saved but error fetching", http.StatusInternalServerError)
 			return

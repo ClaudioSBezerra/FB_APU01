@@ -84,11 +84,11 @@ func SolicitarApuracaoHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// Check if company has active credentials
-		var clientID, clientSecret, cnpjMatriz string
+		var clientID, clientSecret, cnpjMatriz, ambiente string
 		err = db.QueryRow(`
-			SELECT client_id, client_secret, cnpj_matriz FROM rfb_credentials
+			SELECT client_id, client_secret, cnpj_matriz, COALESCE(ambiente, 'producao') FROM rfb_credentials
 			WHERE company_id = $1 AND ativo = true
-		`, companyID).Scan(&clientID, &clientSecret, &cnpjMatriz)
+		`, companyID).Scan(&clientID, &clientSecret, &cnpjMatriz, &ambiente)
 		if err == sql.ErrNoRows {
 			http.Error(w, "Credenciais RFB não configuradas. Configure em Conectar Receita Federal > Credenciais API.", http.StatusBadRequest)
 			return
@@ -118,6 +118,7 @@ func SolicitarApuracaoHandler(db *sql.DB) http.HandlerFunc {
 
 		// 1. Get OAuth2 token
 		rfbClient := services.NewRFBClient()
+		rfbClient.SetAmbiente(ambiente)
 		token, err := rfbClient.GetToken(clientID, clientSecret)
 		if err != nil {
 			// Save failed request

@@ -53,15 +53,19 @@ func ProcessarDownloadRFB(db *sql.DB, rfbClient *RFBClient, requestID string) er
 		return fmt.Errorf("failed to fetch request: %w", err)
 	}
 
-	var clientID, clientSecret string
+	var clientID, clientSecret, ambiente string
 	err = db.QueryRow(`
-		SELECT client_id, client_secret FROM rfb_credentials
+		SELECT client_id, client_secret, COALESCE(ambiente, 'producao') FROM rfb_credentials
 		WHERE company_id = $1 AND ativo = true
-	`, companyID).Scan(&clientID, &clientSecret)
+	`, companyID).Scan(&clientID, &clientSecret, &ambiente)
 	if err != nil {
 		updateRequestError(db, requestID, "CRED_NOT_FOUND", "Credenciais RFB não encontradas ou inativas")
 		return fmt.Errorf("failed to fetch credentials: %w", err)
 	}
+
+	// Apply the correct API path prefix based on the registered environment
+	rfbClient.SetAmbiente(ambiente)
+	log.Printf("[RFB Processor] Using ambiente '%s' for request %s", ambiente, requestID)
 
 	// 2. Get fresh OAuth2 token
 	updateRequestStatus(db, requestID, "downloading")
