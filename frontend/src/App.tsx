@@ -167,7 +167,7 @@ function AppLayout() {
 }
 
 function App() {
-  console.log("App Version: 5.9.1 - Bugfixes: Sidebar Flat, File Cleanup, Email Scan/Formatting");
+  console.log("App Version: 5.9.5 - Fix: preferência empresa pós-logout + botão único salvar hierarquia usuário");
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
