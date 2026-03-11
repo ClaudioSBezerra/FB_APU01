@@ -246,6 +246,74 @@ func DownloadManualHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+// DeleteRequestHandler removes a single RFB request (only if status = error).
+func DeleteRequestHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodDelete {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+		companyID, err := GetEffectiveCompanyID(db, userID, r.Header.Get("X-Company-ID"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		requestID := strings.TrimPrefix(r.URL.Path, "/api/rfb/apuracao/")
+		requestID = strings.TrimSpace(requestID)
+
+		res, err := db.Exec(`
+			DELETE FROM rfb_requests
+			WHERE id = $1 AND company_id = $2 AND status = 'error'
+		`, requestID, companyID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		rows, _ := res.RowsAffected()
+		if rows == 0 {
+			http.Error(w, "Registro não encontrado ou não pode ser removido (apenas erros podem ser excluídos)", http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// ClearErrorsHandler removes all error-status RFB requests for the company.
+func ClearErrorsHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodDelete {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userID := claims["user_id"].(string)
+		companyID, err := GetEffectiveCompanyID(db, userID, r.Header.Get("X-Company-ID"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		res, err := db.Exec(`DELETE FROM rfb_requests WHERE company_id = $1 AND status = 'error'`, companyID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		rows, _ := res.RowsAffected()
+		json.NewEncoder(w).Encode(map[string]interface{}{"deleted": rows})
+	}
+}
+
 // ReprocessHandler re-parses the raw JSON already stored in the DB for a request.
 // Useful when download succeeded but JSON parse failed (e.g. datetime format issue).
 func ReprocessHandler(db *sql.DB) http.HandlerFunc {
@@ -447,7 +515,7 @@ func StatusApuracaoHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-// DetalheApuracaoHandler returns details of a specific RFB request including debits
+// DetalheApuracaoHandler returns details of a specific RFB request (GET) or deletes it (DELETE).
 func DetalheApuracaoHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -469,6 +537,23 @@ func DetalheApuracaoHandler(db *sql.DB) http.HandlerFunc {
 		// Extract request ID from path
 		requestID := strings.TrimPrefix(r.URL.Path, "/api/rfb/apuracao/")
 		requestID = strings.TrimSpace(requestID)
+
+		// Handle DELETE — remove error records only
+		if r.Method == http.MethodDelete {
+			res, err := db.Exec(`DELETE FROM rfb_requests WHERE id = $1 AND company_id = $2 AND status = 'error'`,
+				requestID, companyID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			rows, _ := res.RowsAffected()
+			if rows == 0 {
+				http.Error(w, "Registro não encontrado ou não pode ser removido", http.StatusNotFound)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		if requestID == "" || requestID == "status" || requestID == "solicitar" {
 			http.Error(w, "Invalid request ID", http.StatusBadRequest)
 			return

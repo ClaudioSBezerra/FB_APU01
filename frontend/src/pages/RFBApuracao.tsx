@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Globe, Send, RefreshCw, ChevronLeft, AlertTriangle, Download } from 'lucide-react';
+import { Globe, Send, RefreshCw, ChevronLeft, AlertTriangle, Download, Trash2, RotateCcw } from 'lucide-react';
 
 interface RFBRequest {
   id: string;
@@ -44,12 +44,13 @@ interface RFBDebito {
 }
 
 const statusConfig: Record<string, { label: string; color: string }> = {
-  pending: { label: 'Pendente', color: 'bg-gray-100 text-gray-700' },
-  requested: { label: 'Solicitado', color: 'bg-yellow-100 text-yellow-700' },
-  webhook_received: { label: 'Processando', color: 'bg-blue-100 text-blue-700' },
-  downloading: { label: 'Baixando', color: 'bg-blue-100 text-blue-700' },
-  completed: { label: 'Concluído', color: 'bg-green-100 text-green-700' },
-  error: { label: 'Erro', color: 'bg-red-100 text-red-700' },
+  pending:          { label: 'Pendente',      color: 'bg-gray-100 text-gray-700' },
+  requested:        { label: 'Solicitado',    color: 'bg-yellow-100 text-yellow-700' },
+  webhook_received: { label: 'Processando',   color: 'bg-blue-100 text-blue-700' },
+  downloading:      { label: 'Baixando',      color: 'bg-blue-100 text-blue-700' },
+  reprocessing:     { label: 'Reprocessando', color: 'bg-purple-100 text-purple-700' },
+  completed:        { label: 'Concluído',     color: 'bg-green-100 text-green-700' },
+  error:            { label: 'Erro',          color: 'bg-red-100 text-red-700' },
 };
 
 function formatCurrency(value: number): string {
@@ -146,6 +147,52 @@ export default function RFBApuracao() {
       }
     } catch {
       setMessage({ type: 'error', text: 'Erro ao carregar detalhes' });
+    }
+  };
+
+  const handleDelete = async (requestId: string) => {
+    if (!confirm('Remover este registro do histórico?')) return;
+    try {
+      await fetch(`/api/rfb/apuracao/${requestId}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+      });
+      setRequests(prev => prev.filter(r => r.id !== requestId));
+    } catch {
+      setMessage({ type: 'error', text: 'Erro ao remover registro' });
+    }
+  };
+
+  const handleClearErrors = async () => {
+    if (!confirm('Limpar todos os registros com erro do histórico?')) return;
+    try {
+      await fetch('/api/rfb/apuracao/clear-errors', {
+        method: 'DELETE',
+        headers: getHeaders(),
+      });
+      setRequests(prev => prev.filter(r => r.status !== 'error'));
+    } catch {
+      setMessage({ type: 'error', text: 'Erro ao limpar logs' });
+    }
+  };
+
+  const handleReprocess = async (requestId: string) => {
+    setMessage(null);
+    try {
+      const response = await fetch('/api/rfb/apuracao/reprocess', {
+        method: 'POST',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: requestId }),
+      });
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'Reprocessamento iniciado!' });
+        fetchRequests();
+      } else {
+        const text = await response.text();
+        setMessage({ type: 'error', text: text || 'Erro ao reprocessar' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Erro de conexão' });
     }
   };
 
@@ -326,6 +373,11 @@ export default function RFBApuracao() {
           </p>
         </div>
         <div className="mt-4 md:mt-0 flex gap-2">
+          {requests.some(r => r.status === 'error') && (
+            <Button variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={handleClearErrors}>
+              <Trash2 className="mr-2 h-4 w-4" /> Limpar erros
+            </Button>
+          )}
           <Button variant="outline" onClick={fetchRequests}>
             <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
           </Button>
@@ -388,20 +440,29 @@ export default function RFBApuracao() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {req.status === 'requested' && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={(e) => { e.stopPropagation(); handleDownloadManual(req.id); }}
-                        >
+                      {req.status === 'webhook_received' && (
+                        <Button size="sm" variant="outline"
+                          onClick={(e) => { e.stopPropagation(); handleDownloadManual(req.id); }}>
                           <Download className="mr-1 h-3 w-3" /> Download Manual
                         </Button>
                       )}
+                      {req.status === 'error' && (
+                        <>
+                          <Badge variant="destructive" className="text-xs">{req.error_code}</Badge>
+                          <Button size="sm" variant="outline" className="text-purple-600 hover:bg-purple-50"
+                            onClick={(e) => { e.stopPropagation(); handleReprocess(req.id); }}
+                            title="Reprocessar a partir do JSON salvo (sem chamar a RFB)">
+                            <RotateCcw className="mr-1 h-3 w-3" /> Reprocessar
+                          </Button>
+                          <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2"
+                            onClick={(e) => { e.stopPropagation(); handleDelete(req.id); }}
+                            title="Remover do histórico">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      )}
                       {req.status === 'completed' && (
                         <span className="text-xs text-muted-foreground">Clique para ver detalhes</span>
-                      )}
-                      {req.status === 'error' && (
-                        <Badge variant="destructive" className="text-xs">{req.error_code}</Badge>
                       )}
                     </div>
                   </div>
