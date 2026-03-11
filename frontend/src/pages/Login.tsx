@@ -10,6 +10,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 
+const FEATURES = [
+  "Importação e análise de SPEDs EFD",
+  "Simulador de impacto do IBS e CBS",
+  "Integração direta com a Receita Federal",
+];
+
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -49,73 +55,143 @@ const Login = () => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100 px-4">
-      <div className="w-full max-w-[450px]">
-        <Card className="w-full shadow-lg">
-          <CardHeader className="flex flex-col items-center gap-2 space-y-0 pt-6 pb-4">
-            <img
-              src="/logo-ferreira-costa.png"
-              alt="Ferreira Costa Home Center"
-              className="h-16 w-auto object-contain"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-              }}
-            />
-            <div className="flex flex-col items-center space-y-0.5 text-center">
-              <CardTitle className="text-base font-semibold">Acesse sua conta</CardTitle>
-              <CardDescription className="text-xs">Entre com suas credenciais para continuar</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {errorMsg && (
-              <Alert variant="destructive" className="mb-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Erro</AlertTitle>
-                <AlertDescription>{errorMsg}</AlertDescription>
-              </Alert>
-            )}
+    <div className="min-h-screen flex">
+      {/* ── Painel esquerdo (visível apenas em lg+) ── */}
+      <div
+        className="hidden lg:flex lg:w-2/5 flex-col justify-between p-10 relative overflow-hidden"
+        style={{ background: "#111827" }}
+      >
+        {/* Círculo decorativo grande — canto superior direito */}
+        <div
+          className="absolute -top-24 -right-24 w-96 h-96 rounded-full pointer-events-none"
+          style={{ background: "radial-gradient(circle, #3b1f3a 0%, #1a0f1e 100%)" }}
+        />
+        {/* Círculo decorativo menor — canto inferior esquerdo */}
+        <div
+          className="absolute -bottom-20 -left-20 w-64 h-64 rounded-full pointer-events-none"
+          style={{ background: "radial-gradient(circle, #2d1b2e 0%, #111827 100%)" }}
+        />
 
-            <form onSubmit={handleLogin} className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-sm">E-mail</Label>
-              <Input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu@email.com"
-                className="text-sm"
+        {/* Conteúdo principal */}
+        <div className="relative z-10">
+          {/* Logo */}
+          <div className="flex items-center gap-2.5 mb-14">
+            <img
+              src="/favicon-fc.png"
+              alt="FBTax Cloud"
+              className="w-9 h-9 rounded-lg object-cover"
+            />
+            <span className="text-white font-bold text-lg tracking-tight">FBTax Cloud</span>
+          </div>
+
+          {/* Badge */}
+          <span
+            className="inline-block px-3 py-1 rounded-full text-[11px] uppercase tracking-widest font-semibold"
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              color: "#e5e7eb",
+              border: "1px solid rgba(255,255,255,0.12)",
+            }}
+          >
+            Reforma Tributária 2026
+          </span>
+
+          {/* Título */}
+          <h1 className="text-white text-4xl font-bold leading-tight mt-5">
+            Apuração Assistida
+            <br />
+            IBS/CBS
+          </h1>
+
+          {/* Subtítulo */}
+          <p className="mt-4 text-sm leading-relaxed" style={{ color: "#9ca3af" }}>
+            Controle total sobre créditos, débitos e impactos da Reforma Tributária na sua empresa.
+          </p>
+        </div>
+
+        {/* Features — rodapé do painel */}
+        <ul className="relative z-10 space-y-3">
+          {FEATURES.map((feature) => (
+            <li key={feature} className="flex items-center gap-2.5 text-sm" style={{ color: "#d1d5db" }}>
+              <span
+                className="w-1.5 h-1.5 rounded-full shrink-0"
+                style={{ background: "#ef4444" }}
               />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="password" className="text-sm">Senha</Label>
-              <Input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="text-sm"
+              {feature}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* ── Painel direito — formulário de login (inalterado) ── */}
+      <div className="flex-1 flex items-center justify-center bg-gray-100 px-4">
+        <div className="w-full max-w-[450px]">
+          <Card className="w-full shadow-lg">
+            <CardHeader className="flex flex-col items-center gap-2 space-y-0 pt-6 pb-4">
+              <img
+                src="/logo-ferreira-costa.png"
+                alt="Ferreira Costa Home Center"
+                className="h-16 w-auto object-contain"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
               />
-            </div>
-            <div className="flex justify-end">
-              <Link to="/forgot-password" className="text-xs text-blue-600 hover:underline">
-                Esqueci minha senha
-              </Link>
-            </div>
-            <Button type="submit" className="w-full text-sm" disabled={isLoading}>
-              {isLoading ? "Entrando..." : "Entrar"}
-            </Button>
-            <div className="text-center text-xs text-gray-500 mt-2">
-              Não tem uma conta?{" "}
-              <Link to="/register" className="text-blue-600 hover:underline">
-                Crie grátis
-              </Link>
-            </div>
-            </form>
-          </CardContent>
-        </Card>
+              <div className="flex flex-col items-center space-y-0.5 text-center">
+                <CardTitle className="text-base font-semibold">Acesse sua conta</CardTitle>
+                <CardDescription className="text-xs">Entre com suas credenciais para continuar</CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {errorMsg && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Erro</AlertTitle>
+                  <AlertDescription>{errorMsg}</AlertDescription>
+                </Alert>
+              )}
+
+              <form onSubmit={handleLogin} className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-sm">E-mail</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="seu@email.com"
+                  className="text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-sm">Senha</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="text-sm"
+                />
+              </div>
+              <div className="flex justify-end">
+                <Link to="/forgot-password" className="text-xs text-blue-600 hover:underline">
+                  Esqueci minha senha
+                </Link>
+              </div>
+              <Button type="submit" className="w-full text-sm" disabled={isLoading}>
+                {isLoading ? "Entrando..." : "Entrar"}
+              </Button>
+              <div className="text-center text-xs text-gray-500 mt-2">
+                Não tem uma conta?{" "}
+                <Link to="/register" className="text-blue-600 hover:underline">
+                  Crie grátis
+                </Link>
+              </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

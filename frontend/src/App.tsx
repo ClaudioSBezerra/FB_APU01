@@ -167,7 +167,7 @@ function AppLayout() {
 }
 
 function App() {
-  console.log("App Version: 5.9.7 - feat: menus importar/consultar/rfb adminOnly");
+  console.log("App Version: 5.9.8 - feat: login split-screen com painel esquerdo moderno");
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
