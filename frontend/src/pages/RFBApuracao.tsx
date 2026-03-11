@@ -76,7 +76,7 @@ export default function RFBApuracao() {
 
   const getHeaders = () => {
     const token = localStorage.getItem('token');
-    const companyId = localStorage.getItem('selectedCompanyId');
+    const companyId = localStorage.getItem('companyId');
     return {
       'Authorization': `Bearer ${token}`,
       'X-Company-ID': companyId || '',
