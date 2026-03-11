@@ -36,7 +36,7 @@ export default function RFBCredentials() {
     cnpj_matriz: '',
     client_id: '',
     client_secret: '',
-    ambiente: 'producao_restrita',
+    ambiente: 'producao',
   });
 
   const fetchCredential = async () => {

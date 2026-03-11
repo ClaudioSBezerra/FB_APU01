@@ -107,7 +107,16 @@ func (c *RFBClient) GetToken(clientID, clientSecret string) (string, error) {
 		return "", fmt.Errorf("empty access_token in response")
 	}
 
-	log.Printf("[RFB] Token obtained successfully (expires_in: %d)", tokenResp.ExpiresIn)
+	log.Printf("[RFB] Token obtained — expires_in: %d | token_type: %s | last8: ...%s",
+		tokenResp.ExpiresIn, tokenResp.TokenType,
+		func() string {
+			t := tokenResp.AccessToken
+			if len(t) >= 8 {
+				return t[len(t)-8:]
+			}
+			return t
+		}(),
+	)
 	return tokenResp.AccessToken, nil
 }
 
@@ -185,14 +194,27 @@ func (c *RFBClient) DownloadArquivo(token, tiquete string) ([]byte, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("[RFB] Download error (HTTP %d): %s", resp.StatusCode, string(body))
+		// Log the full response to diagnose gateway vs application errors.
+		// Note: documented responses are 200/400/403/404 — HTTP 401 indicates
+		// gateway-level authentication failure, NOT an application error.
+		log.Printf("[RFB] Download FAILED — HTTP %d | URL: %s | Body: %s | Token (last 8): ...%s",
+			resp.StatusCode, endpoint, string(body),
+			func() string {
+				if len(token) >= 8 {
+					return token[len(token)-8:]
+				}
+				return token
+			}(),
+		)
 		switch resp.StatusCode {
+		case http.StatusUnauthorized:
+			return nil, fmt.Errorf("HTTP 401 (gateway auth) — token inválido ou expirado: %s", string(body))
 		case http.StatusForbidden:
-			return nil, fmt.Errorf("CNPJ do consumidor não corresponde ao CNPJ da solicitação (HTTP 403)")
+			return nil, fmt.Errorf("HTTP 403 — CNPJ do consumidor não corresponde ao CNPJ da solicitação: %s", string(body))
 		case http.StatusNotFound:
-			return nil, fmt.Errorf("arquivo não encontrado ou tíquete inválido (HTTP 404)")
+			return nil, fmt.Errorf("HTTP 404 — arquivo não encontrado ou tíquete inválido: %s", string(body))
 		default:
-			return nil, fmt.Errorf("download returned HTTP %d: %s", resp.StatusCode, string(body))
+			return nil, fmt.Errorf("HTTP %d — %s", resp.StatusCode, string(body))
 		}
 	}
 

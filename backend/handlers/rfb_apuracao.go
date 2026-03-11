@@ -258,22 +258,44 @@ func RFBWebhookHandler(db *sql.DB) http.HandlerFunc {
 		}
 		defer r.Body.Close()
 
-		log.Printf("[RFB Webhook] Received callback: %s", string(body))
+		log.Printf("[RFB Webhook] ===== CALLBACK RECEIVED =====")
+		log.Printf("[RFB Webhook] Method: %s | RemoteAddr: %s", r.Method, r.RemoteAddr)
+		log.Printf("[RFB Webhook] Headers: %v", r.Header)
+		log.Printf("[RFB Webhook] Body: %s", string(body))
+		log.Printf("[RFB Webhook] ==============================")
 
 		// Parse webhook payload - try to extract tiquete
 		var payload map[string]interface{}
 		if err := json.Unmarshal(body, &payload); err != nil {
 			log.Printf("[RFB Webhook] Error parsing JSON: %v", err)
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			// Return 200 even on parse error so RFB doesn't retry indefinitely
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]string{"status": "received", "warning": "invalid JSON"})
 			return
 		}
 
-		// Extract tiquete from payload
-		tiquete, _ := payload["tiquete"].(string)
+		log.Printf("[RFB Webhook] Parsed fields: %v", func() []string {
+			keys := make([]string, 0, len(payload))
+			for k := range payload {
+				keys = append(keys, k)
+			}
+			return keys
+		}())
+
+		// Extract tiquete — try multiple possible field names
+		tiquete := ""
+		for _, field := range []string{"tiquete", "ticket", "ticketId", "tiqueteId", "id", "protocolo"} {
+			if v, ok := payload[field].(string); ok && v != "" {
+				tiquete = v
+				log.Printf("[RFB Webhook] Found tiquete in field '%s': %s", field, tiquete)
+				break
+			}
+		}
+
 		if tiquete == "" {
-			log.Printf("[RFB Webhook] No tiquete in payload, storing raw: %s", string(body))
+			log.Printf("[RFB Webhook] No tiquete found in payload — fields present: %v", payload)
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]string{"status": "received"})
+			json.NewEncoder(w).Encode(map[string]string{"status": "received", "warning": "tiquete not found in payload"})
 			return
 		}
 
