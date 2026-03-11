@@ -400,8 +400,8 @@ func ListUsersHandler(db *sql.DB) http.HandlerFunc {
 			LEFT JOIN user_environments ue ON u.id = ue.user_id
 			LEFT JOIN environments e ON ue.environment_id = e.id
 			LEFT JOIN enterprise_groups eg ON eg.environment_id = e.id
-			LEFT JOIN companies c ON c.group_id = eg.id AND c.owner_id = u.id
-			ORDER BY u.id, u.created_at DESC
+			LEFT JOIN companies c ON c.group_id = eg.id
+			ORDER BY u.id, (c.owner_id = u.id) DESC NULLS LAST, c.created_at ASC NULLS LAST
 		`)
 		if err != nil {
 			log.Printf("ListUsers error: %v", err)
