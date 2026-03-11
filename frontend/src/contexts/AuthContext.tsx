@@ -109,20 +109,50 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(data.user);
     setEnvironment(data.environment_name);
     setGroup(data.group_name);
-    setCompany(data.company_name);
-    setCompanyId(data.company_id);
-    setCnpj(data.cnpj);
+
+    // Restaura preferência de empresa salva para este usuário (persiste após logout)
+    let companyName = data.company_name;
+    let companyIdVal = data.company_id;
+    let cnpjVal = data.cnpj;
+    if (data.user?.id) {
+      const saved = localStorage.getItem(`pref_company_${data.user.id}`);
+      if (saved) {
+        try {
+          const pref = JSON.parse(saved);
+          if (pref.id) {
+            companyName = pref.name;
+            companyIdVal = pref.id;
+            cnpjVal = pref.cnpj || '';
+          }
+        } catch {}
+      }
+    }
+
+    setCompany(companyName);
+    setCompanyId(companyIdVal);
+    setCnpj(cnpjVal);
 
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
     localStorage.setItem('environment', data.environment_name || '');
     localStorage.setItem('group', data.group_name || '');
-    localStorage.setItem('company', data.company_name || '');
-    localStorage.setItem('companyId', data.company_id || '');
-    localStorage.setItem('cnpj', data.cnpj || '');
+    localStorage.setItem('company', companyName || '');
+    localStorage.setItem('companyId', companyIdVal || '');
+    localStorage.setItem('cnpj', cnpjVal || '');
   };
 
   const logout = () => {
+    // Preserva preferências de empresa antes de limpar o storage
+    const prefs: Record<string, string> = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('pref_company_')) {
+        prefs[key] = localStorage.getItem(key) || '';
+      }
+    }
+    localStorage.clear();
+    Object.entries(prefs).forEach(([k, v]) => localStorage.setItem(k, v));
+
     setUser(null);
     setToken(null);
     setEnvironment(null);
@@ -130,7 +160,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setCompany(null);
     setCompanyId(null);
     setCnpj(null);
-    localStorage.clear();
     window.location.href = '/login';
   };
 
@@ -141,8 +170,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     localStorage.setItem('company', name);
     localStorage.setItem('companyId', id);
     localStorage.setItem('cnpj', newCnpj);
-    // Optional: Reload to ensure all components refresh data with new company context
-    window.location.reload(); 
+    // Salva preferência persistente para este usuário
+    if (user?.id) {
+      localStorage.setItem(`pref_company_${user.id}`, JSON.stringify({ id, name, cnpj: newCnpj }));
+    }
+    window.location.reload();
   };
 
   return (
