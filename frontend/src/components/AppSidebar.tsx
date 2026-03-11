@@ -74,6 +74,7 @@ interface NavSection {
   id: string;
   title: string;
   sectionIcon: React.ElementType;
+  adminOnly?: boolean;
   items: NavItem[];
 }
 
@@ -112,6 +113,7 @@ const sections: NavSection[] = [
     id: "importar",
     title: "Apuração Assistida — Importar",
     sectionIcon: FolderInput,
+    adminOnly: true,
     items: [
       { title: "Entradas Mod. 55",        url: "/apuracao/entrada",  icon: Upload },
       { title: "Saídas Mod. 55/65",       url: "/apuracao/saida",    icon: Upload },
@@ -124,6 +126,7 @@ const sections: NavSection[] = [
     id: "consultar",
     title: "Apuração Assistida",
     sectionIcon: Calculator,
+    adminOnly: true,
     items: [
       { title: "Entradas Mod. 55",        url: "/apuracao/entrada/notas",     icon: FileText },
       { title: "Saídas Mod. 55/65",       url: "/apuracao/saida/notas",       icon: FileText },
@@ -139,6 +142,7 @@ const sections: NavSection[] = [
     id: "rfb",
     title: "Receita Federal",
     sectionIcon: Landmark,
+    adminOnly: true,
     items: [
       { title: "Gestão Créditos IBS/CBS",       url: "/rfb/gestao-creditos",         icon: BarChart3 },
       { title: "Credenciais API RFB",            url: "/rfb/credenciais",             icon: Globe },
@@ -232,6 +236,7 @@ export function AppSidebar() {
       {/* ── Conteúdo ── */}
       <SidebarContent>
         {sections.map((section) => {
+          if (section.adminOnly && !isAdmin) return null
           const visibleItems = section.items.filter(
             (item) => !item.adminOnly || isAdmin
           )
