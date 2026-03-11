@@ -5,8 +5,36 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 )
+
+// RFBTime handles RFB datetime strings that may lack timezone suffix (e.g. "2026-03-01T08:30:09").
+type RFBTime struct {
+	T *time.Time
+}
+
+func (rt *RFBTime) UnmarshalJSON(data []byte) error {
+	s := strings.Trim(string(data), `"`)
+	if s == "null" || s == "" {
+		rt.T = nil
+		return nil
+	}
+	for _, format := range []string{
+		time.RFC3339,
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04:05.999999999",
+	} {
+		if t, err := time.Parse(format, s); err == nil {
+			rt.T = &t
+			return nil
+		}
+	}
+	// Log and ignore unparseable dates rather than failing the whole import
+	log.Printf("[RFB Processor] WARNING: could not parse datetime '%s', storing as nil", s)
+	rt.T = nil
+	return nil
+}
 
 // RFB JSON structures matching the API response layout
 type RFBApuracaoJSON struct {
@@ -23,9 +51,9 @@ type RFBDebito struct {
 	ModeloDfe          string          `json:"modeloDfe"`
 	NumeroDfe          string          `json:"numeroDfe"`
 	ChaveDfe           string          `json:"chaveDfe"`
-	DataDfeEmissao     *time.Time      `json:"dataDfeEmissao"`
-	DataDfeAutorizacao *time.Time      `json:"dataDfeAutorizacao"`
-	DataDfeRegistro    *time.Time      `json:"dataDfeRegistro"`
+	DataDfeEmissao     *RFBTime        `json:"dataDfeEmissao"`
+	DataDfeAutorizacao *RFBTime        `json:"dataDfeAutorizacao"`
+	DataDfeRegistro    *RFBTime        `json:"dataDfeRegistro"`
 	DataApuracao       string          `json:"dataApuracao"`
 	NiEmitente         string          `json:"niEmitente"`
 	NiAdquirente       string          `json:"niAdquirente"`
@@ -91,13 +119,19 @@ func ProcessarDownloadRFB(db *sql.DB, rfbClient *RFBClient, requestID string) er
 		return fmt.Errorf("failed to download: %w", err)
 	}
 
-	// 4. Save raw JSON immediately (ticket is single-use, cannot retry)
-	_, err = db.Exec(`
-		UPDATE rfb_requests SET raw_json = $1, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $2
-	`, rawJSON, requestID)
-	if err != nil {
-		log.Printf("[RFB Processor] WARNING: Failed to save raw JSON for request %s: %v", requestID, err)
+	// 4. Save raw JSON (skip if > 200 MB — PostgreSQL JSONB limit is ~268 MB)
+	const maxRawJSONBytes = 200 * 1024 * 1024
+	if len(rawJSON) <= maxRawJSONBytes {
+		_, err = db.Exec(`
+			UPDATE rfb_requests SET raw_json = $1, updated_at = CURRENT_TIMESTAMP
+			WHERE id = $2
+		`, rawJSON, requestID)
+		if err != nil {
+			log.Printf("[RFB Processor] WARNING: Failed to save raw JSON for request %s: %v", requestID, err)
+		}
+	} else {
+		log.Printf("[RFB Processor] Skipping raw_json storage for request %s: too large (%d MB > 200 MB limit)",
+			requestID, len(rawJSON)/1024/1024)
 	}
 
 	// 5. Parse JSON
@@ -188,6 +222,12 @@ func insertDebito(db *sql.DB, requestID, companyID, tipoApuracao string, d RFBDe
 		eventos = sql.NullString{String: string(d.Eventos), Valid: true}
 	}
 
+	// Extract *time.Time from RFBTime wrapper (handles nil safely)
+	var dataEmissao *time.Time
+	if d.DataDfeEmissao != nil {
+		dataEmissao = d.DataDfeEmissao.T
+	}
+
 	_, err := db.Exec(`
 		INSERT INTO rfb_debitos (request_id, company_id, tipo_apuracao,
 			modelo_dfe, numero_dfe, chave_dfe, data_dfe_emissao, data_apuracao,
@@ -196,7 +236,7 @@ func insertDebito(db *sql.DB, requestID, companyID, tipoApuracao string, d RFBDe
 			situacao_debito, formas_extincao, eventos)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`, requestID, companyID, tipoApuracao,
-		d.ModeloDfe, d.NumeroDfe, d.ChaveDfe, d.DataDfeEmissao, d.DataApuracao,
+		d.ModeloDfe, d.NumeroDfe, d.ChaveDfe, dataEmissao, d.DataApuracao,
 		d.NiEmitente, d.NiAdquirente,
 		d.ValorCBSTotal, d.ValorCBSExtinto, d.ValorCBSNaoExtinto,
 		d.SituacaoDebito, formasExtincao, eventos)
