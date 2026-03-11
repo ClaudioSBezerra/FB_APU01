@@ -44,11 +44,12 @@ func ProcessarDownloadRFB(db *sql.DB, rfbClient *RFBClient, requestID string) er
 
 	// 1. Fetch request details and company credentials
 	var companyID, tiquete, cnpjBase string
+	var tiqueteDownload *string
 	err := db.QueryRow(`
-		SELECT r.company_id, r.tiquete, r.cnpj_base
+		SELECT r.company_id, r.tiquete, r.cnpj_base, r.tiquete_download
 		FROM rfb_requests r
 		WHERE r.id = $1
-	`, requestID).Scan(&companyID, &tiquete, &cnpjBase)
+	`, requestID).Scan(&companyID, &tiquete, &cnpjBase, &tiqueteDownload)
 	if err != nil {
 		return fmt.Errorf("failed to fetch request: %w", err)
 	}
@@ -65,7 +66,15 @@ func ProcessarDownloadRFB(db *sql.DB, rfbClient *RFBClient, requestID string) er
 
 	// Apply the correct API path prefix based on the registered environment
 	rfbClient.SetAmbiente(ambiente)
-	log.Printf("[RFB Processor] Using ambiente '%s' for request %s", ambiente, requestID)
+
+	// Use tiqueteDownload if provided by the webhook (RFB sends two separate tíquetes)
+	tiqueteParaDownload := tiquete
+	if tiqueteDownload != nil && *tiqueteDownload != "" {
+		tiqueteParaDownload = *tiqueteDownload
+		log.Printf("[RFB Processor] Using tiqueteDownload '%s' (solicitacao: '%s')", tiqueteParaDownload, tiquete)
+	} else {
+		log.Printf("[RFB Processor] WARNING: tiqueteDownload not set, falling back to tiqueteSolicitacao '%s'", tiquete)
+	}
 
 	// 2. Get fresh OAuth2 token
 	updateRequestStatus(db, requestID, "downloading")
@@ -76,7 +85,7 @@ func ProcessarDownloadRFB(db *sql.DB, rfbClient *RFBClient, requestID string) er
 	}
 
 	// 3. Download the JSON file (single use per ticket!)
-	rawJSON, err := rfbClient.DownloadArquivo(token, tiquete)
+	rawJSON, err := rfbClient.DownloadArquivo(token, tiqueteParaDownload)
 	if err != nil {
 		updateRequestError(db, requestID, "DOWNLOAD_ERROR", err.Error())
 		return fmt.Errorf("failed to download: %w", err)

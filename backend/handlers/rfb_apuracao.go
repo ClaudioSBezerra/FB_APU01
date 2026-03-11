@@ -197,10 +197,11 @@ func DownloadManualHandler(db *sql.DB) http.HandlerFunc {
 
 		// Verify request belongs to company and has a tiquete
 		var requestID, tiquete, status string
+		var tiqueteDownload *string
 		err = db.QueryRow(`
-			SELECT id, COALESCE(tiquete, ''), status FROM rfb_requests
+			SELECT id, COALESCE(tiquete, ''), status, tiquete_download FROM rfb_requests
 			WHERE id = $1 AND company_id = $2
-		`, req.RequestID, companyID).Scan(&requestID, &tiquete, &status)
+		`, req.RequestID, companyID).Scan(&requestID, &tiquete, &status, &tiqueteDownload)
 		if err == sql.ErrNoRows {
 			http.Error(w, "Solicitação não encontrada", http.StatusNotFound)
 			return
@@ -212,6 +213,11 @@ func DownloadManualHandler(db *sql.DB) http.HandlerFunc {
 
 		if tiquete == "" {
 			http.Error(w, "Solicitação sem tíquete - não é possível fazer download", http.StatusBadRequest)
+			return
+		}
+
+		if tiqueteDownload == nil || *tiqueteDownload == "" {
+			http.Error(w, "Tíquete de download ainda não recebido — aguarde o webhook da RFB confirmar o processamento", http.StatusBadRequest)
 			return
 		}
 
@@ -282,42 +288,45 @@ func RFBWebhookHandler(db *sql.DB) http.HandlerFunc {
 			return keys
 		}())
 
-		// Extract tiquete — try multiple possible field names
-		tiquete := ""
-		for _, field := range []string{"tiquete", "ticket", "ticketId", "tiqueteId", "id", "protocolo"} {
-			if v, ok := payload[field].(string); ok && v != "" {
-				tiquete = v
-				log.Printf("[RFB Webhook] Found tiquete in field '%s': %s", field, tiquete)
-				break
-			}
-		}
+		// RFB sends two distinct tíquetes:
+		//   tiqueteSolicitacao = identifies the original request (stored in rfb_requests.tiquete)
+		//   tiqueteDownload    = the tíquete to use when calling the download endpoint
+		tiqueteSolicitacao, _ := payload["tiqueteSolicitacao"].(string)
+		tiqueteDownload, _ := payload["tiqueteDownload"].(string)
 
-		if tiquete == "" {
-			log.Printf("[RFB Webhook] No tiquete found in payload — fields present: %v", payload)
+		log.Printf("[RFB Webhook] tiqueteSolicitacao: %s | tiqueteDownload: %s",
+			tiqueteSolicitacao, tiqueteDownload)
+
+		if tiqueteSolicitacao == "" || tiqueteDownload == "" {
+			log.Printf("[RFB Webhook] Missing required tíquetes in payload — fields: %v", payload)
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]string{"status": "received", "warning": "tiquete not found in payload"})
+			json.NewEncoder(w).Encode(map[string]string{"status": "received", "warning": "missing tiqueteSolicitacao or tiqueteDownload"})
 			return
 		}
 
-		// Find the request by tiquete
+		// Find the request by tiqueteSolicitacao
 		var requestID string
 		err = db.QueryRow(`
 			SELECT id FROM rfb_requests WHERE tiquete = $1 AND status = 'requested'
-		`, tiquete).Scan(&requestID)
+		`, tiqueteSolicitacao).Scan(&requestID)
 		if err != nil {
-			log.Printf("[RFB Webhook] Request not found for tiquete %s: %v", tiquete, err)
+			log.Printf("[RFB Webhook] Request not found for tiqueteSolicitacao %s: %v", tiqueteSolicitacao, err)
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(map[string]string{"status": "received", "warning": "request not found"})
 			return
 		}
 
-		// Update status
+		// Save tiqueteDownload and update status
 		_, err = db.Exec(`
-			UPDATE rfb_requests SET status = 'webhook_received', updated_at = CURRENT_TIMESTAMP WHERE id = $1
-		`, requestID)
+			UPDATE rfb_requests
+			SET status = 'webhook_received', tiquete_download = $1, updated_at = CURRENT_TIMESTAMP
+			WHERE id = $2
+		`, tiqueteDownload, requestID)
 		if err != nil {
-			log.Printf("[RFB Webhook] Error updating status: %v", err)
+			log.Printf("[RFB Webhook] Error updating status/tiqueteDownload: %v", err)
 		}
+
+		log.Printf("[RFB Webhook] Request %s updated — tiqueteDownload saved, triggering download", requestID)
 
 		// Trigger async download and processing
 		go func() {
