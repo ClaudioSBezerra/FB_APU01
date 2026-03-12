@@ -14,6 +14,16 @@ type dbExecutor interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 }
 
+// FlexString unmarshals both JSON strings and JSON numbers into a Go string.
+// Needed because the RFB API returns some fields (e.g. modeloDfe=55) as numbers.
+type FlexString string
+
+func (fs *FlexString) UnmarshalJSON(data []byte) error {
+	s := strings.Trim(string(data), `"`)
+	*fs = FlexString(s)
+	return nil
+}
+
 // RFBTime handles RFB datetime strings that may lack timezone suffix (e.g. "2026-03-01T08:30:09").
 type RFBTime struct {
 	T *time.Time
@@ -53,19 +63,19 @@ type RFBGrupoDebitos struct {
 }
 
 type RFBDebito struct {
-	ModeloDfe          string          `json:"modeloDfe"`
-	NumeroDfe          string          `json:"numeroDfe"`
-	ChaveDfe           string          `json:"chaveDfe"`
+	ModeloDfe          FlexString      `json:"modeloDfe"`
+	NumeroDfe          FlexString      `json:"numeroDfe"`
+	ChaveDfe           FlexString      `json:"chaveDfe"`
 	DataDfeEmissao     *RFBTime        `json:"dataDfeEmissao"`
 	DataDfeAutorizacao *RFBTime        `json:"dataDfeAutorizacao"`
 	DataDfeRegistro    *RFBTime        `json:"dataDfeRegistro"`
 	DataApuracao       string          `json:"dataApuracao"`
-	NiEmitente         string          `json:"niEmitente"`
-	NiAdquirente       string          `json:"niAdquirente"`
+	NiEmitente         FlexString      `json:"niEmitente"`
+	NiAdquirente       FlexString      `json:"niAdquirente"`
 	ValorCBSTotal      float64         `json:"valorCBSTotal"`
 	ValorCBSExtinto    float64         `json:"valorCBSExtinto"`
 	ValorCBSNaoExtinto float64         `json:"valorCBSNaoExtinto"`
-	SituacaoDebito     string          `json:"situacaoDebito"`
+	SituacaoDebito     FlexString      `json:"situacaoDebito"`
 	FormasExtincao     json.RawMessage `json:"formasExtincao"`
 	Eventos            json.RawMessage `json:"eventos"`
 }
@@ -277,10 +287,10 @@ func insertDebito(exec dbExecutor, requestID, companyID, tipoApuracao string, d 
 			situacao_debito, formas_extincao, eventos)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`, requestID, companyID, tipoApuracao,
-		d.ModeloDfe, d.NumeroDfe, d.ChaveDfe, dataEmissao, d.DataApuracao,
-		d.NiEmitente, d.NiAdquirente,
+		string(d.ModeloDfe), string(d.NumeroDfe), string(d.ChaveDfe), dataEmissao, d.DataApuracao,
+		string(d.NiEmitente), string(d.NiAdquirente),
 		d.ValorCBSTotal, d.ValorCBSExtinto, d.ValorCBSNaoExtinto,
-		d.SituacaoDebito, formasExtincao, eventos)
+		string(d.SituacaoDebito), formasExtincao, eventos)
 	return err
 }
 
