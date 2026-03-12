@@ -9,6 +9,11 @@ import (
 	"time"
 )
 
+// dbExecutor abstracts *sql.DB and *sql.Tx so insertDebito works in both contexts.
+type dbExecutor interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+}
+
 // RFBTime handles RFB datetime strings that may lack timezone suffix (e.g. "2026-03-01T08:30:09").
 type RFBTime struct {
 	T *time.Time
@@ -67,6 +72,8 @@ type RFBDebito struct {
 
 // ProcessarDownloadRFB downloads and processes the RFB CBS assessment JSON.
 // It saves the raw JSON, normalizes debits into rfb_debitos, and creates a summary in rfb_resumo.
+// All DB writes (debits + summary) are wrapped in a single transaction to prevent partial imports.
+// An atomic status update prevents two goroutines from processing the same request concurrently.
 func ProcessarDownloadRFB(db *sql.DB, rfbClient *RFBClient, requestID string) error {
 	log.Printf("[RFB Processor] Starting download processing for request %s", requestID)
 
@@ -92,10 +99,9 @@ func ProcessarDownloadRFB(db *sql.DB, rfbClient *RFBClient, requestID string) er
 		return fmt.Errorf("failed to fetch credentials: %w", err)
 	}
 
-	// Apply the correct API path prefix based on the registered environment
 	rfbClient.SetAmbiente(ambiente)
 
-	// Use tiqueteDownload if provided by the webhook (RFB sends two separate tíquetes)
+	// Use tiqueteDownload if provided by the webhook
 	tiqueteParaDownload := tiquete
 	if tiqueteDownload != nil && *tiqueteDownload != "" {
 		tiqueteParaDownload = *tiqueteDownload
@@ -104,90 +110,116 @@ func ProcessarDownloadRFB(db *sql.DB, rfbClient *RFBClient, requestID string) er
 		log.Printf("[RFB Processor] WARNING: tiqueteDownload not set, falling back to tiqueteSolicitacao '%s'", tiquete)
 	}
 
-	// 2. Get fresh OAuth2 token
-	updateRequestStatus(db, requestID, "downloading")
+	// 2. Atomic status claim — prevents concurrent webhook + manual download races.
+	// Only proceeds if status is not already 'downloading', 'completed', or 'reprocessing'.
+	res, err := db.Exec(`
+		UPDATE rfb_requests SET status = 'downloading', updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1 AND status NOT IN ('downloading', 'completed', 'reprocessing')
+	`, requestID)
+	if err != nil {
+		return fmt.Errorf("failed to claim request status: %w", err)
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		log.Printf("[RFB Processor] Request %s already being processed by another goroutine — skipping", requestID)
+		return nil
+	}
+
+	// 3. Get fresh OAuth2 token
 	token, err := rfbClient.GetToken(clientID, clientSecret)
 	if err != nil {
 		updateRequestError(db, requestID, "TOKEN_ERROR", err.Error())
 		return fmt.Errorf("failed to get token: %w", err)
 	}
 
-	// 3. Download the JSON file (single use per ticket!)
+	// 4. Download the JSON file (single-use ticket!)
 	rawJSON, err := rfbClient.DownloadArquivo(token, tiqueteParaDownload)
 	if err != nil {
 		updateRequestError(db, requestID, "DOWNLOAD_ERROR", err.Error())
 		return fmt.Errorf("failed to download: %w", err)
 	}
 
-	// 4. Save raw JSON as TEXT immediately — data is preserved even if parse fails.
-	// Column is TEXT (not JSONB), so no size limit applies.
+	// 5. Save raw JSON as TEXT immediately — data is preserved even if parse/insert fails.
+	// Column is TEXT (not JSONB, migration 064), so no 268 MB size limit applies.
 	log.Printf("[RFB Processor] Saving raw JSON (%d MB) for request %s", len(rawJSON)/1024/1024, requestID)
-	_, err = db.Exec(`
+	_, saveErr := db.Exec(`
 		UPDATE rfb_requests SET raw_json = $1, updated_at = CURRENT_TIMESTAMP
 		WHERE id = $2
 	`, string(rawJSON), requestID)
-	if err != nil {
-		// Non-fatal: log but continue — debits can still be parsed and inserted
-		log.Printf("[RFB Processor] WARNING: Failed to save raw JSON for request %s: %v", requestID, err)
+	if saveErr != nil {
+		// Non-fatal: log but continue — if parse succeeds, debits are still loaded
+		log.Printf("[RFB Processor] WARNING: Failed to save raw JSON for request %s: %v (processing continues)", requestID, saveErr)
 	} else {
 		log.Printf("[RFB Processor] Raw JSON saved successfully for request %s", requestID)
 	}
 
-	// 5. Parse JSON
+	// 6. Parse JSON
 	var apuracao RFBApuracaoJSON
 	if err := json.Unmarshal(rawJSON, &apuracao); err != nil {
 		updateRequestError(db, requestID, "PARSE_ERROR", "Falha ao interpretar JSON da RFB: "+err.Error())
 		return fmt.Errorf("failed to parse JSON: %w", err)
 	}
 
-	// 6. Normalize debits into rfb_debitos
-	var totalCorrente, totalAjuste, totalExtemporaneo int
+	// 7. Insert debits and summary inside a single transaction.
+	// If any step fails the whole import is rolled back — no partial data.
+	tx, err := db.Begin()
+	if err != nil {
+		updateRequestError(db, requestID, "DB_ERROR", "Falha ao iniciar transação: "+err.Error())
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	var totalCorrente, totalAjuste, totalExtemporaneo, insertErrors int
 	var valorTotal, valorExtinto, valorNaoExtinto float64
 	var dataApuracao string
 
 	if apuracao.ApuracaoCorrente != nil {
 		for _, d := range apuracao.ApuracaoCorrente.Debitos {
-			if err := insertDebito(db, requestID, companyID, "corrente", d); err != nil {
-				log.Printf("[RFB Processor] Error inserting corrente debit: %v", err)
-			}
-			totalCorrente++
-			valorTotal += d.ValorCBSTotal
-			valorExtinto += d.ValorCBSExtinto
-			valorNaoExtinto += d.ValorCBSNaoExtinto
-			if dataApuracao == "" && d.DataApuracao != "" {
-				dataApuracao = d.DataApuracao
+			if err := insertDebito(tx, requestID, companyID, "corrente", d); err != nil {
+				log.Printf("[RFB Processor] Error inserting corrente debit (chave=%s): %v", d.ChaveDfe, err)
+				insertErrors++
+			} else {
+				totalCorrente++
+				valorTotal += d.ValorCBSTotal
+				valorExtinto += d.ValorCBSExtinto
+				valorNaoExtinto += d.ValorCBSNaoExtinto
+				if dataApuracao == "" && d.DataApuracao != "" {
+					dataApuracao = d.DataApuracao
+				}
 			}
 		}
 	}
 
 	if apuracao.ApuracaoAjuste != nil {
 		for _, d := range apuracao.ApuracaoAjuste.Debitos {
-			if err := insertDebito(db, requestID, companyID, "ajuste", d); err != nil {
-				log.Printf("[RFB Processor] Error inserting ajuste debit: %v", err)
+			if err := insertDebito(tx, requestID, companyID, "ajuste", d); err != nil {
+				log.Printf("[RFB Processor] Error inserting ajuste debit (chave=%s): %v", d.ChaveDfe, err)
+				insertErrors++
+			} else {
+				totalAjuste++
+				valorTotal += d.ValorCBSTotal
+				valorExtinto += d.ValorCBSExtinto
+				valorNaoExtinto += d.ValorCBSNaoExtinto
 			}
-			totalAjuste++
-			valorTotal += d.ValorCBSTotal
-			valorExtinto += d.ValorCBSExtinto
-			valorNaoExtinto += d.ValorCBSNaoExtinto
 		}
 	}
 
 	if apuracao.DebitosExtemporaneos != nil {
 		for _, d := range apuracao.DebitosExtemporaneos.Debitos {
-			if err := insertDebito(db, requestID, companyID, "extemporaneo", d); err != nil {
-				log.Printf("[RFB Processor] Error inserting extemporaneo debit: %v", err)
+			if err := insertDebito(tx, requestID, companyID, "extemporaneo", d); err != nil {
+				log.Printf("[RFB Processor] Error inserting extemporaneo debit (chave=%s): %v", d.ChaveDfe, err)
+				insertErrors++
+			} else {
+				totalExtemporaneo++
+				valorTotal += d.ValorCBSTotal
+				valorExtinto += d.ValorCBSExtinto
+				valorNaoExtinto += d.ValorCBSNaoExtinto
 			}
-			totalExtemporaneo++
-			valorTotal += d.ValorCBSTotal
-			valorExtinto += d.ValorCBSExtinto
-			valorNaoExtinto += d.ValorCBSNaoExtinto
 		}
 	}
 
 	totalDebitos := totalCorrente + totalAjuste + totalExtemporaneo
 
-	// 7. Upsert summary in rfb_resumo
-	_, err = db.Exec(`
+	// Upsert summary in the same transaction
+	_, err = tx.Exec(`
 		INSERT INTO rfb_resumo (request_id, company_id, data_apuracao, total_debitos,
 			valor_cbs_total, valor_cbs_extinto, valor_cbs_nao_extinto,
 			total_corrente, total_ajuste, total_extemporaneo)
@@ -200,18 +232,29 @@ func ProcessarDownloadRFB(db *sql.DB, rfbClient *RFBClient, requestID string) er
 		valorTotal, valorExtinto, valorNaoExtinto,
 		totalCorrente, totalAjuste, totalExtemporaneo)
 	if err != nil {
-		log.Printf("[RFB Processor] Error upserting summary: %v", err)
+		tx.Rollback()
+		updateRequestError(db, requestID, "DB_ERROR", "Falha ao salvar resumo: "+err.Error())
+		return fmt.Errorf("failed to upsert summary: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		updateRequestError(db, requestID, "DB_ERROR", "Falha no commit da transação: "+err.Error())
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	// 8. Mark request as completed
-	updateRequestStatus(db, requestID, "completed")
-	log.Printf("[RFB Processor] Request %s completed: %d debits (%d corrente, %d ajuste, %d extemporaneo), CBS total: %.2f",
-		requestID, totalDebitos, totalCorrente, totalAjuste, totalExtemporaneo, valorTotal)
+	finalStatus := "completed"
+	if insertErrors > 0 {
+		log.Printf("[RFB Processor] WARN: %d debits failed to insert (raw_json preserved — use reprocess to retry)", insertErrors)
+	}
+	updateRequestStatus(db, requestID, finalStatus)
+	log.Printf("[RFB Processor] Request %s %s: %d debits (%d corrente, %d ajuste, %d extemporaneo, %d errors), CBS total: %.2f",
+		requestID, finalStatus, totalDebitos, totalCorrente, totalAjuste, totalExtemporaneo, insertErrors, valorTotal)
 
 	return nil
 }
 
-func insertDebito(db *sql.DB, requestID, companyID, tipoApuracao string, d RFBDebito) error {
+func insertDebito(exec dbExecutor, requestID, companyID, tipoApuracao string, d RFBDebito) error {
 	formasExtincao := sql.NullString{}
 	if len(d.FormasExtincao) > 0 && string(d.FormasExtincao) != "null" {
 		formasExtincao = sql.NullString{String: string(d.FormasExtincao), Valid: true}
@@ -221,13 +264,12 @@ func insertDebito(db *sql.DB, requestID, companyID, tipoApuracao string, d RFBDe
 		eventos = sql.NullString{String: string(d.Eventos), Valid: true}
 	}
 
-	// Extract *time.Time from RFBTime wrapper (handles nil safely)
 	var dataEmissao *time.Time
 	if d.DataDfeEmissao != nil {
 		dataEmissao = d.DataDfeEmissao.T
 	}
 
-	_, err := db.Exec(`
+	_, err := exec.Exec(`
 		INSERT INTO rfb_debitos (request_id, company_id, tipo_apuracao,
 			modelo_dfe, numero_dfe, chave_dfe, data_dfe_emissao, data_apuracao,
 			ni_emitente, ni_adquirente,
@@ -242,8 +284,9 @@ func insertDebito(db *sql.DB, requestID, companyID, tipoApuracao string, d RFBDe
 	return err
 }
 
-// ReprocessarRawJSON re-parses the raw JSON already stored in the DB without
-// calling the RFB API again. Useful when download succeeded but parse failed.
+// ReprocessarRawJSON re-parses the raw JSON already stored in the DB without calling the RFB API.
+// Safe pattern: parse JSON FIRST, then atomically delete old debits and insert new ones in a transaction.
+// If parse or any insert fails, old data is never deleted — no data loss.
 func ReprocessarRawJSON(db *sql.DB, requestID string) error {
 	log.Printf("[RFB Reprocess] Starting reprocess for request %s", requestID)
 
@@ -261,64 +304,93 @@ func ReprocessarRawJSON(db *sql.DB, requestID string) error {
 
 	log.Printf("[RFB Reprocess] Raw JSON found (%d MB), parsing...", len(*rawJSON)/1024/1024)
 
-	// Delete existing debits before reprocessing
-	_, err = db.Exec(`DELETE FROM rfb_debitos WHERE request_id = $1`, requestID)
+	// 1. Atomic status claim — prevent concurrent reprocess runs
+	res, err := db.Exec(`
+		UPDATE rfb_requests SET status = 'reprocessing', updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1 AND status NOT IN ('downloading', 'reprocessing')
+	`, requestID)
 	if err != nil {
-		log.Printf("[RFB Reprocess] WARNING: failed to delete existing debits: %v", err)
+		return fmt.Errorf("failed to claim reprocess status: %w", err)
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		log.Printf("[RFB Reprocess] Request %s is already being processed — skipping", requestID)
+		return nil
 	}
 
-	updateRequestStatus(db, requestID, "reprocessing")
-
+	// 2. Parse JSON FIRST — before touching any existing data.
+	// If parse fails, old debits remain intact.
 	var apuracao RFBApuracaoJSON
 	if err := json.Unmarshal([]byte(*rawJSON), &apuracao); err != nil {
 		updateRequestError(db, requestID, "PARSE_ERROR", "Falha ao reprocessar JSON: "+err.Error())
 		return fmt.Errorf("failed to parse JSON: %w", err)
 	}
 
-	var totalCorrente, totalAjuste, totalExtemporaneo int
+	// 3. Transaction: delete old debits then insert new ones atomically.
+	// Rollback keeps old data if anything goes wrong.
+	tx, err := db.Begin()
+	if err != nil {
+		updateRequestError(db, requestID, "DB_ERROR", "Falha ao iniciar transação: "+err.Error())
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	if _, err = tx.Exec(`DELETE FROM rfb_debitos WHERE request_id = $1`, requestID); err != nil {
+		tx.Rollback()
+		updateRequestError(db, requestID, "DB_ERROR", "Falha ao limpar débitos anteriores: "+err.Error())
+		return fmt.Errorf("failed to delete existing debits: %w", err)
+	}
+
+	var totalCorrente, totalAjuste, totalExtemporaneo, insertErrors int
 	var valorTotal, valorExtinto, valorNaoExtinto float64
 	var dataApuracao string
 
 	if apuracao.ApuracaoCorrente != nil {
 		for _, d := range apuracao.ApuracaoCorrente.Debitos {
-			if err := insertDebito(db, requestID, companyID, "corrente", d); err != nil {
-				log.Printf("[RFB Reprocess] Error inserting corrente debit: %v", err)
-			}
-			totalCorrente++
-			valorTotal += d.ValorCBSTotal
-			valorExtinto += d.ValorCBSExtinto
-			valorNaoExtinto += d.ValorCBSNaoExtinto
-			if dataApuracao == "" && d.DataApuracao != "" {
-				dataApuracao = d.DataApuracao
+			if err := insertDebito(tx, requestID, companyID, "corrente", d); err != nil {
+				log.Printf("[RFB Reprocess] Error inserting corrente debit (chave=%s): %v", d.ChaveDfe, err)
+				insertErrors++
+			} else {
+				totalCorrente++
+				valorTotal += d.ValorCBSTotal
+				valorExtinto += d.ValorCBSExtinto
+				valorNaoExtinto += d.ValorCBSNaoExtinto
+				if dataApuracao == "" && d.DataApuracao != "" {
+					dataApuracao = d.DataApuracao
+				}
 			}
 		}
 	}
+
 	if apuracao.ApuracaoAjuste != nil {
 		for _, d := range apuracao.ApuracaoAjuste.Debitos {
-			if err := insertDebito(db, requestID, companyID, "ajuste", d); err != nil {
-				log.Printf("[RFB Reprocess] Error inserting ajuste debit: %v", err)
+			if err := insertDebito(tx, requestID, companyID, "ajuste", d); err != nil {
+				log.Printf("[RFB Reprocess] Error inserting ajuste debit (chave=%s): %v", d.ChaveDfe, err)
+				insertErrors++
+			} else {
+				totalAjuste++
+				valorTotal += d.ValorCBSTotal
+				valorExtinto += d.ValorCBSExtinto
+				valorNaoExtinto += d.ValorCBSNaoExtinto
 			}
-			totalAjuste++
-			valorTotal += d.ValorCBSTotal
-			valorExtinto += d.ValorCBSExtinto
-			valorNaoExtinto += d.ValorCBSNaoExtinto
 		}
 	}
+
 	if apuracao.DebitosExtemporaneos != nil {
 		for _, d := range apuracao.DebitosExtemporaneos.Debitos {
-			if err := insertDebito(db, requestID, companyID, "extemporaneo", d); err != nil {
-				log.Printf("[RFB Reprocess] Error inserting extemporaneo debit: %v", err)
+			if err := insertDebito(tx, requestID, companyID, "extemporaneo", d); err != nil {
+				log.Printf("[RFB Reprocess] Error inserting extemporaneo debit (chave=%s): %v", d.ChaveDfe, err)
+				insertErrors++
+			} else {
+				totalExtemporaneo++
+				valorTotal += d.ValorCBSTotal
+				valorExtinto += d.ValorCBSExtinto
+				valorNaoExtinto += d.ValorCBSNaoExtinto
 			}
-			totalExtemporaneo++
-			valorTotal += d.ValorCBSTotal
-			valorExtinto += d.ValorCBSExtinto
-			valorNaoExtinto += d.ValorCBSNaoExtinto
 		}
 	}
 
 	totalDebitos := totalCorrente + totalAjuste + totalExtemporaneo
 
-	_, err = db.Exec(`
+	_, err = tx.Exec(`
 		INSERT INTO rfb_resumo (request_id, company_id, data_apuracao, total_debitos,
 			valor_cbs_total, valor_cbs_extinto, valor_cbs_nao_extinto,
 			total_corrente, total_ajuste, total_extemporaneo)
@@ -331,12 +403,22 @@ func ReprocessarRawJSON(db *sql.DB, requestID string) error {
 		valorTotal, valorExtinto, valorNaoExtinto,
 		totalCorrente, totalAjuste, totalExtemporaneo)
 	if err != nil {
-		log.Printf("[RFB Reprocess] Error upserting summary: %v", err)
+		tx.Rollback()
+		updateRequestError(db, requestID, "DB_ERROR", "Falha ao salvar resumo: "+err.Error())
+		return fmt.Errorf("failed to upsert summary: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		updateRequestError(db, requestID, "DB_ERROR", "Falha no commit: "+err.Error())
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	updateRequestStatus(db, requestID, "completed")
-	log.Printf("[RFB Reprocess] Request %s completed: %d debits (%d corrente, %d ajuste, %d extemporaneo), CBS total: %.2f",
-		requestID, totalDebitos, totalCorrente, totalAjuste, totalExtemporaneo, valorTotal)
+	if insertErrors > 0 {
+		log.Printf("[RFB Reprocess] WARN: %d debits failed to insert out of total attempted", insertErrors)
+	}
+	log.Printf("[RFB Reprocess] Request %s completed: %d debits (%d corrente, %d ajuste, %d extemporaneo, %d errors), CBS total: %.2f",
+		requestID, totalDebitos, totalCorrente, totalAjuste, totalExtemporaneo, insertErrors, valorTotal)
 	return nil
 }
 
