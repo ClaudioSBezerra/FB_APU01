@@ -14,6 +14,7 @@ import GestaoAmbiente from './pages/GestaoAmbiente';
 import Managers from './pages/Managers';
 import RFBCredentials from './pages/RFBCredentials';
 import RFBApuracao from './pages/RFBApuracao';
+import RFBDebitos from './pages/RFBDebitos';
 import GestaoCredIBSCBS from './pages/GestaoCredIBSCBS';
 import PainelApuracaoIBS from './pages/PainelApuracaoIBS';
 import PainelApuracaoCBS from './pages/PainelApuracaoCBS';
@@ -151,6 +152,7 @@ function AppLayout() {
             {/* RFB */}
             <Route path="/rfb/credenciais" element={<RFBCredentials />} />
             <Route path="/rfb/apuracao" element={<RFBApuracao />} />
+            <Route path="/rfb/debitos" element={<RFBDebitos />} />
             <Route path="/rfb/gestao-creditos" element={<GestaoCredIBSCBS />} />
             <Route path="/rfb/apuracao-ibs" element={<PainelApuracaoIBS />} />
             <Route path="/rfb/apuracao-cbs" element={<PainelApuracaoCBS />} />
@@ -167,7 +169,7 @@ function AppLayout() {
 }
 
 function App() {
-  console.log("App Version: 5.9.10 - feat: débitos CBS paginados + resumo inline na lista");
+  console.log("App Version: 5.9.11 - feat: Credenciais RFB → Config, split Importação/Débitos CBS");
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

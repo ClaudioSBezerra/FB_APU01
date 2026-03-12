@@ -2,19 +2,15 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Globe, Send, RefreshCw, ChevronLeft, ChevronRight, AlertTriangle, Download, Trash2, RotateCcw, CheckCircle2 } from 'lucide-react';
+import { Globe, Send, RefreshCw, AlertTriangle, Download, Trash2, RotateCcw, CheckCircle2 } from 'lucide-react';
 
 interface RFBResumo {
-  id: string;
-  request_id: string;
-  data_apuracao: string;
   total_debitos: number;
   valor_cbs_total: number;
-  valor_cbs_extinto: number;
   valor_cbs_nao_extinto: number;
   total_corrente: number;
   total_ajuste: number;
-  total_extemporaneo: number;
+  data_apuracao: string;
 }
 
 interface RFBRequest {
@@ -30,29 +26,6 @@ interface RFBRequest {
   resumo?: RFBResumo;
 }
 
-interface RFBDebito {
-  id: string;
-  tipo_apuracao: string;
-  modelo_dfe: string;
-  numero_dfe: string;
-  chave_dfe: string;
-  data_dfe_emissao?: string;
-  data_apuracao: string;
-  ni_emitente: string;
-  ni_adquirente: string;
-  valor_cbs_total: number;
-  valor_cbs_extinto: number;
-  valor_cbs_nao_extinto: number;
-  situacao_debito: string;
-}
-
-interface Pagination {
-  page: number;
-  page_size: number;
-  total: number;
-  total_pages: number;
-}
-
 const statusConfig: Record<string, { label: string; color: string }> = {
   pending:          { label: 'Pendente',      color: 'bg-gray-100 text-gray-700' },
   requested:        { label: 'Solicitado',    color: 'bg-yellow-100 text-yellow-700' },
@@ -62,10 +35,6 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   completed:        { label: 'Concluído',     color: 'bg-green-100 text-green-700' },
   error:            { label: 'Erro',          color: 'bg-red-100 text-red-700' },
 };
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-}
 
 function formatCNPJBase(cnpj: string): string {
   if (cnpj.length === 8) return `${cnpj.slice(0, 2)}.${cnpj.slice(2, 5)}.${cnpj.slice(5)}`;
@@ -81,13 +50,14 @@ function formatNumber(n: number): string {
   return new Intl.NumberFormat('pt-BR').format(n);
 }
 
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+}
+
 export default function RFBApuracao() {
   const [requests, setRequests] = useState<RFBRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [soliciting, setSoliciting] = useState(false);
-  const [selectedRequest, setSelectedRequest] = useState<string | null>(null);
-  const [detail, setDetail] = useState<{ request: RFBRequest; resumo: RFBResumo | null; debitos: RFBDebito[]; pagination: Pagination } | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const getHeaders = () => {
@@ -117,9 +87,11 @@ export default function RFBApuracao() {
     fetchRequests();
   }, [fetchRequests]);
 
-  // Poll for status updates when there are pending requests
+  // Poll para requests em andamento
   useEffect(() => {
-    const hasPending = requests.some(r => ['pending', 'requested', 'webhook_received', 'downloading', 'reprocessing'].includes(r.status));
+    const hasPending = requests.some(r =>
+      ['pending', 'requested', 'webhook_received', 'downloading', 'reprocessing'].includes(r.status)
+    );
     if (!hasPending) return;
     const interval = setInterval(fetchRequests, 10000);
     return () => clearInterval(interval);
@@ -146,27 +118,6 @@ export default function RFBApuracao() {
       setMessage({ type: 'error', text: 'Erro de conexão' });
     } finally {
       setSoliciting(false);
-    }
-  };
-
-  const fetchDetail = async (requestId: string, page = 1) => {
-    setSelectedRequest(requestId);
-    setDetailLoading(true);
-    try {
-      const response = await fetch(`/api/rfb/apuracao/${requestId}?page=${page}`, { headers: getHeaders() });
-      if (response.ok) {
-        const data = await response.json();
-        setDetail({
-          request: data.request,
-          resumo: data.resumo || null,
-          debitos: data.debitos || [],
-          pagination: data.pagination || { page: 1, page_size: 500, total: 0, total_pages: 1 },
-        });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Erro ao carregar detalhes' });
-    } finally {
-      setDetailLoading(false);
     }
   };
 
@@ -238,165 +189,16 @@ export default function RFBApuracao() {
     );
   }
 
-  // ── Detail view ──
-  if (selectedRequest && detail) {
-    const { request: req, resumo, debitos, pagination } = detail;
-    const sc = statusConfig[req.status] || statusConfig.pending;
-
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <Button variant="ghost" className="mb-4" onClick={() => { setSelectedRequest(null); setDetail(null); }}>
-          <ChevronLeft className="mr-1 h-4 w-4" /> Voltar
-        </Button>
-
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold flex items-center gap-2">
-              Detalhes da Apuração CBS
-              <Badge className={sc.color}>{sc.label}</Badge>
-            </h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              CNPJ Base: {formatCNPJBase(req.cnpj_base)} · Solicitado em: {new Date(req.created_at).toLocaleString('pt-BR')}
-            </p>
-          </div>
-        </div>
-
-        {req.error_message && (
-          <div className="mb-4 rounded-md p-4 bg-red-50 text-red-800 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            <span className="text-sm font-medium">{req.error_code}: {req.error_message}</span>
-          </div>
-        )}
-
-        {/* Resumo cards */}
-        {resumo && (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-              <Card><CardContent className="pt-4">
-                <p className="text-xs text-muted-foreground">Período</p>
-                <p className="text-xl font-bold">{formatPeriodo(resumo.data_apuracao)}</p>
-              </CardContent></Card>
-              <Card><CardContent className="pt-4">
-                <p className="text-xs text-muted-foreground">Total de Débitos</p>
-                <p className="text-xl font-bold">{formatNumber(resumo.total_debitos)}</p>
-              </CardContent></Card>
-              <Card><CardContent className="pt-4">
-                <p className="text-xs text-muted-foreground">CBS Total</p>
-                <p className="text-xl font-bold text-red-600">{formatCurrency(resumo.valor_cbs_total)}</p>
-              </CardContent></Card>
-              <Card><CardContent className="pt-4">
-                <p className="text-xs text-muted-foreground">CBS Não Extinto</p>
-                <p className="text-xl font-bold text-orange-600">{formatCurrency(resumo.valor_cbs_nao_extinto)}</p>
-              </CardContent></Card>
-            </div>
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              <Card><CardContent className="pt-4 text-center">
-                <p className="text-xs text-muted-foreground">Corrente</p>
-                <p className="text-lg font-bold">{formatNumber(resumo.total_corrente)}</p>
-              </CardContent></Card>
-              <Card><CardContent className="pt-4 text-center">
-                <p className="text-xs text-muted-foreground">Ajuste</p>
-                <p className="text-lg font-bold">{formatNumber(resumo.total_ajuste)}</p>
-              </CardContent></Card>
-              <Card><CardContent className="pt-4 text-center">
-                <p className="text-xs text-muted-foreground">Extemporâneo</p>
-                <p className="text-lg font-bold">{formatNumber(resumo.total_extemporaneo)}</p>
-              </CardContent></Card>
-            </div>
-          </>
-        )}
-
-        {/* Tabela de débitos paginada */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">
-                Débitos CBS — página {pagination.page} de {pagination.total_pages}
-                <span className="ml-2 text-sm font-normal text-muted-foreground">
-                  ({formatNumber(pagination.total)} registros no total)
-                </span>
-              </CardTitle>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline"
-                  disabled={pagination.page <= 1 || detailLoading}
-                  onClick={() => fetchDetail(req.id, pagination.page - 1)}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-xs text-muted-foreground w-16 text-center">
-                  {pagination.page} / {pagination.total_pages}
-                </span>
-                <Button size="sm" variant="outline"
-                  disabled={pagination.page >= pagination.total_pages || detailLoading}
-                  onClick={() => fetchDetail(req.id, pagination.page + 1)}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {detailLoading ? (
-              <div className="flex justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-              </div>
-            ) : debitos.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 text-xs">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-semibold">Tipo</th>
-                      <th className="px-3 py-2 text-left font-semibold">Mod.</th>
-                      <th className="px-3 py-2 text-left font-semibold">Número NF</th>
-                      <th className="px-3 py-2 text-left font-semibold">Emitente (NI)</th>
-                      <th className="px-3 py-2 text-left font-semibold">Período</th>
-                      <th className="px-3 py-2 text-right font-semibold">CBS Total</th>
-                      <th className="px-3 py-2 text-right font-semibold">Extinto</th>
-                      <th className="px-3 py-2 text-right font-semibold">Não Extinto</th>
-                      <th className="px-3 py-2 text-left font-semibold">Situação</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {debitos.map((d) => (
-                      <tr key={d.id} className="hover:bg-gray-50">
-                        <td className="px-3 py-1.5">
-                          <Badge variant="outline" className="text-[10px]">
-                            {d.tipo_apuracao === 'corrente' ? 'Corrente' : d.tipo_apuracao === 'ajuste' ? 'Ajuste' : 'Extemp.'}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-1.5 font-mono">{d.modelo_dfe || '—'}</td>
-                        <td className="px-3 py-1.5 font-mono">{d.numero_dfe || '—'}</td>
-                        <td className="px-3 py-1.5 font-mono">{d.ni_emitente}</td>
-                        <td className="px-3 py-1.5">{formatPeriodo(d.data_apuracao?.replace('-', '').slice(0, 6))}</td>
-                        <td className="px-3 py-1.5 text-right">{formatCurrency(d.valor_cbs_total)}</td>
-                        <td className="px-3 py-1.5 text-right text-green-600">{formatCurrency(d.valor_cbs_extinto)}</td>
-                        <td className="px-3 py-1.5 text-right text-orange-600">{formatCurrency(d.valor_cbs_nao_extinto)}</td>
-                        <td className="px-3 py-1.5">{d.situacao_debito}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="py-8 text-center text-muted-foreground text-sm">
-                Nenhum débito CBS encontrado para este período.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // ── List view ──
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
       <div className="md:flex md:items-center md:justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <Globe className="h-6 w-6" />
-            Débitos CBS — Receita Federal
+            Importação dos Débitos CBS
           </h2>
           <p className="mt-1 text-sm text-gray-600">
-            Solicite e acompanhe a apuração de débitos CBS diretamente da Receita Federal.
+            Solicite e acompanhe a importação de débitos CBS diretamente da Receita Federal.
           </p>
         </div>
         <div className="mt-4 md:mt-0 flex gap-2">
@@ -423,8 +225,11 @@ export default function RFBApuracao() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Solicitações</CardTitle>
-          <CardDescription>Histórico de solicitações de apuração CBS (limite: 2 por dia)</CardDescription>
+          <CardTitle className="text-lg">Histórico de Solicitações</CardTitle>
+          <CardDescription>
+            Registro de todas as importações de débitos CBS da RFB (limite: 2 solicitações por dia).
+            Para visualizar os débitos importados, acesse <strong>Débitos mês corrente</strong>.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {requests.length === 0 ? (
@@ -442,14 +247,11 @@ export default function RFBApuracao() {
 
                 return (
                   <div key={req.id} className="rounded-lg border overflow-hidden">
-                    {/* Cabeçalho da linha */}
-                    <div
-                      className={`flex items-center justify-between p-4 ${req.status === 'completed' ? 'cursor-pointer hover:bg-gray-50' : ''}`}
-                      onClick={() => req.status === 'completed' && fetchDetail(req.id)}
-                    >
+                    <div className="flex items-center justify-between p-4">
                       <div className="flex items-center gap-3">
                         {isPending && <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 shrink-0" />}
                         {req.status === 'completed' && <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />}
+                        {req.status === 'error' && <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />}
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-sm">CNPJ: {formatCNPJBase(req.cnpj_base)}</span>
@@ -457,14 +259,16 @@ export default function RFBApuracao() {
                           </div>
                           <p className="text-xs text-muted-foreground mt-0.5">
                             {new Date(req.created_at).toLocaleString('pt-BR')}
-                            {req.error_message && <span className="text-red-600 ml-2">{req.error_message}</span>}
+                            {req.error_message && (
+                              <span className="text-red-600 ml-2">{req.error_message}</span>
+                            )}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         {req.status === 'webhook_received' && (
                           <Button size="sm" variant="outline"
-                            onClick={(e) => { e.stopPropagation(); handleDownloadManual(req.id); }}>
+                            onClick={() => handleDownloadManual(req.id)}>
                             <Download className="mr-1 h-3 w-3" /> Download Manual
                           </Button>
                         )}
@@ -472,17 +276,14 @@ export default function RFBApuracao() {
                           <>
                             <Badge variant="destructive" className="text-xs">{req.error_code}</Badge>
                             <Button size="sm" variant="outline" className="text-purple-600 hover:bg-purple-50"
-                              onClick={(e) => { e.stopPropagation(); handleReprocess(req.id); }}>
+                              onClick={() => handleReprocess(req.id)}>
                               <RotateCcw className="mr-1 h-3 w-3" /> Reprocessar
                             </Button>
                             <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2"
-                              onClick={(e) => { e.stopPropagation(); handleDelete(req.id); }}>
+                              onClick={() => handleDelete(req.id)}>
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </>
-                        )}
-                        {req.status === 'completed' && (
-                          <span className="text-xs text-muted-foreground">Ver débitos →</span>
                         )}
                       </div>
                     </div>
