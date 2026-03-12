@@ -167,7 +167,7 @@ function AppLayout() {
 }
 
 function App() {
-  console.log("App Version: 5.9.9 - feat: login split-screen painel esquerdo FC finalizado");
+  console.log("App Version: 5.9.10 - feat: débitos CBS paginados + resumo inline na lista");
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

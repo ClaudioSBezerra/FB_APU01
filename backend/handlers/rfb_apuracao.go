@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,16 +17,17 @@ import (
 
 // RFBRequest represents a request to the RFB API
 type RFBRequest struct {
-	ID           string     `json:"id"`
-	CompanyID    string     `json:"company_id"`
-	CNPJBase     string     `json:"cnpj_base"`
-	Tiquete      string     `json:"tiquete,omitempty"`
-	Status       string     `json:"status"`
-	Ambiente     string     `json:"ambiente"`
-	ErrorCode    *string    `json:"error_code,omitempty"`
-	ErrorMessage *string    `json:"error_message,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	ID           string      `json:"id"`
+	CompanyID    string      `json:"company_id"`
+	CNPJBase     string      `json:"cnpj_base"`
+	Tiquete      string      `json:"tiquete,omitempty"`
+	Status       string      `json:"status"`
+	Ambiente     string      `json:"ambiente"`
+	ErrorCode    *string     `json:"error_code,omitempty"`
+	ErrorMessage *string     `json:"error_message,omitempty"`
+	CreatedAt    time.Time   `json:"created_at"`
+	UpdatedAt    time.Time   `json:"updated_at"`
+	Resumo       *RFBResumo  `json:"resumo,omitempty"`
 }
 
 // RFBResumo represents the summary of a CBS assessment
@@ -484,11 +486,15 @@ func StatusApuracaoHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		rows, err := db.Query(`
-			SELECT id, company_id, cnpj_base, COALESCE(tiquete, ''), status, ambiente,
-				error_code, error_message, created_at, updated_at
-			FROM rfb_requests
-			WHERE company_id = $1
-			ORDER BY created_at DESC
+			SELECT r.id, r.company_id, r.cnpj_base, COALESCE(r.tiquete, ''), r.status, r.ambiente,
+				r.error_code, r.error_message, r.created_at, r.updated_at,
+				res.id, res.request_id, COALESCE(res.data_apuracao, ''), res.total_debitos,
+				res.valor_cbs_total, res.valor_cbs_extinto, res.valor_cbs_nao_extinto,
+				res.total_corrente, res.total_ajuste, res.total_extemporaneo
+			FROM rfb_requests r
+			LEFT JOIN rfb_resumo res ON res.request_id = r.id
+			WHERE r.company_id = $1
+			ORDER BY r.created_at DESC
 			LIMIT 20
 		`, companyID)
 		if err != nil {
@@ -500,10 +506,33 @@ func StatusApuracaoHandler(db *sql.DB) http.HandlerFunc {
 		var requests []RFBRequest
 		for rows.Next() {
 			var req RFBRequest
-			if err := rows.Scan(&req.ID, &req.CompanyID, &req.CNPJBase, &req.Tiquete, &req.Status, &req.Ambiente,
-				&req.ErrorCode, &req.ErrorMessage, &req.CreatedAt, &req.UpdatedAt); err != nil {
+			var resID, resReqID, resData sql.NullString
+			var resTotalDebitos, resCorrente, resAjuste, resExtemp sql.NullInt64
+			var resCBSTotal, resCBSExtinto, resCBSNaoExtinto sql.NullFloat64
+
+			if err := rows.Scan(
+				&req.ID, &req.CompanyID, &req.CNPJBase, &req.Tiquete, &req.Status, &req.Ambiente,
+				&req.ErrorCode, &req.ErrorMessage, &req.CreatedAt, &req.UpdatedAt,
+				&resID, &resReqID, &resData, &resTotalDebitos,
+				&resCBSTotal, &resCBSExtinto, &resCBSNaoExtinto,
+				&resCorrente, &resAjuste, &resExtemp,
+			); err != nil {
 				http.Error(w, "Error scanning request: "+err.Error(), http.StatusInternalServerError)
 				return
+			}
+			if resID.Valid {
+				req.Resumo = &RFBResumo{
+					ID:                 resID.String,
+					RequestID:          resReqID.String,
+					DataApuracao:       resData.String,
+					TotalDebitos:       int(resTotalDebitos.Int64),
+					ValorCBSTotal:      resCBSTotal.Float64,
+					ValorCBSExtinto:    resCBSExtinto.Float64,
+					ValorCBSNaoExtinto: resCBSNaoExtinto.Float64,
+					TotalCorrente:      int(resCorrente.Int64),
+					TotalAjuste:        int(resAjuste.Int64),
+					TotalExtemporaneo:  int(resExtemp.Int64),
+				}
 			}
 			requests = append(requests, req)
 		}
@@ -592,7 +621,27 @@ func DetalheApuracaoHandler(db *sql.DB) http.HandlerFunc {
 			resumo = &r2
 		}
 
-		// Fetch debits
+		// Pagination — default 500 per page
+		const pageSize = 500
+		page := 1
+		if p, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && p > 0 {
+			page = p
+		}
+		offset := (page - 1) * pageSize
+
+		// Total debit count (uses summary if available, falls back to COUNT)
+		totalDebits := 0
+		if resumo != nil {
+			totalDebits = resumo.TotalDebitos
+		} else {
+			db.QueryRow(`SELECT COUNT(*) FROM rfb_debitos WHERE request_id = $1`, requestID).Scan(&totalDebits)
+		}
+		totalPages := (totalDebits + pageSize - 1) / pageSize
+		if totalPages == 0 {
+			totalPages = 1
+		}
+
+		// Fetch debits — paginated
 		debitRows, err := db.Query(`
 			SELECT id, tipo_apuracao, COALESCE(modelo_dfe, ''), COALESCE(numero_dfe, ''),
 				COALESCE(chave_dfe, ''),
@@ -604,7 +653,8 @@ func DetalheApuracaoHandler(db *sql.DB) http.HandlerFunc {
 			FROM rfb_debitos
 			WHERE request_id = $1
 			ORDER BY tipo_apuracao, data_apuracao
-		`, requestID)
+			LIMIT $2 OFFSET $3
+		`, requestID, pageSize, offset)
 		if err != nil {
 			http.Error(w, "Error querying debits: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -629,6 +679,12 @@ func DetalheApuracaoHandler(db *sql.DB) http.HandlerFunc {
 			"request": req,
 			"resumo":  resumo,
 			"debitos": debitos,
+			"pagination": map[string]int{
+				"page":        page,
+				"page_size":   pageSize,
+				"total":       totalDebits,
+				"total_pages": totalPages,
+			},
 		})
 	}
 }
