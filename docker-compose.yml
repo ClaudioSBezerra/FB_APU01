@@ -62,8 +62,8 @@ services:
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=${DB_NAME}
-    # ports:
-    #   - "${DB_PORT}:5432"
+    ports:
+      - "127.0.0.1:5432:5432"  # acessível apenas no host — não exposto à internet
     volumes:
       - postgres_data_v2:/var/lib/postgresql/data
     networks:
