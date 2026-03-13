@@ -63,7 +63,7 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=${DB_NAME}
     ports:
-      - "127.0.0.1:5432:5432"  # acessível apenas no host — não exposto à internet
+      - "10.0.1.1:5432:5432"  # acessível apenas pela rede interna Coolify — não exposto à internet
     volumes:
       - postgres_data_v2:/var/lib/postgresql/data
     networks:
