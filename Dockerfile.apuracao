@@ -1,17 +1,16 @@
-# FB_APU01 - DOCKERFILE PARA PRODUÇÃO (COOLIFY)
-# Versão: 5.0.9
+# FB_APU02 - DOCKERFILE PARA PRODUÇÃO (COOLIFY)
+# Módulo: Apuração Assistida + Receita Federal
 # Fluxo: GitHub → Coolify → Hostinger
 
 # Build stage
 FROM node:18-alpine AS frontend-builder
 WORKDIR /app/frontend
 
-# Copy frontend files
 COPY frontend/package*.json ./
 RUN npm ci
 
 COPY frontend/ ./
-ARG VITE_APP_MODULE=all
+ARG VITE_APP_MODULE=apuracao
 ENV VITE_APP_MODULE=$VITE_APP_MODULE
 RUN npm run build
 
@@ -19,17 +18,13 @@ RUN npm run build
 FROM golang:1.22-alpine AS backend-builder
 WORKDIR /app/backend
 
-# Install build dependencies
 RUN apk add --no-cache git
 
-# Copy backend files
 COPY backend/ ./
 COPY backend/go.mod backend/go.sum ./
 
-# Download dependencies
 RUN go mod download
 
-# Build the backend application
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-w -s" \
     -a -installsuffix cgo \
@@ -38,46 +33,34 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 # Production stage
 FROM alpine:latest
 
-# Install runtime dependencies
 RUN apk --no-cache add ca-certificates curl tzdata postgresql-client
 
-# Create app user
 RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup
 
-# Set timezone
 RUN ln -sf /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime
 
 WORKDIR /app
 
-# Copy backend binary
 COPY --from=backend-builder /app/backend/fb_apu01-api .
-
-# Copy frontend build
 COPY --from=frontend-builder /app/frontend/dist ./static
-
-# Copy migration files
 COPY backend/migrations ./migrations
 
-# Create required directories
 RUN mkdir -p /app/uploads /app/logs /app/backups && \
     chown -R appuser:appgroup /app
 
-# Switch to non-root user
 USER appuser
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8081/api/health || exit 1
 
-# Expose port
 EXPOSE 8081
 
-# Run the application
+ENV APP_MODULE=apuracao
+
 CMD ["./fb_apu01-api"]
 
-# Labels for Coolify
 LABEL maintainer="FB_APU01 Team"
-LABEL version="5.7.0"
-LABEL description="Sistema de Reforma Tributária"
+LABEL version="5.9.11"
+LABEL description="Sistema de Apuração Assistida + Receita Federal"
 LABEL com.coolify.image=true

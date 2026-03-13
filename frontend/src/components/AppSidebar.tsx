@@ -74,6 +74,7 @@ interface NavSection {
   title: string;
   sectionIcon: React.ElementType;
   adminOnly?: boolean;
+  appModule?: 'simulador' | 'apuracao';
   items: NavItem[];
 }
 
@@ -100,6 +101,7 @@ const sections: NavSection[] = [
     id: "simulador",
     title: "Simulador da Reforma Tributária",
     sectionIcon: TrendingUp,
+    appModule: 'simulador',
     items: [
       { title: "Importar SPEDs",              url: "/importar-efd",                    icon: FileSpreadsheet },
       { title: "Operações Comerciais",         url: "/mercadorias",                     icon: ShoppingCart },
@@ -114,6 +116,7 @@ const sections: NavSection[] = [
     title: "Apuração Assistida — Importar",
     sectionIcon: FolderInput,
     adminOnly: true,
+    appModule: 'apuracao',
     items: [
       { title: "Entradas Mod. 55",        url: "/apuracao/entrada",  icon: Upload },
       { title: "Saídas Mod. 55/65",       url: "/apuracao/saida",    icon: Upload },
@@ -127,6 +130,7 @@ const sections: NavSection[] = [
     title: "Apuração Assistida",
     sectionIcon: Calculator,
     adminOnly: true,
+    appModule: 'apuracao',
     items: [
       { title: "Entradas Mod. 55",        url: "/apuracao/entrada/notas",     icon: FileText },
       { title: "Saídas Mod. 55/65",       url: "/apuracao/saida/notas",       icon: FileText },
@@ -143,6 +147,7 @@ const sections: NavSection[] = [
     title: "Receita Federal",
     sectionIcon: Landmark,
     adminOnly: true,
+    appModule: 'apuracao',
     items: [
       { title: "Demo Gestão de apuração IBS/CBS", url: "/rfb/gestao-creditos",         icon: BarChart3 },
       { title: "Importação dos débitos CBS",     url: "/rfb/apuracao",                icon: Download },
@@ -158,6 +163,8 @@ const sections: NavSection[] = [
 // ---------------------------------------------------------------------------
 // AppSidebar
 // ---------------------------------------------------------------------------
+const APP_MODULE = (import.meta.env.VITE_APP_MODULE as string) || 'all'
+
 export function AppSidebar() {
   const location = useLocation()
   const { user, company, logout, token } = useAuth()
@@ -237,6 +244,7 @@ export function AppSidebar() {
       <SidebarContent>
         {sections.map((section) => {
           if (section.adminOnly && !isAdmin) return null
+          if (section.appModule && APP_MODULE !== 'all' && section.appModule !== APP_MODULE) return null
           const visibleItems = section.items.filter(
             (item) => !item.adminOnly || isAdmin
           )

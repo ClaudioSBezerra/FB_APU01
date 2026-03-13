@@ -220,21 +220,23 @@ func onDBConnected() {
 		}
 	}
 
-	// Start Background Worker
-	worker.StartWorker(database)
+	// Start Background Worker (only for Simulador — SPED worker not needed in Apuração)
+	appModule := os.Getenv("APP_MODULE")
+	if appModule != "apuracao" {
+		worker.StartWorker(database)
 
-	// Trigger async refresh of views (Startup)
-	go func() {
-		// Wait for server to start serving requests
-		time.Sleep(5 * time.Second)
-		log.Println("Background: Triggering initial view refresh (mv_mercadorias_agregada)...")
-		_, err := database.Exec("REFRESH MATERIALIZED VIEW mv_mercadorias_agregada")
-		if err != nil {
-			log.Printf("Background: Initial view refresh failed: %v", err)
-		} else {
-			log.Println("Background: Initial view refresh completed successfully.")
-		}
-	}()
+		// Trigger async refresh of materialized views (Startup — Simulador only)
+		go func() {
+			time.Sleep(5 * time.Second)
+			log.Println("Background: Triggering initial view refresh (mv_mercadorias_agregada)...")
+			_, err := database.Exec("REFRESH MATERIALIZED VIEW mv_mercadorias_agregada")
+			if err != nil {
+				log.Printf("Background: Initial view refresh failed: %v", err)
+			} else {
+				log.Println("Background: Initial view refresh completed successfully.")
+			}
+		}()
+	}
 }
 
 // Middleware to check if DB is ready
@@ -259,6 +261,13 @@ func DBMiddleware(next http.HandlerFunc) http.HandlerFunc {
 func main() {
 	// Load .env file if it exists
 	_ = godotenv.Load()
+
+	// APP_MODULE controls which route groups are registered:
+	//   "simulador" — SPED upload/jobs/reports/AI; no NF-e/CT-e/RFB routes
+	//   "apuracao"  — NF-e/CT-e/RFB/apuração; no upload/jobs/reports/AI routes
+	//   ""  / "all" — all routes (local dev)
+	appModule := os.Getenv("APP_MODULE")
+	log.Printf("APP_MODULE=%q", appModule)
 
 	PrintVersion()
 
@@ -375,53 +384,58 @@ func main() {
 	// Filiais Endpoint (global branch selector)
 	http.HandleFunc("/api/filiais", withAuth(handlers.GetFiliaisHandler, ""))
 
-	// Report Endpoints
-	http.HandleFunc("/api/reports/mercadorias", withAuth(handlers.GetMercadoriasReportHandler, ""))
-	http.HandleFunc("/api/reports/energia", withAuth(handlers.GetEnergiaReportHandler, ""))
-	http.HandleFunc("/api/reports/transporte", withAuth(handlers.GetTransporteReportHandler, ""))
-	http.HandleFunc("/api/reports/comunicacoes", withAuth(handlers.GetComunicacoesReportHandler, ""))
-	http.HandleFunc("/api/dashboard/projection", withAuth(handlers.GetDashboardProjectionHandler, ""))
-	http.HandleFunc("/api/dashboard/simples-nacional", withAuth(handlers.GetSimplesDashboardHandler, ""))
+	// ── Simulador da Reforma Tributária (SPED) — routes skipped in APP_MODULE=apuracao ──
+	if appModule != "apuracao" {
+		// Report Endpoints
+		http.HandleFunc("/api/reports/mercadorias", withAuth(handlers.GetMercadoriasReportHandler, ""))
+		http.HandleFunc("/api/reports/energia", withAuth(handlers.GetEnergiaReportHandler, ""))
+		http.HandleFunc("/api/reports/transporte", withAuth(handlers.GetTransporteReportHandler, ""))
+		http.HandleFunc("/api/reports/comunicacoes", withAuth(handlers.GetComunicacoesReportHandler, ""))
+		http.HandleFunc("/api/dashboard/projection", withAuth(handlers.GetDashboardProjectionHandler, ""))
+		http.HandleFunc("/api/dashboard/simples-nacional", withAuth(handlers.GetSimplesDashboardHandler, ""))
 
-	// AI-Powered Report Endpoints
-	http.HandleFunc("/api/reports/available-periods", withAuth(handlers.GetAvailablePeriodsHandler, ""))
-	http.HandleFunc("/api/reports/executive-summary", withAuth(handlers.GetExecutiveSummaryHandler, ""))
-	http.HandleFunc("/api/insights/daily", withAuth(handlers.GetDailyInsightHandler, ""))
-	http.HandleFunc("/api/ai/query", withAuth(handlers.AIQueryHandler, ""))
+		// AI-Powered Report Endpoints
+		http.HandleFunc("/api/reports/available-periods", withAuth(handlers.GetAvailablePeriodsHandler, ""))
+		http.HandleFunc("/api/reports/executive-summary", withAuth(handlers.GetExecutiveSummaryHandler, ""))
+		http.HandleFunc("/api/insights/daily", withAuth(handlers.GetDailyInsightHandler, ""))
+		http.HandleFunc("/api/ai/query", withAuth(handlers.AIQueryHandler, ""))
 
-	// Saved AI Reports
-	http.HandleFunc("/api/reports", withAuth(handlers.ListSavedAIReportsHandler, ""))
-	http.HandleFunc("/api/reports/", withAuth(handlers.GetSavedAIReportHandler, ""))
+		// Saved AI Reports
+		http.HandleFunc("/api/reports", withAuth(handlers.ListSavedAIReportsHandler, ""))
+		http.HandleFunc("/api/reports/", withAuth(handlers.GetSavedAIReportHandler, ""))
 
-	// Register Upload Handler
-	http.HandleFunc("/api/upload", withAuth(handlers.UploadHandler, ""))
+		// SPED Upload Handler
+		http.HandleFunc("/api/upload", withAuth(handlers.UploadHandler, ""))
 
-	// Register Check Duplicity Handler
-	http.HandleFunc("/api/check-duplicity", withAuth(handlers.CheckDuplicityHandler, ""))
+		// Check Duplicity Handler
+		http.HandleFunc("/api/check-duplicity", withAuth(handlers.CheckDuplicityHandler, ""))
 
-	// Register Job Status Handler
-	http.HandleFunc("/api/jobs", withAuth(handlers.ListJobsHandler, ""))
+		// Job Status Handlers
+		http.HandleFunc("/api/jobs", withAuth(handlers.ListJobsHandler, ""))
 
-	// Custom wrapper for jobs/id (supports /participants and /cancel sub-routes)
-	http.HandleFunc("/api/jobs/", func(w http.ResponseWriter, r *http.Request) {
-		database := getDB()
-		if database == nil {
-			http.Error(w, "Database initializing...", http.StatusServiceUnavailable)
-			return
-		}
-		handlers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
-			path := strings.TrimPrefix(r.URL.Path, "/api/jobs/")
-			if strings.HasSuffix(path, "/participants") {
-				handlers.GetJobParticipantsHandler(database)(w, r)
+		// Custom wrapper for jobs/id (supports /participants and /cancel sub-routes)
+		http.HandleFunc("/api/jobs/", func(w http.ResponseWriter, r *http.Request) {
+			database := getDB()
+			if database == nil {
+				http.Error(w, "Database initializing...", http.StatusServiceUnavailable)
 				return
 			}
-			if strings.HasSuffix(path, "/cancel") {
-				handlers.CancelJobHandler(database)(w, r)
-				return
-			}
-			handlers.GetJobStatusHandler(database)(w, r)
-		}, "")(w, r)
-	})
+			handlers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
+				path := strings.TrimPrefix(r.URL.Path, "/api/jobs/")
+				if strings.HasSuffix(path, "/participants") {
+					handlers.GetJobParticipantsHandler(database)(w, r)
+					return
+				}
+				if strings.HasSuffix(path, "/cancel") {
+					handlers.CancelJobHandler(database)(w, r)
+					return
+				}
+				handlers.GetJobStatusHandler(database)(w, r)
+			}, "")(w, r)
+		})
+
+		http.HandleFunc("/api/mercadorias", withAuth(handlers.GetMercadoriasReportHandler, ""))
+	}
 
 	// Auth Routes
 	http.HandleFunc("/api/auth/register", withDB(handlers.RegisterHandler))
@@ -432,8 +446,6 @@ func main() {
 	http.HandleFunc("/api/auth/change-password", withAuth(handlers.ChangePasswordHandler, ""))
 	http.HandleFunc("/api/user/hierarchy", withAuth(handlers.GetUserHierarchyHandler, ""))
 	http.HandleFunc("/api/user/companies", withAuth(handlers.GetUserCompaniesHandler, ""))
-
-	http.HandleFunc("/api/mercadorias", withAuth(handlers.GetMercadoriasReportHandler, ""))
 
 	// Admin Endpoints
 	http.HandleFunc("/api/admin/reset-db", withAuth(handlers.ResetDatabaseHandler, "admin"))
@@ -520,53 +532,56 @@ func main() {
 		}
 	}, ""))
 
-	// RFB Credentials Endpoints (Conectar Receita Federal)
-	http.HandleFunc("/api/rfb/credentials", func(w http.ResponseWriter, r *http.Request) {
-		database := getDB()
-		if database == nil {
-			http.Error(w, "Database initializing...", http.StatusServiceUnavailable)
-			return
-		}
-		switch r.Method {
-		case http.MethodGet:
-			handlers.AuthMiddleware(handlers.GetRFBCredentialHandler(database), "")(w, r)
-		case http.MethodPost:
-			handlers.AuthMiddleware(handlers.SaveRFBCredentialHandler(database), "")(w, r)
-		case http.MethodDelete:
-			handlers.AuthMiddleware(handlers.DeleteRFBCredentialHandler(database), "")(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
+	// ── Apuração Assistida + Receita Federal — routes skipped in APP_MODULE=simulador ──
+	if appModule != "simulador" {
+		// RFB Credentials Endpoints (Conectar Receita Federal)
+		http.HandleFunc("/api/rfb/credentials", func(w http.ResponseWriter, r *http.Request) {
+			database := getDB()
+			if database == nil {
+				http.Error(w, "Database initializing...", http.StatusServiceUnavailable)
+				return
+			}
+			switch r.Method {
+			case http.MethodGet:
+				handlers.AuthMiddleware(handlers.GetRFBCredentialHandler(database), "")(w, r)
+			case http.MethodPost:
+				handlers.AuthMiddleware(handlers.SaveRFBCredentialHandler(database), "")(w, r)
+			case http.MethodDelete:
+				handlers.AuthMiddleware(handlers.DeleteRFBCredentialHandler(database), "")(w, r)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+		})
 
-	// RFB Apuração Endpoints
-	http.HandleFunc("/api/rfb/apuracao/solicitar", withAuth(handlers.SolicitarApuracaoHandler, ""))
-	http.HandleFunc("/api/rfb/apuracao/download", withAuth(handlers.DownloadManualHandler, ""))
-	http.HandleFunc("/api/rfb/apuracao/reprocess", withAuth(handlers.ReprocessHandler, ""))
-	http.HandleFunc("/api/rfb/apuracao/clear-errors", withAuth(handlers.ClearErrorsHandler, ""))
-	http.HandleFunc("/api/rfb/apuracao/status", withAuth(handlers.StatusApuracaoHandler, ""))
-	http.HandleFunc("/api/rfb/apuracao/", withAuth(handlers.DetalheApuracaoHandler, ""))
+		// RFB Apuração Endpoints
+		http.HandleFunc("/api/rfb/apuracao/solicitar", withAuth(handlers.SolicitarApuracaoHandler, ""))
+		http.HandleFunc("/api/rfb/apuracao/download", withAuth(handlers.DownloadManualHandler, ""))
+		http.HandleFunc("/api/rfb/apuracao/reprocess", withAuth(handlers.ReprocessHandler, ""))
+		http.HandleFunc("/api/rfb/apuracao/clear-errors", withAuth(handlers.ClearErrorsHandler, ""))
+		http.HandleFunc("/api/rfb/apuracao/status", withAuth(handlers.StatusApuracaoHandler, ""))
+		http.HandleFunc("/api/rfb/apuracao/", withAuth(handlers.DetalheApuracaoHandler, ""))
 
-	// RFB Webhook (PUBLIC - no JWT auth, called by Receita Federal)
-	http.HandleFunc("/api/rfb/webhook", withDB(handlers.RFBWebhookHandler))
+		// RFB Webhook (PUBLIC - no JWT auth, called by Receita Federal)
+		http.HandleFunc("/api/rfb/webhook", withDB(handlers.RFBWebhookHandler))
 
-	// Apuração Assistida — NF-e Saídas
-	http.HandleFunc("/api/nfe-saidas/upload", withAuth(handlers.NfeSaidasUploadHandler, ""))
-	http.HandleFunc("/api/nfe-saidas", withAuth(handlers.NfeSaidasListHandler, ""))
+		// Apuração Assistida — NF-e Saídas
+		http.HandleFunc("/api/nfe-saidas/upload", withAuth(handlers.NfeSaidasUploadHandler, ""))
+		http.HandleFunc("/api/nfe-saidas", withAuth(handlers.NfeSaidasListHandler, ""))
 
-	// Apuração Assistida — NF-e Entradas
-	http.HandleFunc("/api/nfe-entradas/upload", withAuth(handlers.NfeEntradasUploadHandler, ""))
-	http.HandleFunc("/api/nfe-entradas", withAuth(handlers.NfeEntradasListHandler, ""))
+		// Apuração Assistida — NF-e Entradas
+		http.HandleFunc("/api/nfe-entradas/upload", withAuth(handlers.NfeEntradasUploadHandler, ""))
+		http.HandleFunc("/api/nfe-entradas", withAuth(handlers.NfeEntradasListHandler, ""))
 
-	// Apuração Assistida — CT-e Entradas
-	http.HandleFunc("/api/cte-entradas/upload", withAuth(handlers.CteEntradasUploadHandler, ""))
-	http.HandleFunc("/api/cte-entradas", withAuth(handlers.CteEntradasListHandler, ""))
+		// Apuração Assistida — CT-e Entradas
+		http.HandleFunc("/api/cte-entradas/upload", withAuth(handlers.CteEntradasUploadHandler, ""))
+		http.HandleFunc("/api/cte-entradas", withAuth(handlers.CteEntradasListHandler, ""))
 
-	// Apuração Assistida — Créditos IBS/CBS em Risco
-	http.HandleFunc("/api/apuracao/creditos-perdidos", withAuth(handlers.CreditosPerdidosHandler, ""))
+		// Apuração Assistida — Créditos IBS/CBS em Risco
+		http.HandleFunc("/api/apuracao/creditos-perdidos", withAuth(handlers.CreditosPerdidosHandler, ""))
 
-	// Painel Apuração IBS/CBS
-	http.HandleFunc("/api/apuracao/painel", withAuth(handlers.ApuracaoPainelHandler, ""))
+		// Painel Apuração IBS/CBS
+		http.HandleFunc("/api/apuracao/painel", withAuth(handlers.ApuracaoPainelHandler, ""))
+	}
 
 	// Managers Endpoints (Gestores para relatorios IA)
 	http.HandleFunc("/api/managers", withAuth(handlers.ListManagersHandler, ""))
