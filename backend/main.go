@@ -603,6 +603,27 @@ func main() {
 		}
 	})
 
+	// Serve frontend static files (SPA — React Router)
+	staticDir := "./static"
+	if _, err := os.Stat(staticDir); err == nil {
+		fs := http.FileServer(http.Dir(staticDir))
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			// API routes are handled by their own handlers above
+			if strings.HasPrefix(r.URL.Path, "/api/") {
+				http.NotFound(w, r)
+				return
+			}
+			// Serve the file if it exists, otherwise fall back to index.html (SPA routing)
+			filePath := filepath.Join(staticDir, filepath.Clean(r.URL.Path))
+			if _, err := os.Stat(filePath); os.IsNotExist(err) {
+				http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
+				return
+			}
+			fs.ServeHTTP(w, r)
+		})
+		fmt.Println("Serving frontend from ./static")
+	}
+
 	fmt.Printf("FB_APU01 Fiscal Engine (Go) starting on port %s...\n", port)
 
 	// Print Version
