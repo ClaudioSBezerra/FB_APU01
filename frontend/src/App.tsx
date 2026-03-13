@@ -105,7 +105,7 @@ function AppLayout() {
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
           <div className="flex items-center gap-2 text-sm font-medium">
-            FB_APU01 / Painel
+            FBTax Cloud / Simulador RT
           </div>
         </header>
         <div className="flex-1 space-y-4 p-4 pt-6">
