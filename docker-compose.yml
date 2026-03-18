@@ -58,6 +58,7 @@ services:
       - api
     networks:
       - fb_net
+      - coolify
 
   # Banco de Dados
   db:
@@ -95,6 +96,8 @@ services:
 networks:
   fb_net:
     driver: bridge
+  coolify:
+    external: true
 
 volumes:
   postgres_data_v2:
