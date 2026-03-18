@@ -93,7 +93,7 @@ const Login = () => {
               <img
                 src="/logo-ferreira-costa.png"
                 alt="Ferreira Costa Home Center"
-                className="h-14 w-auto object-contain"
+                className="h-14 w-auto"
               />
             </div>
           </div>
