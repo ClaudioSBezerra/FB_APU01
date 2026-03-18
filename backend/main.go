@@ -24,9 +24,9 @@ import (
 )
 
 // Version information for backend deployment validation
-// Force rebuild: 2026-03-10 - v5.9.2 - Filtro multi-filial global + fix insight diário
+// Force rebuild: 2026-03-18 - v5.9.13 - Separação simulador/apuracao + docker-compose Service
 const (
-	BackendVersion = "5.9.2"
+	BackendVersion = "5.9.13"
 	FeatureSet     = "Z.AI GLM Integration, AI Executive Reports, Email Estruturado, NF-e Entradas, Creditos em Risco, Tax Reform Projection, Simples Nacional Dashboard, Apelidos de Filiais, Filtro Multi-Filial Global"
 )
 
