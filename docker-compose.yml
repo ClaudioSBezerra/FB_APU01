@@ -42,10 +42,7 @@ services:
       context: ./frontend
       args:
         - VITE_APP_MODULE=${VITE_APP_MODULE:-simulador}
-    container_name: fb_apu01-web
     restart: always
-    ports:
-      - "3000:80"
     expose:
       - "80"
     depends_on:
