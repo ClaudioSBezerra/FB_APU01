@@ -51,11 +51,10 @@ export default function ImportarEFD() {
       try {
         const res = await fetch('/api/jobs', {
           headers: {
-            'Authorization': `Bearer ${token}`,
             'Cache-Control': 'no-cache',
             'Pragma': 'no-cache'
           }
-        }); 
+        });
         if (res.ok) {
           const data = await res.json();
           setJobs(data);
@@ -155,12 +154,7 @@ export default function ImportarEFD() {
                 const cnpj = fields[7];
                 
                 if (dtIni && cnpj) {
-                     const authToken = token || localStorage.getItem('token');
-                     const res = await fetch(`/api/check-duplicity?cnpj=${cnpj}&dt_ini=${dtIni}`, {
-                        headers: {
-                            'Authorization': `Bearer ${authToken}`
-                        }
-                     });
+                     const res = await fetch(`/api/check-duplicity?cnpj=${cnpj}&dt_ini=${dtIni}`);
                      
                      if (res.ok) {
                          const data = await res.json();
@@ -394,14 +388,12 @@ export default function ImportarEFD() {
         await new Promise(r => setTimeout(r, 2000)); // Poll every 2s
         
         try {
-            const authToken = token || localStorage.getItem('token');
             const res = await fetch('/api/jobs', {
               headers: {
-                'Authorization': `Bearer ${authToken}`,
                 'Cache-Control': 'no-cache',
                 'Pragma': 'no-cache'
               }
-            }); 
+            });
             if (res.ok) {
                 const data: ImportJob[] = await res.json();
                 setJobs(data);
@@ -437,9 +429,6 @@ export default function ImportarEFD() {
     try {
         const refreshRes = await fetch('/api/admin/refresh-views', {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
         });
         
         toast.dismiss(toastId);
@@ -486,12 +475,8 @@ export default function ImportarEFD() {
     }
 
     try {
-        const authToken = token || localStorage.getItem('token');
-        const res = await fetch('/api/admin/reset-db', { 
+        const res = await fetch('/api/admin/reset-db', {
             method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${authToken}`
-            }
         });
         if (res.ok) {
             toast.success('Base de dados limpa com sucesso!');
@@ -518,11 +503,9 @@ export default function ImportarEFD() {
     }
 
     try {
-        const authToken = token || localStorage.getItem('token');
-        const res = await fetch('/api/company/reset-data', { 
+        const res = await fetch('/api/company/reset-data', {
             method: 'DELETE',
             headers: {
-                'Authorization': `Bearer ${authToken}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ company_id: companyId })
@@ -530,10 +513,7 @@ export default function ImportarEFD() {
 
         if (res.ok) {
             toast.success(`Dados da empresa ${company} limpos com sucesso!`);
-            const authToken = token || localStorage.getItem('token');
-            const jobsRes = await fetch('/api/jobs', {
-                headers: { 'Authorization': `Bearer ${authToken}` }
-            });
+            const jobsRes = await fetch('/api/jobs');
             if (jobsRes.ok) {
                 const data = await jobsRes.json();
                 setJobs(data);

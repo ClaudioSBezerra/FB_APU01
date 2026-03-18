@@ -233,7 +233,6 @@ function CreditosEmRisco({ token, companyId }: { token: string | null; companyId
     if (!token) return;
     fetch('/api/apuracao/creditos-perdidos', {
       headers: {
-        Authorization: `Bearer ${token}`,
         'X-Company-ID': companyId || '',
       },
     })
@@ -329,9 +328,7 @@ export default function ExecutiveSummary() {
   useEffect(() => {
     const fetchPeriods = async () => {
       try {
-        const headers: Record<string, string> = {
-          Authorization: `Bearer ${token || localStorage.getItem('token')}`,
-        };
+        const headers: Record<string, string> = {};
         if (companyId) {
           headers['X-Company-ID'] = companyId;
         }
@@ -357,9 +354,7 @@ export default function ExecutiveSummary() {
   const fetchSummary = async (periodo: string, force = false) => {
     setLoading(true);
     try {
-      const headers: Record<string, string> = {
-        Authorization: `Bearer ${token || localStorage.getItem('token')}`,
-      };
+      const headers: Record<string, string> = {};
       if (companyId) {
         headers['X-Company-ID'] = companyId;
       }

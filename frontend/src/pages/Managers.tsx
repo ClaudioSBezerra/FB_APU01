@@ -21,11 +21,9 @@ export default function Managers() {
 
   const fetchManagers = async () => {
     try {
-      const token = localStorage.getItem('token');
       const companyId = localStorage.getItem('selectedCompanyId');
       const response = await fetch('/api/managers', {
         headers: {
-          'Authorization': `Bearer ${token}`,
           'X-Company-ID': companyId || '',
         },
       });
@@ -51,7 +49,6 @@ export default function Managers() {
     setMessage(null);
 
     try {
-      const token = localStorage.getItem('token');
       const companyId = localStorage.getItem('selectedCompanyId');
       const url = editingManager
         ? `/api/managers/${editingManager.id}`
@@ -63,7 +60,6 @@ export default function Managers() {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
           'X-Company-ID': companyId || '',
         },
         body: JSON.stringify(formData),
@@ -98,12 +94,10 @@ export default function Managers() {
     if (!confirm('Tem certeza que deseja desativar este gestor?')) return;
 
     try {
-      const token = localStorage.getItem('token');
       const companyId = localStorage.getItem('selectedCompanyId');
       const response = await fetch(`/api/managers/${id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'X-Company-ID': companyId || '',
         },
       });

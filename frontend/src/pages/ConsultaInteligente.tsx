@@ -111,11 +111,9 @@ export default function ConsultaInteligente() {
   }, []);
 
   const getHeaders = () => {
-    const token = localStorage.getItem('token');
     const companyId = localStorage.getItem('selectedCompanyId');
     return {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
       'X-Company-ID': companyId || '',
     };
   };

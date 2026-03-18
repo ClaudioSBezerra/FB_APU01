@@ -41,11 +41,9 @@ export default function RFBCredentials() {
 
   const fetchCredential = async () => {
     try {
-      const token = localStorage.getItem('token');
       const companyId = localStorage.getItem('companyId');
       const response = await fetch('/api/rfb/credentials', {
         headers: {
-          'Authorization': `Bearer ${token}`,
           'X-Company-ID': companyId || '',
         },
       });
@@ -82,13 +80,11 @@ export default function RFBCredentials() {
     setSaving(true);
 
     try {
-      const token = localStorage.getItem('token');
       const companyId = localStorage.getItem('companyId');
       const response = await fetch('/api/rfb/credentials', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
           'X-Company-ID': companyId || '',
         },
         body: JSON.stringify({
@@ -118,12 +114,10 @@ export default function RFBCredentials() {
     setMessage(null);
 
     try {
-      const token = localStorage.getItem('token');
       const companyId = localStorage.getItem('companyId');
       const response = await fetch('/api/rfb/credentials', {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'X-Company-ID': companyId || '',
         },
       });

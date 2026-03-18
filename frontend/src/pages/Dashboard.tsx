@@ -49,11 +49,7 @@ export default function Dashboard() {
       if (mesAno) params.set('mes_ano', mesAno);
       if (selectedFiliais.length > 0) params.set('filiais', selectedFiliais.join(','));
       const query = params.size > 0 ? `?${params.toString()}` : '';
-      const response = await fetch(`/api/dashboard/projection${query}`, {
-        headers: {
-          Authorization: `Bearer ${token || localStorage.getItem('token')}`
-        }
-      });
+      const response = await fetch(`/api/dashboard/projection${query}`);
       if (response.ok) {
         const result = await response.json();
         setData(result);

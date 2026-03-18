@@ -78,11 +78,7 @@ const Mercadorias = () => {
   useEffect(() => {
     if (!token) return;
     
-    fetch("/api/config/aliquotas", {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
+    fetch("/api/config/aliquotas")
       .then((res) => res.json())
       .then((data) => setTaxRates(data || []))
       .catch((err) => console.error("Failed to fetch tax rates", err));
@@ -93,7 +89,6 @@ const Mercadorias = () => {
     if (!token) return;
     fetch("/api/config/filial-apelidos", {
       headers: {
-        Authorization: `Bearer ${token}`,
         "X-Company-ID": companyId || "",
       },
     })
@@ -114,7 +109,6 @@ const Mercadorias = () => {
     // Request 'todos' to get all operations (Commercial + Others)
     fetch(`/api/reports/mercadorias?target_year=${selectedYear}&tipo_operacao=todos`, {
       headers: {
-        'Authorization': `Bearer ${token}`,
         'X-Company-ID': companyId || ''
       }
     })
@@ -153,12 +147,8 @@ const Mercadorias = () => {
   const handleRefreshViews = async () => {
     setIsRefreshing(true);
     try {
-      const token = localStorage.getItem('token');
       const response = await fetch(`/api/admin/refresh-views`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
       });
       if (response.ok) {
         fetchData();

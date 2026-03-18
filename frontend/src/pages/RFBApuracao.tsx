@@ -61,10 +61,8 @@ export default function RFBApuracao() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const getHeaders = () => {
-    const token = localStorage.getItem('token');
     const companyId = localStorage.getItem('companyId');
     return {
-      'Authorization': `Bearer ${token}`,
       'X-Company-ID': companyId || '',
     };
   };

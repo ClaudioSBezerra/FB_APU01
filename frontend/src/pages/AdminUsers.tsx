@@ -70,7 +70,7 @@ function HierarchyCascadeSelects({
   const [companies, setCompanies] = useState<HierarchyItem[]>([]);
 
   useEffect(() => {
-    fetch('/api/config/environments', { headers: { Authorization: `Bearer ${token}` } })
+    fetch('/api/config/environments')
       .then(r => r.json())
       .then(data => setEnvironments(data || []))
       .catch(() => setEnvironments([]));
@@ -78,7 +78,7 @@ function HierarchyCascadeSelects({
 
   useEffect(() => {
     if (!envId) { setGroups([]); return; }
-    fetch(`/api/config/groups?environment_id=${envId}`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`/api/config/groups?environment_id=${envId}`)
       .then(r => r.json())
       .then(data => setGroups(data || []))
       .catch(() => setGroups([]));
@@ -86,7 +86,7 @@ function HierarchyCascadeSelects({
 
   useEffect(() => {
     if (!groupId) { setCompanies([]); return; }
-    fetch(`/api/config/companies?group_id=${groupId}`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`/api/config/companies?group_id=${groupId}`)
       .then(r => r.json())
       .then(data => setCompanies(data || []))
       .catch(() => setCompanies([]));
@@ -163,9 +163,7 @@ export default function AdminUsers() {
   const { data: users, isLoading } = useQuery<User[]>({
     queryKey: ['admin-users'],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/users`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await fetch(`/api/admin/users`);
       if (!response.ok) {
         const text = await response.text();
         try {
@@ -197,7 +195,6 @@ export default function AdminUsers() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify(body)
       });
@@ -231,7 +228,6 @@ export default function AdminUsers() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({ role: data.role, extend_days: data.extendDays, is_official: data.isOfficial })
       });
@@ -252,7 +248,6 @@ export default function AdminUsers() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify(data)
       });
@@ -271,7 +266,6 @@ export default function AdminUsers() {
     mutationFn: async (userId: string) => {
       const response = await fetch(`/api/admin/users/delete?id=${userId}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to delete user');
       return response.json();

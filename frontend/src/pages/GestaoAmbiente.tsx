@@ -126,11 +126,8 @@ export default function GestaoAmbiente() {
   const fetchUserHierarchy = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+
       const res = await fetch("/api/user/hierarchy", {
-        headers: { 
-            "Authorization": `Bearer ${token}` 
-        }
       });
       if (!res.ok) throw new Error("Failed to fetch hierarchy");
       const data = await res.json();
@@ -146,9 +143,8 @@ export default function GestaoAmbiente() {
   const fetchEnvironments = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+
       const res = await fetch("/api/config/environments", {
-        headers: { "Authorization": `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Failed to fetch environments");
       const data = await res.json();
@@ -167,9 +163,8 @@ export default function GestaoAmbiente() {
 
   const fetchGroups = async (envId: string) => {
     try {
-      const token = localStorage.getItem('token');
+
       const res = await fetch(`/api/config/groups?environment_id=${envId}`, {
-        headers: { "Authorization": `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Failed to fetch groups");
       const data = await res.json();
@@ -182,9 +177,8 @@ export default function GestaoAmbiente() {
 
   const fetchCompanies = async (groupId: string) => {
     try {
-      const token = localStorage.getItem('token');
+
       const res = await fetch(`/api/config/companies?group_id=${groupId}`, {
-        headers: { "Authorization": `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Failed to fetch companies");
       const data = await res.json();
@@ -202,12 +196,11 @@ export default function GestaoAmbiente() {
     }
 
     try {
-      const token = localStorage.getItem('token');
+
       const res = await fetch("/api/config/environments", {
         method: "POST",
         headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ name: newEnvName, description: newEnvDesc }),
       });
@@ -232,12 +225,11 @@ export default function GestaoAmbiente() {
     }
 
     try {
-      const token = localStorage.getItem('token');
+
       const res = await fetch("/api/config/groups", {
         method: "POST",
         headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           environment_id: selectedEnv.id,
@@ -266,12 +258,11 @@ export default function GestaoAmbiente() {
     }
 
     try {
-      const token = localStorage.getItem('token');
+
       const res = await fetch("/api/config/companies", {
         method: "POST",
         headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           group_id: selectedGroup.id,
@@ -298,10 +289,9 @@ export default function GestaoAmbiente() {
     if (!confirm("Tem certeza? Isso apagará TODOS os grupos e empresas vinculados.")) return;
     
     try {
-      const token = localStorage.getItem('token');
+
       const res = await fetch(`/api/config/environments?id=${id}`, { 
         method: "DELETE",
-        headers: { "Authorization": `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Failed to delete");
       toast.success("Ambiente removido");
@@ -316,10 +306,9 @@ export default function GestaoAmbiente() {
     if (!confirm("Tem certeza? Isso apagará TODAS as empresas vinculadas.")) return;
     
     try {
-      const token = localStorage.getItem('token');
+
       const res = await fetch(`/api/config/groups?id=${id}`, { 
         method: "DELETE",
-        headers: { "Authorization": `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Failed to delete");
       toast.success("Grupo removido");
@@ -334,10 +323,9 @@ export default function GestaoAmbiente() {
     if (!confirm("Tem certeza?")) return;
     
     try {
-      const token = localStorage.getItem('token');
+
       const res = await fetch(`/api/config/companies?id=${id}`, { 
         method: "DELETE",
-        headers: { "Authorization": `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Failed to delete");
       toast.success("Empresa removida");

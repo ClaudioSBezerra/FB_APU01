@@ -42,9 +42,7 @@ export function InsightCard() {
     const fetchInsight = async () => {
       setLoading(true);
       try {
-        const headers: Record<string, string> = {
-          Authorization: `Bearer ${token || localStorage.getItem('token')}`,
-        };
+        const headers: Record<string, string> = {};
         if (companyId) {
           headers['X-Company-ID'] = companyId;
         }
