@@ -244,14 +244,9 @@ func DBMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		database := getDB()
 		if database == nil {
-			dbMutex.RLock()
-			err := dbErr
-			dbMutex.RUnlock()
-			errMsg := "Database not initialized yet"
-			if err != nil {
-				errMsg += ": " + err.Error()
-			}
-			http.Error(w, errMsg, http.StatusServiceUnavailable)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(`{"error":"service_unavailable","message":"Database initializing, please try again in a moment."}`))
 			return
 		}
 		next(w, r)
@@ -340,27 +335,30 @@ func main() {
 	// We have to wrap the FACTORY calls.
 
 	// Helper to wrap DB dependency
+	jsonServiceUnavailable := func(w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(`{"error":"service_unavailable","message":"Database initializing, please try again in a moment."}`))
+	}
+
 	withDB := func(handlerFactory func(*sql.DB) http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			database := getDB()
 			if database == nil {
-				http.Error(w, "Database initializing, please wait...", http.StatusServiceUnavailable)
+				jsonServiceUnavailable(w)
 				return
 			}
-			// Create handler with ready DB and serve
 			handlerFactory(database)(w, r)
 		}
 	}
 
-	// Auth AuthMiddleware wrapper needs special care as it takes a handler.
 	withAuth := func(handlerFactory func(*sql.DB) http.HandlerFunc, role string) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			database := getDB()
 			if database == nil {
-				http.Error(w, "Database initializing...", http.StatusServiceUnavailable)
+				jsonServiceUnavailable(w)
 				return
 			}
-			// Create handler, then wrap in Auth
 			h := handlerFactory(database)
 			handlers.AuthMiddleware(h, role)(w, r)
 		}
@@ -402,7 +400,7 @@ func main() {
 		http.HandleFunc("/api/jobs/", func(w http.ResponseWriter, r *http.Request) {
 			database := getDB()
 			if database == nil {
-				http.Error(w, "Database initializing...", http.StatusServiceUnavailable)
+				jsonServiceUnavailable(w)
 				return
 			}
 			handlers.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
@@ -452,7 +450,7 @@ func main() {
 	http.HandleFunc("/api/config/forn-simples", func(w http.ResponseWriter, r *http.Request) {
 		database := getDB()
 		if database == nil {
-			http.Error(w, "Database initializing...", http.StatusServiceUnavailable)
+			jsonServiceUnavailable(w)
 			return
 		}
 		switch r.Method {
@@ -525,7 +523,7 @@ func main() {
 		http.HandleFunc("/api/rfb/credentials", func(w http.ResponseWriter, r *http.Request) {
 			database := getDB()
 			if database == nil {
-				http.Error(w, "Database initializing...", http.StatusServiceUnavailable)
+				jsonServiceUnavailable(w)
 				return
 			}
 			switch r.Method {
@@ -576,7 +574,7 @@ func main() {
 	http.HandleFunc("/api/managers/", func(w http.ResponseWriter, r *http.Request) {
 		database := getDB()
 		if database == nil {
-			http.Error(w, "Database initializing...", http.StatusServiceUnavailable)
+			jsonServiceUnavailable(w)
 			return
 		}
 		// Route to update or delete based on HTTP method
