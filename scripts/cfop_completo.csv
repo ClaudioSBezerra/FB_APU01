@@ -1,0 +1,482 @@
+cfop,descricao_cfop,tipo
+1101,Compra para industrialização,R
+1102,Compra para comercialização,R
+1111,Compra para industrialização de mercadoria recebida anteriormente em consignação industrial,R
+1113,Compra para comercialização gerada por bonificação,R
+1116,Compra para industrialização originada de encomenda para recebimento futuro,R
+1117,Compra para comercialização originada de encomenda para recebimento futuro,R
+1118,Compra de mercadoria para comercialização pelo adquirente originário destinada ao consumidor final,R
+1120,Compra para industrialização em venda à ordem já confirmada,R
+1121,Compra para comercialização em venda à ordem já confirmada,R
+1122,Compra para industrialização em venda à ordem ainda não confirmada,R
+1123,Compra para comercialização em venda à ordem ainda não confirmada,R
+1124,Industrialização efetuada por outra empresa,R
+1125,Industrialização efetuada por outra empresa quando a mercadoria remetida não transitou pelo estabelecimento adquirente,R
+1126,Compra para utilização na prestação de serviço sujeita ao ISSQN,S
+1151,Transferência para industrialização,T
+1152,Transferência para comercialização,T
+1153,Transferência de energia elétrica para distribuição,T
+1154,Transferência para utilização na prestação de serviço,T
+1201,Devolução de venda de produção do estabelecimento,O
+1202,Devolução de venda de mercadoria adquirida ou recebida de terceiros,O
+1203,Devolução de venda de produção do estabelecimento destinada à Zona Franca de Manaus,O
+1204,Devolução de venda de mercadoria adquirida destinada à Zona Franca de Manaus,O
+1205,Anulação de valor relativo a prestação de serviço de comunicação,O
+1206,Anulação de valor relativo a prestação de serviço de transporte,O
+1207,Anulação de valor relativo à venda de energia elétrica,O
+1208,Devolução de produção do estabelecimento remetida em transferência,O
+1209,Devolução de mercadoria remetida em transferência para comercialização,O
+1210,Devolução de compra para recuperação de crédito,O
+1250,Compra de energia elétrica para distribuição ou comercialização,C
+1251,Compra de energia elétrica para consumo próprio,C
+1252,Compra de energia elétrica por estabelecimento industrial,C
+1253,Compra de energia elétrica por estabelecimento comercial,C
+1254,Compra de energia elétrica por estabelecimento prestador de serviço de transporte,C
+1255,Compra de energia elétrica para estabelecimento prestador de serviços,C
+1256,Compra de energia elétrica para utilização no sistema de transporte de cargas,C
+1301,Aquisição de serviço de comunicação para execução de serviço da mesma natureza,S
+1302,Aquisição de serviço de comunicação por estabelecimento industrial,S
+1303,Aquisição de serviço de comunicação por estabelecimento comercial,S
+1304,Aquisição de serviço de comunicação por estabelecimento prestador de serviço de transporte,S
+1305,Aquisição de serviço de comunicação por estabelecimento prestador de serviço de comunicação,S
+1306,Aquisição de serviço de comunicação por estabelecimento prestador de serviço,S
+1351,Aquisição de serviço de transporte para execução de serviço da mesma natureza,S
+1352,Aquisição de serviço de transporte por estabelecimento industrial,S
+1353,Aquisição de serviço de transporte por estabelecimento comercial,S
+1354,Aquisição de serviço de transporte por estabelecimento prestador de serviço de comunicação,S
+1355,Aquisição de serviço de transporte por estabelecimento prestador de serviço de transporte,S
+1356,Aquisição de serviço de transporte por estabelecimento prestador de serviço,S
+1360,Aquisição de serviço de transporte por contribuinte substituído,S
+1401,Compra para industrialização em operação com mercadoria sujeita ao regime de substituição tributária,R
+1403,Compra para comercialização em operação com mercadoria sujeita ao regime de substituição tributária,R
+1406,Compra de bem para o ativo imobilizado cuja mercadoria está sujeita ao regime de substituição tributária,A
+1407,Compra de mercadoria para uso ou consumo cuja mercadoria está sujeita ao regime de substituição tributária,C
+1408,Transferência para industrialização em operação com mercadoria sujeita ao regime de substituição tributária,T
+1409,Transferência para comercialização em operação com mercadoria sujeita ao regime de substituição tributária,T
+1410,Devolução de venda de produção do estabelecimento em operação com produto sujeito ao regime de substituição tributária,O
+1411,Devolução de venda de mercadoria adquirida em operação com mercadoria sujeita ao regime de substituição tributária,O
+1412,Devolução de venda no mercado interno de mercadoria industrializada e insumos importados,O
+1413,Devolução de vendas de mercadoria sujeita ao regime de substituição tributária na condição de contribuinte substituído,O
+1414,Retorno de produção do estabelecimento remetida para venda fora do estabelecimento,O
+1415,Retorno de mercadoria remetida para venda fora do estabelecimento,O
+1501,Entrada de mercadoria recebida com fim específico de exportação,O
+1503,Entrada decorrente de devolução de produto remetido com fim específico de exportação,O
+1504,Entrada decorrente de devolução de mercadoria remetida com fim específico de exportação,O
+1505,Entrada decorrente de devolução simbólica de mercadoria remetida para formação de lote de exportação,O
+1551,Compra de bem para o ativo imobilizado,A
+1552,Transferência de bem do ativo imobilizado,A
+1553,Devolução de venda de bem do ativo imobilizado,A
+1554,Retorno de bem do ativo imobilizado remetido para uso fora do estabelecimento,A
+1555,Entrada de bem do ativo imobilizado de terceiro para uso no estabelecimento,A
+1556,Compra de material para uso ou consumo,C
+1557,Transferência de material para uso ou consumo,C
+1600,Crédito do ICMS do ativo permanente — CIAP,A
+1601,Recebimento de crédito de ICMS do ativo imobilizado — CIAP,A
+1603,Ressarcimento de ICMS retido por substituição tributária,O
+1604,Lançamento do crédito relativo à compra de bem para o ativo imobilizado — CIAP,A
+1605,Recebimento de crédito de ICMS de produtor rural,O
+1651,Compra de combustível ou lubrificante para industrialização subsequente,R
+1652,Compra de combustível ou lubrificante para comercialização,R
+1653,Compra de combustível ou lubrificante por consumidor ou usuário final,C
+1658,Transferência de combustível e lubrificante para industrialização,T
+1659,Transferência de combustível e lubrificante para comercialização,T
+1660,Devolução de venda de combustível e lubrificante destinados à industrialização,O
+1661,Devolução de venda de combustível e lubrificante destinados à comercialização,O
+1662,Devolução de venda de combustível e lubrificante destinados a consumidor ou usuário final,O
+1901,Entrada para industrialização por encomenda,R
+1902,Retorno de mercadoria remetida para industrialização por encomenda,R
+1903,Entrada de mercadoria remetida para industrialização e não aplicada no referido processo,O
+1904,Retorno de remessa para venda fora do estabelecimento,O
+1905,Entrada de mercadoria recebida para depósito em depósito fechado ou armazém-geral,O
+1906,Retorno de mercadoria remetida para depósito fechado ou armazém-geral,O
+1907,Retorno simbólico de mercadoria remetida para depósito fechado ou armazém-geral,O
+1908,Entrada de bem por conta de contrato de comodato,O
+1909,Retorno de bem remetido por conta de contrato de comodato,O
+1910,Entrada de bonificação em mercadorias,R
+1911,Entrada de amostra grátis,O
+1912,Entrada de mercadoria ou bem recebido para demonstração,O
+1913,Retorno de mercadoria ou bem remetido para demonstração,O
+1914,Retorno de mercadoria ou bem remetido em consignação mercantil,O
+1915,Entrada de mercadoria ou bem recebido em consignação mercantil,O
+1916,Desfazimento de venda — devolução simbólica,O
+1917,Lançamento efetuado a título de ajuste de diferença de preço em operação de industrialização,O
+1918,Lançamento efetuado a título de ajuste de diferença de preço em operação de produção rural,O
+1919,Entrada de retorno de remessa com fim específico de exportação,O
+1920,Entrada de mercadoria em razão de colaboração,O
+2101,Compra para industrialização,R
+2102,Compra para comercialização,R
+2111,Compra para industrialização de mercadoria recebida anteriormente em consignação industrial,R
+2113,Compra para comercialização gerada por bonificação,R
+2116,Compra para industrialização originada de encomenda para recebimento futuro,R
+2117,Compra para comercialização originada de encomenda para recebimento futuro,R
+2118,Compra de mercadoria para comercialização pelo adquirente originário destinada ao consumidor final,R
+2120,Compra para industrialização em venda à ordem já confirmada,R
+2121,Compra para comercialização em venda à ordem já confirmada,R
+2122,Compra para industrialização em venda à ordem ainda não confirmada,R
+2123,Compra para comercialização em venda à ordem ainda não confirmada,R
+2124,Industrialização efetuada por outra empresa,R
+2125,Industrialização efetuada por outra empresa quando a mercadoria não transitou pelo estabelecimento adquirente,R
+2126,Compra para utilização na prestação de serviço sujeita ao ISSQN,S
+2151,Transferência para industrialização,T
+2152,Transferência para comercialização,T
+2153,Transferência de energia elétrica para distribuição,T
+2154,Transferência para utilização na prestação de serviço,T
+2201,Devolução de venda de produção do estabelecimento,O
+2202,Devolução de venda de mercadoria adquirida ou recebida de terceiros,O
+2203,Devolução de venda de produção do estabelecimento destinada à Zona Franca de Manaus,O
+2204,Devolução de venda de mercadoria adquirida destinada à Zona Franca de Manaus,O
+2205,Anulação de valor relativo a prestação de serviço de comunicação,O
+2206,Anulação de valor relativo a prestação de serviço de transporte,O
+2207,Anulação de valor relativo à venda de energia elétrica,O
+2208,Devolução de produção do estabelecimento remetida em transferência,O
+2209,Devolução de mercadoria remetida em transferência para comercialização,O
+2250,Compra de energia elétrica para distribuição ou comercialização,C
+2251,Compra de energia elétrica para consumo próprio,C
+2252,Compra de energia elétrica por estabelecimento industrial,C
+2253,Compra de energia elétrica por estabelecimento comercial,C
+2254,Compra de energia elétrica por estabelecimento prestador de serviço de transporte,C
+2255,Compra de energia elétrica para estabelecimento prestador de serviços,C
+2301,Aquisição de serviço de comunicação para execução de serviço da mesma natureza,S
+2302,Aquisição de serviço de comunicação por estabelecimento industrial,S
+2303,Aquisição de serviço de comunicação por estabelecimento comercial,S
+2351,Aquisição de serviço de transporte para execução de serviço da mesma natureza,S
+2352,Aquisição de serviço de transporte por estabelecimento industrial,S
+2353,Aquisição de serviço de transporte por estabelecimento comercial,S
+2354,Aquisição de serviço de transporte por estabelecimento prestador de serviço de comunicação,S
+2355,Aquisição de serviço de transporte por estabelecimento prestador de serviço de transporte,S
+2401,Compra para industrialização em operação com mercadoria sujeita ao regime de substituição tributária,R
+2403,Compra para comercialização em operação com mercadoria sujeita ao regime de substituição tributária,R
+2406,Compra de bem para o ativo imobilizado cuja mercadoria está sujeita ao regime de substituição tributária,A
+2407,Compra de material para uso ou consumo cuja mercadoria está sujeita ao regime de substituição tributária,C
+2408,Transferência para industrialização em operação com mercadoria sujeita ao regime de substituição tributária,T
+2409,Transferência para comercialização em operação com mercadoria sujeita ao regime de substituição tributária,T
+2410,Devolução de venda de produção do estabelecimento em operação com produto sujeito ao regime de substituição tributária,O
+2411,Devolução de venda de mercadoria adquirida em operação com mercadoria sujeita ao regime de substituição tributária,O
+2501,Entrada de mercadoria recebida com fim específico de exportação,O
+2503,Entrada decorrente de devolução de produto remetido com fim específico de exportação,O
+2551,Compra de bem para o ativo imobilizado,A
+2552,Transferência de bem do ativo imobilizado,A
+2553,Devolução de venda de bem do ativo imobilizado,A
+2554,Retorno de bem do ativo imobilizado remetido para uso fora do estabelecimento,A
+2555,Entrada de bem do ativo imobilizado de terceiro para uso no estabelecimento,A
+2556,Compra de material para uso ou consumo,C
+2557,Transferência de material para uso ou consumo,C
+2603,Ressarcimento de ICMS retido por substituição tributária,O
+2651,Compra de combustível ou lubrificante para industrialização subsequente,R
+2652,Compra de combustível ou lubrificante para comercialização,R
+2653,Compra de combustível ou lubrificante por consumidor ou usuário final,C
+2658,Transferência de combustível e lubrificante para industrialização,T
+2659,Transferência de combustível e lubrificante para comercialização,T
+2901,Entrada para industrialização por encomenda,R
+2902,Retorno de mercadoria remetida para industrialização por encomenda,R
+2903,Entrada de mercadoria remetida para industrialização e não aplicada no referido processo,O
+2904,Retorno de remessa para venda fora do estabelecimento,O
+2905,Entrada de mercadoria recebida para depósito em depósito fechado ou armazém-geral,O
+2906,Retorno de mercadoria remetida para depósito fechado ou armazém-geral,O
+2907,Retorno simbólico de mercadoria remetida para depósito fechado ou armazém-geral,O
+2908,Entrada de bem por conta de contrato de comodato,O
+2909,Retorno de bem remetido por conta de contrato de comodato,O
+2910,Entrada de bonificação em mercadorias,R
+2911,Entrada de amostra grátis,O
+2912,Entrada de mercadoria ou bem recebido para demonstração,O
+2913,Retorno de mercadoria ou bem remetido para demonstração,O
+2914,Retorno de mercadoria ou bem remetido em consignação mercantil,O
+2915,Entrada de mercadoria ou bem recebido em consignação mercantil,O
+3101,Compra para industrialização ou produção rural,R
+3102,Compra para comercialização,R
+3126,Compra para utilização na prestação de serviço sujeita ao ISSQN,S
+3201,Devolução de venda de produção do estabelecimento,O
+3202,Devolução de venda de mercadoria adquirida ou recebida de terceiros,O
+3205,Anulação de valor relativo a prestação de serviço de comunicação,O
+3206,Anulação de valor relativo a prestação de serviço de transporte,O
+3207,Anulação de valor relativo à venda de energia elétrica,O
+3251,Compra de energia elétrica para consumo próprio,C
+3301,Aquisição de serviço de comunicação para execução de serviço da mesma natureza,S
+3351,Aquisição de serviço de transporte para execução de serviço da mesma natureza,S
+3352,Aquisição de serviço de transporte por estabelecimento industrial,S
+3353,Aquisição de serviço de transporte por estabelecimento comercial,S
+3551,Compra de bem para o ativo imobilizado,A
+3553,Devolução de venda de bem do ativo imobilizado,A
+3556,Compra de material para uso ou consumo,C
+3651,Compra de combustível ou lubrificante para industrialização subsequente,R
+3652,Compra de combustível ou lubrificante para comercialização,R
+3653,Compra de combustível ou lubrificante por consumidor ou usuário final,C
+5101,Venda de produção do estabelecimento,R
+5102,Venda de mercadoria adquirida ou recebida de terceiros,R
+5103,Venda de produção do estabelecimento efetuada fora do estabelecimento,R
+5104,Venda de mercadoria adquirida ou recebida de terceiros efetuada fora do estabelecimento,R
+5105,Venda de produção do estabelecimento que não deva por ele transitar,R
+5106,Venda de mercadoria adquirida que não deva por ele transitar,R
+5107,Venda de produção do estabelecimento destinada a não contribuinte,R
+5108,Venda de mercadoria adquirida destinada a não contribuinte,R
+5109,Venda de produção do estabelecimento destinada à Zona Franca de Manaus,R
+5110,Venda de mercadoria adquirida destinada à Zona Franca de Manaus,R
+5111,Venda de produção do estabelecimento remetida anteriormente em consignação industrial,R
+5112,Venda de mercadoria adquirida remetida anteriormente em consignação mercantil,R
+5113,Venda de produção do estabelecimento gerada por bonificação,R
+5114,Venda de mercadoria adquirida gerada por bonificação,R
+5115,Venda de mercadoria adquirida originada de encomenda para recebimento futuro,R
+5116,Venda de produção do estabelecimento originada de encomenda para recebimento futuro,R
+5117,Venda de mercadoria adquirida em venda à ordem,R
+5118,Venda de produção do estabelecimento entregue ao destinatário por conta e ordem do adquirente originário,R
+5119,Venda de mercadoria adquirida entregue ao destinatário pelo vendedor remetente,R
+5120,Venda de mercadoria adquirida entregue ao destinatário por conta e ordem do adquirente originário,R
+5122,Venda de produção do estabelecimento remetida para industrialização por conta do destinatário,R
+5123,Venda de mercadoria adquirida remetida para industrialização por conta do destinatário,R
+5124,Industrialização efetuada para outra empresa,R
+5125,Industrialização efetuada para outra empresa quando a mercadoria não transitar pelo estabelecimento,R
+5126,Venda de mercadoria adquirida para utilização na prestação de serviço sujeita ao ISSQN,S
+5129,Venda de insumos importados com fim específico de exportação,R
+5151,Transferência de produção do estabelecimento,T
+5152,Transferência de mercadoria adquirida ou recebida de terceiros,T
+5153,Transferência de energia elétrica,T
+5154,Transferência para utilização na prestação de serviço,T
+5155,Transferência de bem do ativo imobilizado,T
+5156,Transferência de material para uso ou consumo,T
+5201,Devolução de compra para industrialização,O
+5202,Devolução de compra para comercialização,O
+5203,Devolução de compra para industrialização em Zona Franca de Manaus,O
+5204,Devolução de compra para comercialização em Zona Franca de Manaus,O
+5205,Anulação de valor relativo à aquisição de serviço de comunicação,O
+5206,Anulação de valor relativo à aquisição de serviço de transporte,O
+5207,Anulação de valor relativo à compra de energia elétrica,O
+5208,Devolução de mercadoria recebida em transferência para industrialização,O
+5209,Devolução de mercadoria recebida em transferência para comercialização,O
+5210,Devolução de compra para utilização na prestação de serviço,O
+5250,Venda de energia elétrica para distribuição ou comercialização,R
+5251,Venda de energia elétrica para estabelecimento industrial,C
+5252,Venda de energia elétrica para estabelecimento comercial,C
+5253,Venda de energia elétrica para estabelecimento prestador de serviço de transporte,C
+5254,Venda de energia elétrica para estabelecimento prestador de serviço,C
+5255,Venda de energia elétrica para consumidor final,C
+5256,Venda de energia elétrica para estabelecimento de produtor rural,C
+5257,Venda de energia elétrica para uso no sistema de transporte de cargas,C
+5301,Prestação de serviço de comunicação para execução de serviço da mesma natureza,S
+5302,Prestação de serviço de comunicação a estabelecimento industrial,S
+5303,Prestação de serviço de comunicação a estabelecimento comercial,S
+5304,Prestação de serviço de comunicação a estabelecimento de prestador de serviço de transporte,S
+5305,Prestação de serviço de comunicação a estabelecimento de geradora ou distribuidora de energia elétrica,S
+5306,Prestação de serviço de comunicação a estabelecimento de prestador de serviço de comunicação,S
+5307,Prestação de serviço de comunicação a estabelecimento prestador de serviço,S
+5308,Prestação de serviço de comunicação a consumidor final,S
+5351,Prestação de serviço de transporte para execução de serviço da mesma natureza,S
+5352,Prestação de serviço de transporte a estabelecimento industrial,S
+5353,Prestação de serviço de transporte a estabelecimento comercial,S
+5354,Prestação de serviço de transporte a estabelecimento prestador de serviço de comunicação,S
+5355,Prestação de serviço de transporte a estabelecimento prestador de serviço de transporte,S
+5356,Prestação de serviço de transporte a estabelecimento de produtor rural,S
+5357,Prestação de serviço de transporte a não contribuinte,S
+5359,Prestação de serviço de transporte a contribuinte ou a não contribuinte quando a mercadoria transportada está dispensada de emissão de nota fiscal,S
+5360,Prestação de serviço de transporte a contribuinte substituto em relação ao serviço de transporte,S
+5401,Venda de produção do estabelecimento em operação com produto sujeito ao regime de substituição tributária,R
+5402,Venda de produção do estabelecimento de produto sujeito ao regime de substituição tributária destinado a industrialização ou comercialização,R
+5403,Venda de mercadoria adquirida em operação com mercadoria sujeita ao regime de substituição tributária,R
+5404,Venda de mercadoria sujeita ao regime de substituição tributária cujo imposto já tenha sido retido anteriormente,R
+5405,Venda de mercadoria adquirida na condição de contribuinte substituído,R
+5408,Transferência de produção do estabelecimento em operação com produto sujeito ao regime de substituição tributária,T
+5409,Transferência de mercadoria adquirida em operação com produto sujeito ao regime de substituição tributária,T
+5410,Devolução de compra para industrialização em operação com mercadoria sujeita ao regime de substituição tributária,O
+5411,Devolução de compra para comercialização em operação com mercadoria sujeita ao regime de substituição tributária,O
+5412,Devolução de bem do ativo imobilizado em operação com mercadoria sujeita ao regime de substituição tributária,O
+5413,Devolução de mercadoria destinada ao uso ou consumo em operação com mercadoria sujeita ao regime de substituição tributária,O
+5414,Remessa de produção do estabelecimento para venda fora do estabelecimento em operação com produto sujeito ao regime de substituição tributária,R
+5415,Remessa de mercadoria adquirida para venda fora do estabelecimento em operação com mercadoria sujeita ao regime de substituição tributária,R
+5451,Remessa de animal e de insumo para estabelecimento produtor,O
+5501,Remessa de produção do estabelecimento com fim específico de exportação,O
+5502,Remessa de mercadoria adquirida com fim específico de exportação,O
+5503,Devolução de mercadoria recebida com fim específico de exportação,O
+5504,Remessa de mercadoria para formação de lote de exportação,O
+5505,Remessa de mercadoria adquirida para exportação por conta e ordem do adquirente,O
+5551,Venda de bem do ativo imobilizado,A
+5552,Transferência de bem do ativo imobilizado,A
+5553,Devolução de compra de bem para o ativo imobilizado,A
+5554,Remessa de bem do ativo imobilizado para uso fora do estabelecimento,A
+5555,Remessa de bem do ativo imobilizado para depósito fechado ou armazém-geral,A
+5556,Venda de material de uso ou consumo,C
+5557,Transferência de material de uso ou consumo,C
+5601,Transferência de crédito de ICMS acumulado,O
+5602,Transferência de saldo credor de ICMS para outro estabelecimento responsável pelo pagamento,O
+5603,Ressarcimento de ICMS retido por substituição tributária,O
+5605,Transferência de saldo devedor de ICMS para outro estabelecimento,O
+5606,Utilização de saldo credor de ICMS para extinção por compensação de débitos fiscais,O
+5651,Venda de combustível ou lubrificante de produção do estabelecimento destinados à industrialização subsequente,R
+5652,Venda de combustível ou lubrificante de produção do estabelecimento destinados à comercialização,R
+5653,Venda de combustível ou lubrificante de produção do estabelecimento destinados a consumidor ou usuário final,R
+5654,Venda de combustível ou lubrificante destinados à industrialização subsequente,R
+5655,Venda de combustível ou lubrificante destinados à comercialização,R
+5656,Venda de combustível ou lubrificante destinados a consumidor ou usuário final,R
+5657,Remessa de combustível ou lubrificante adquiridos com fim específico de exportação,O
+5658,Transferência de combustível e lubrificante de produção do estabelecimento,T
+5659,Transferência de combustível e lubrificante adquiridos ou recebidos de terceiros,T
+5660,Devolução de compra de combustível ou lubrificante para industrialização,O
+5661,Devolução de compra de combustível ou lubrificante para comercialização,O
+5662,Devolução de compra de combustível ou lubrificante por consumidor ou usuário final,O
+5663,Remessa para armazenagem de combustível ou lubrificante,O
+5664,Retorno de combustível ou lubrificante recebidos para armazenagem,O
+5901,Remessa para industrialização por encomenda,R
+5902,Retorno de mercadoria utilizada na industrialização por encomenda,R
+5903,Retorno de mercadoria recebida para industrialização e não aplicada no referido processo,O
+5904,Remessa para venda fora do estabelecimento,R
+5905,Remessa para depósito fechado ou armazém-geral,O
+5906,Retorno de mercadoria depositada em depósito fechado ou armazém-geral,O
+5907,Retorno simbólico de mercadoria depositada em depósito fechado ou armazém-geral,O
+5908,Remessa de bem por conta de contrato de comodato,O
+5909,Retorno de bem remetido por conta de contrato de comodato,O
+5910,Remessa em bonificação de mercadoria ou bem,R
+5911,Remessa de amostra grátis,O
+5912,Remessa de mercadoria ou bem para demonstração,O
+5913,Retorno de mercadoria ou bem recebido para demonstração,O
+5914,Remessa de mercadoria ou bem para exposição ou feira,O
+5915,Remessa de mercadoria ou bem para conserto ou reparo,O
+5916,Retorno de mercadoria ou bem recebido para conserto ou reparo,O
+5917,Remessa de mercadoria em consignação mercantil,O
+5918,Devolução de mercadoria recebida em consignação mercantil,O
+5919,Devolução simbólica de mercadoria vendida em consignação mercantil,O
+5920,Remessa de vasilhame ou sacaria,O
+5921,Devolução de vasilhame ou sacaria,O
+5922,Lançamento efetuado a título de simples faturamento decorrente de venda para entrega futura,R
+5923,Remessa de mercadoria por conta e ordem de terceiros em operações com armazém-geral,O
+5924,Remessa para industrialização por conta e ordem do adquirente originário,R
+5925,Retorno de mercadoria remetida para industrialização por conta e ordem do adquirente originário,R
+5926,Lançamento efetuado a título de reclassificação de mercadoria de produção própria,O
+5927,Lançamento efetuado a título de baixa de estoque de mercadoria não estocável,O
+5928,Lançamento efetuado a título de ajuste de diferença de preço em operação de industrialização,O
+5929,Lançamento efetuado a título de ajuste de diferença de preço em operação de produção rural,O
+5931,Lançamento efetuado pelo tomador do serviço de transporte quando a responsabilidade de retenção do imposto for atribuída ao remetente ou alienante,S
+5932,Prestação de serviço de transporte iniciada em UF diversa daquela onde inscrito o prestador,S
+6101,Venda de produção do estabelecimento,R
+6102,Venda de mercadoria adquirida ou recebida de terceiros,R
+6103,Venda de produção do estabelecimento efetuada fora do estabelecimento,R
+6104,Venda de mercadoria adquirida ou recebida de terceiros efetuada fora do estabelecimento,R
+6105,Venda de produção do estabelecimento que não deva por ele transitar,R
+6106,Venda de mercadoria adquirida que não deva por ele transitar,R
+6107,Venda de produção do estabelecimento destinada a não contribuinte,R
+6108,Venda de mercadoria adquirida ou recebida de terceiros destinada a não contribuinte,R
+6109,Venda de produção do estabelecimento destinada à Zona Franca de Manaus,R
+6110,Venda de mercadoria adquirida destinada à Zona Franca de Manaus,R
+6111,Venda de produção do estabelecimento remetida anteriormente em consignação industrial,R
+6112,Venda de mercadoria adquirida remetida anteriormente em consignação mercantil,R
+6113,Venda de produção do estabelecimento gerada por bonificação,R
+6114,Venda de mercadoria adquirida gerada por bonificação,R
+6115,Venda de mercadoria adquirida originada de encomenda para recebimento futuro,R
+6116,Venda de produção do estabelecimento originada de encomenda para recebimento futuro,R
+6117,Venda de mercadoria adquirida em venda à ordem,R
+6118,Venda de produção do estabelecimento entregue ao destinatário por conta e ordem do adquirente originário,R
+6119,Venda de mercadoria adquirida entregue ao destinatário pelo vendedor remetente,R
+6120,Venda de mercadoria adquirida entregue ao destinatário por conta e ordem do adquirente originário,R
+6122,Venda de produção do estabelecimento remetida para industrialização por conta do destinatário,R
+6123,Venda de mercadoria adquirida remetida para industrialização por conta do destinatário,R
+6124,Industrialização efetuada para outra empresa,R
+6125,Industrialização efetuada para outra empresa quando a mercadoria não transitar pelo estabelecimento,R
+6126,Venda de mercadoria adquirida para utilização na prestação de serviço sujeita ao ISSQN,S
+6129,Venda de insumos importados com fim específico de exportação,R
+6151,Transferência de produção do estabelecimento,T
+6152,Transferência de mercadoria adquirida ou recebida de terceiros,T
+6153,Transferência de energia elétrica,T
+6154,Transferência para utilização na prestação de serviço,T
+6155,Transferência de bem do ativo imobilizado,T
+6156,Transferência de material para uso ou consumo,T
+6201,Devolução de compra para industrialização,O
+6202,Devolução de compra para comercialização,O
+6205,Anulação de valor relativo à aquisição de serviço de comunicação,O
+6206,Anulação de valor relativo à aquisição de serviço de transporte,O
+6207,Anulação de valor relativo à compra de energia elétrica,O
+6208,Devolução de mercadoria recebida em transferência para industrialização,O
+6209,Devolução de mercadoria recebida em transferência para comercialização,O
+6210,Devolução de compra para utilização na prestação de serviço,O
+6250,Venda de energia elétrica para distribuição ou comercialização,R
+6251,Venda de energia elétrica para estabelecimento industrial,C
+6252,Venda de energia elétrica para estabelecimento comercial,C
+6253,Venda de energia elétrica para estabelecimento prestador de serviço de transporte,C
+6254,Venda de energia elétrica para estabelecimento prestador de serviço,C
+6255,Venda de energia elétrica para consumidor final,C
+6256,Venda de energia elétrica para estabelecimento de produtor rural,C
+6301,Prestação de serviço de comunicação para execução de serviço da mesma natureza,S
+6302,Prestação de serviço de comunicação a estabelecimento industrial,S
+6303,Prestação de serviço de comunicação a estabelecimento comercial,S
+6351,Prestação de serviço de transporte para execução de serviço da mesma natureza,S
+6352,Prestação de serviço de transporte a estabelecimento industrial,S
+6353,Prestação de serviço de transporte a estabelecimento comercial,S
+6354,Prestação de serviço de transporte a estabelecimento prestador de serviço de comunicação,S
+6355,Prestação de serviço de transporte a estabelecimento prestador de serviço de transporte,S
+6356,Prestação de serviço de transporte a estabelecimento de produtor rural,S
+6357,Prestação de serviço de transporte a não contribuinte,S
+6401,Venda de produção do estabelecimento em operação com produto sujeito ao regime de substituição tributária,R
+6402,Venda de produção do estabelecimento de produto sujeito ao regime de substituição tributária destinado a industrialização ou comercialização,R
+6403,Venda de mercadoria adquirida em operação com mercadoria sujeita ao regime de substituição tributária,R
+6404,Venda de mercadoria sujeita ao regime de substituição tributária cujo imposto já tenha sido retido anteriormente,R
+6408,Transferência de produção do estabelecimento em operação com produto sujeito ao regime de substituição tributária,T
+6409,Transferência de mercadoria adquirida em operação com produto sujeito ao regime de substituição tributária,T
+6410,Devolução de compra para industrialização em operação com mercadoria sujeita ao regime de substituição tributária,O
+6411,Devolução de compra para comercialização em operação com mercadoria sujeita ao regime de substituição tributária,O
+6501,Remessa de produção do estabelecimento com fim específico de exportação,O
+6502,Remessa de mercadoria adquirida com fim específico de exportação,O
+6503,Devolução de mercadoria recebida com fim específico de exportação,O
+6504,Remessa de mercadoria para formação de lote de exportação,O
+6551,Venda de bem do ativo imobilizado,A
+6552,Transferência de bem do ativo imobilizado,A
+6553,Devolução de compra de bem para o ativo imobilizado,A
+6554,Remessa de bem do ativo imobilizado para uso fora do estabelecimento,A
+6555,Remessa de bem do ativo imobilizado para depósito fechado ou armazém-geral,A
+6556,Venda de material de uso ou consumo,C
+6557,Transferência de material de uso ou consumo,C
+6603,Ressarcimento de ICMS retido por substituição tributária,O
+6651,Venda de combustível ou lubrificante de produção do estabelecimento destinados à industrialização,R
+6652,Venda de combustível ou lubrificante de produção do estabelecimento destinados à comercialização,R
+6653,Venda de combustível ou lubrificante de produção do estabelecimento destinados a consumidor ou usuário final,R
+6654,Venda de combustível ou lubrificante destinados à industrialização subsequente,R
+6655,Venda de combustível ou lubrificante destinados à comercialização,R
+6656,Venda de combustível ou lubrificante destinados a consumidor ou usuário final,R
+6658,Transferência de combustível e lubrificante de produção do estabelecimento,T
+6659,Transferência de combustível e lubrificante adquiridos ou recebidos de terceiros,T
+6660,Devolução de compra de combustível ou lubrificante para industrialização,O
+6661,Devolução de compra de combustível ou lubrificante para comercialização,O
+6662,Devolução de compra de combustível ou lubrificante por consumidor ou usuário final,O
+6901,Remessa para industrialização por encomenda,R
+6902,Retorno de mercadoria utilizada na industrialização por encomenda,R
+6903,Retorno de mercadoria recebida para industrialização e não aplicada no referido processo,O
+6904,Remessa para venda fora do estabelecimento,R
+6905,Remessa para depósito fechado ou armazém-geral,O
+6906,Retorno de mercadoria depositada em depósito fechado ou armazém-geral,O
+6907,Retorno simbólico de mercadoria depositada em depósito fechado ou armazém-geral,O
+6908,Remessa de bem por conta de contrato de comodato,O
+6909,Retorno de bem remetido por conta de contrato de comodato,O
+6910,Remessa em bonificação de mercadoria ou bem,R
+6911,Remessa de amostra grátis,O
+6912,Remessa de mercadoria ou bem para demonstração,O
+6913,Retorno de mercadoria ou bem recebido para demonstração,O
+6914,Remessa de mercadoria ou bem para exposição ou feira,O
+6915,Remessa de mercadoria ou bem para conserto ou reparo,O
+6916,Retorno de mercadoria ou bem recebido para conserto ou reparo,O
+6917,Remessa de mercadoria em consignação mercantil,O
+6918,Devolução de mercadoria recebida em consignação mercantil,O
+6919,Devolução simbólica de mercadoria vendida em consignação mercantil,O
+6920,Remessa de vasilhame ou sacaria,O
+6921,Devolução de vasilhame ou sacaria,O
+6922,Lançamento efetuado a título de simples faturamento decorrente de venda para entrega futura,R
+6931,Lançamento efetuado pelo tomador do serviço de transporte quando a responsabilidade de retenção do imposto for atribuída ao remetente ou alienante,S
+6932,Prestação de serviço de transporte iniciada em UF diversa daquela onde inscrito o prestador,S
+7101,Venda de produção do estabelecimento,R
+7102,Venda de mercadoria adquirida ou recebida de terceiros,R
+7105,Venda de produção do estabelecimento que não deva por ele transitar,R
+7106,Venda de mercadoria adquirida que não deva por ele transitar,R
+7127,Venda de produção do estabelecimento sob regime de drawback,R
+7129,Venda de insumos importados com fim específico de exportação,R
+7201,Devolução de compra para industrialização em exportação,O
+7202,Devolução de compra para comercialização em exportação,O
+7205,Anulação de valor relativo à aquisição de serviço de comunicação,O
+7206,Anulação de valor relativo à aquisição de serviço de transporte,O
+7207,Anulação de valor relativo à compra de energia elétrica,O
+7210,Devolução de compra para utilização na prestação de serviço,O
+7251,Venda de energia elétrica para o exterior,C
+7301,Prestação de serviço de comunicação para execução de serviço da mesma natureza,S
+7358,Prestação de serviço de transporte,S
+7501,Exportação de mercadoria recebida com fim específico de exportação,O
+7551,Venda de bem do ativo imobilizado,A
+7553,Devolução de compra de bem para o ativo imobilizado,A
+7556,Venda de material de uso ou consumo,C
+7651,Venda de combustível ou lubrificante de produção do estabelecimento,R
+7654,Venda de combustível ou lubrificante destinados à industrialização,R
+7667,Venda de combustível ou lubrificante a consumidor ou usuário final,R
+7901,Remessa para industrialização por encomenda,R
+7930,Lançamento efetuado a título de simples faturamento decorrente de venda para entrega futura,R

@@ -66,9 +66,9 @@ func ImportCFOPsHandler(db *sql.DB) http.HandlerFunc {
 		}
 		defer file.Close()
 
-		// Detect delimiter: Try ';' (Standard) then '\t' (Excel copy-paste)
-		// We remove ',' because descriptions often contain commas, leading to false positives.
-		delimiters := []rune{';', '\t'}
+		// Detect delimiter: Try ';', ',' then '\t'
+		// For ',' we validate strictly: first col must be 4 digits only
+		delimiters := []rune{';', ',', '\t'}
 		var reader *csv.Reader
 		
 		for _, delim := range delimiters {
@@ -156,11 +156,11 @@ func ImportCFOPsHandler(db *sql.DB) http.HandlerFunc {
 			descricao := strings.TrimSpace(record[1])
 			tipo := strings.TrimSpace(record[2])
 
-			// Clean description: remove '~' and truncate to 100 chars
+			// Clean description: remove '~' and truncate to 255 chars
 			descricao = strings.ReplaceAll(descricao, "~", "")
 			runes := []rune(descricao)
-			if len(runes) > 100 {
-				descricao = string(runes[:100])
+			if len(runes) > 255 {
+				descricao = string(runes[:255])
 			}
 
 			// Validate CFOP length to prevent DB error "value too long"
