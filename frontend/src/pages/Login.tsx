@@ -121,12 +121,9 @@ const Login = () => {
           <p className="mt-5 text-base leading-relaxed" style={{ color: "#9ca3af" }}>
             Controle total sobre créditos, débitos e impactos da Reforma Tributária na sua empresa.
           </p>
-        </div>
 
-        {/* ── Rodapé do painel ── */}
-        <div className="relative z-10 space-y-5">
           {/* Bullets de features */}
-          <ul className="space-y-3">
+          <ul className="mt-6 space-y-3">
             {FEATURES.map((feature) => (
               <li key={feature} className="flex items-center gap-3 text-sm" style={{ color: "#d1d5db" }}>
                 <span
@@ -137,7 +134,10 @@ const Login = () => {
               </li>
             ))}
           </ul>
+        </div>
 
+        {/* ── Rodapé do painel ── */}
+        <div className="relative z-10">
           {/* Versão — confirma o build ativo */}
           <p className="text-xs" style={{ color: "#6b7280" }}>
             API v{apiVersion}
