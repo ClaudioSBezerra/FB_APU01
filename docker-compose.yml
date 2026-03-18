@@ -45,6 +45,14 @@ services:
     restart: always
     expose:
       - "80"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=coolify"
+      - "traefik.http.routers.simulador.rule=Host(`simulador.fbtax.cloud`)"
+      - "traefik.http.routers.simulador.entrypoints=websecure"
+      - "traefik.http.routers.simulador.tls=true"
+      - "traefik.http.routers.simulador.tls.certresolver=letsencrypt"
+      - "traefik.http.services.simulador.loadbalancer.server.port=80"
     depends_on:
       - api
     networks:
