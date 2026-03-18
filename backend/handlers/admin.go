@@ -7,10 +7,17 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
+
+var reUUID = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+func isValidUUID(s string) bool {
+	return reUUID.MatchString(s)
+}
 
 // ResetCompanyDataRequest struct
 type ResetCompanyDataRequest struct {
@@ -443,8 +450,8 @@ type PromoteUserRequest struct {
 func PromoteUserHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := r.URL.Query().Get("id")
-		if userID == "" {
-			http.Error(w, "User ID required", http.StatusBadRequest)
+		if userID == "" || !isValidUUID(userID) {
+			http.Error(w, "Valid User ID required", http.StatusBadRequest)
 			return
 		}
 
@@ -580,8 +587,8 @@ func ReassignUserHandler(db *sql.DB) http.HandlerFunc {
 func DeleteUserHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := r.URL.Query().Get("id")
-		if userID == "" {
-			http.Error(w, "User ID required", http.StatusBadRequest)
+		if userID == "" || !isValidUUID(userID) {
+			http.Error(w, "Valid User ID required", http.StatusBadRequest)
 			return
 		}
 

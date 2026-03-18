@@ -60,8 +60,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   useEffect(() => {
-    // Restore session from localStorage
-    const storedToken = localStorage.getItem('token');
+    // Restore non-sensitive session metadata from localStorage
     const storedUser = localStorage.getItem('user');
     const storedEnv = localStorage.getItem('environment');
     const storedGroup = localStorage.getItem('group');
@@ -69,9 +68,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const storedCompanyId = localStorage.getItem('companyId');
     const storedCnpj = localStorage.getItem('cnpj');
 
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      tokenRef.current = storedToken;
+    if (storedUser) {
+      // Restore display state immediately for a fast UI
       setUser(JSON.parse(storedUser));
       setEnvironment(storedEnv);
       setGroup(storedGroup);
@@ -80,32 +78,46 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       companyIdRef.current = storedCompanyId;
       setCnpj(storedCnpj);
 
-      // Refresh user profile from server to ensure role and trial status are up to date
-      fetch('/api/auth/me', {
-        headers: { Authorization: `Bearer ${storedToken}` }
+      // Exchange the httpOnly refresh cookie for a new short-lived access token
+      fetch('/api/auth/refresh', {
+        method: 'POST',
+        credentials: 'include',
       })
-      .then(res => {
-        if (res.ok) return res.json();
-        if (res.status === 401) {
-          localStorage.clear();
-          window.location.href = '/login';
-          throw new Error('Session expired');
-        }
-        throw new Error('Failed to refresh user data');
-      })
-      .then(userData => {
-        setUser(userData);
-        localStorage.setItem('user', JSON.stringify(userData));
-      })
-      .catch(err => console.error("Session refresh error:", err))
-      .finally(() => setLoading(false));
+        .then(res => {
+          if (res.ok) return res.json();
+          if (res.status === 401) {
+            localStorage.clear();
+            window.location.href = '/login';
+            throw new Error('Session expired');
+          }
+          throw new Error('Failed to refresh token');
+        })
+        .then(data => {
+          setToken(data.token);
+          tokenRef.current = data.token;
+          // Refresh user profile to ensure role/trial are up to date
+          return fetch('/api/auth/me', {
+            headers: { Authorization: `Bearer ${data.token}` }
+          });
+        })
+        .then(res => (res.ok ? res.json() : null))
+        .then(userData => {
+          if (userData) {
+            setUser(userData);
+            localStorage.setItem('user', JSON.stringify(userData));
+          }
+        })
+        .catch(err => console.error('Session restore error:', err))
+        .finally(() => setLoading(false));
     } else {
       setLoading(false);
     }
   }, []);
 
   const login = (data: any) => {
+    // Store access token in memory only — never in localStorage
     setToken(data.token);
+    tokenRef.current = data.token;
     setUser(data.user);
     setEnvironment(data.environment_name);
     setGroup(data.group_name);
@@ -132,7 +144,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setCompanyId(companyIdVal);
     setCnpj(cnpjVal);
 
-    localStorage.setItem('token', data.token);
+    // Persist only non-sensitive session metadata
     localStorage.setItem('user', JSON.stringify(data.user));
     localStorage.setItem('environment', data.environment_name || '');
     localStorage.setItem('group', data.group_name || '');
@@ -142,6 +154,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const logout = () => {
+    // Tell server to revoke the access token and clear the refresh cookie
+    const currentToken = tokenRef.current;
+    fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: currentToken ? { Authorization: `Bearer ${currentToken}` } : {},
+    }).catch(() => {}); // best-effort, don't block UI
+
     // Preserva preferências de empresa antes de limpar o storage
     const prefs: Record<string, string> = {};
     for (let i = 0; i < localStorage.length; i++) {
@@ -155,6 +175,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     setUser(null);
     setToken(null);
+    tokenRef.current = null;
     setEnvironment(null);
     setGroup(null);
     setCompany(null);

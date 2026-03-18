@@ -108,6 +108,7 @@ func ProcessarDownloadRFB(db *sql.DB, rfbClient *RFBClient, requestID string) er
 		updateRequestError(db, requestID, "CRED_NOT_FOUND", "Credenciais RFB não encontradas ou inativas")
 		return fmt.Errorf("failed to fetch credentials: %w", err)
 	}
+	clientSecret = DecryptFieldWithFallback(clientSecret)
 
 	rfbClient.SetAmbiente(ambiente)
 

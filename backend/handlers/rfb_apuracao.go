@@ -91,6 +91,7 @@ func SolicitarApuracaoHandler(db *sql.DB) http.HandlerFunc {
 			SELECT client_id, client_secret, cnpj_matriz, COALESCE(ambiente, 'producao') FROM rfb_credentials
 			WHERE company_id = $1 AND ativo = true
 		`, companyID).Scan(&clientID, &clientSecret, &cnpjMatriz, &ambiente)
+		clientSecret = DecryptFieldWithFallback(clientSecret)
 		if err == sql.ErrNoRows {
 			http.Error(w, "Credenciais RFB não configuradas. Configure em Conectar Receita Federal > Credenciais API.", http.StatusBadRequest)
 			return

@@ -22,8 +22,17 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [apiVersion, setApiVersion] = useState<string>("...");
   const navigate = useNavigate();
   const { login } = useAuth();
+
+  // Fetch backend version to confirm which build is running
+  useState(() => {
+    fetch("/api/health")
+      .then(r => r.json())
+      .then(d => setApiVersion(d.version ?? "?"))
+      .catch(() => setApiVersion("offline"));
+  });
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,6 +138,10 @@ const Login = () => {
             ))}
           </ul>
 
+          {/* Versão — confirma o build ativo */}
+          <p className="text-xs" style={{ color: "#6b7280" }}>
+            API v{apiVersion}
+          </p>
         </div>
       </div>
 

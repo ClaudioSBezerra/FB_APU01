@@ -13,6 +13,28 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// sqlDenyPatterns rejects SQL statements that mutate data or schema.
+var sqlDenyPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)\bINSERT\b`),
+	regexp.MustCompile(`(?i)\bUPDATE\b`),
+	regexp.MustCompile(`(?i)\bDELETE\b`),
+	regexp.MustCompile(`(?i)\bDROP\b`),
+	regexp.MustCompile(`(?i)\bALTER\b`),
+	regexp.MustCompile(`(?i)\bCREATE\b`),
+	regexp.MustCompile(`(?i)\bTRUNCATE\b`),
+	regexp.MustCompile(`(?i)\bGRANT\b`),
+	regexp.MustCompile(`(?i)\bREVOKE\b`),
+}
+
+func validateReadOnlySQL(sqlStr string) error {
+	for _, re := range sqlDenyPatterns {
+		if re.MatchString(sqlStr) {
+			return fmt.Errorf("operação não permitida detectada no SQL gerado")
+		}
+	}
+	return nil
+}
+
 // reCompanyPlaceholder captura __COMPANY_ID__ e variações truncadas pela IA,
 // com ou sem aspas simples ao redor (ex: '__COMPANY_ID__', '__COMPANY_ID', '__COMPANY').
 var reCompanyPlaceholder = regexp.MustCompile(`'?__COMPANY(?:_ID(?:__)?)?'?`)
@@ -91,9 +113,15 @@ func AIQueryHandler(db *sql.DB) http.HandlerFunc {
 		if err != nil {
 			fmt.Printf("[AI Query] ExtractSQL failed: %v\nRaw AI text (first 500): %.500s\n", err, aiResp.Text)
 			jsonErr(w, http.StatusUnprocessableEntity,
-				fmt.Sprintf("IA não retornou SQL válido: %v", err),
-				map[string]string{"ai_text": aiResp.Text},
+				"IA não retornou SQL válido. Tente reformular a pergunta.",
 			)
+			return
+		}
+
+		// Validate that the AI-generated SQL only contains read operations
+		if err := validateReadOnlySQL(generatedSQL); err != nil {
+			fmt.Printf("[AI Query] SQL denied by whitelist: %v\nSQL: %.500s\n", err, generatedSQL)
+			jsonErr(w, http.StatusUnprocessableEntity, "SQL gerado contém operação não permitida. Tente reformular a pergunta.")
 			return
 		}
 
@@ -118,10 +146,8 @@ func AIQueryHandler(db *sql.DB) http.HandlerFunc {
 		// Execute the query
 		rows, err := db.Query(finalSQL)
 		if err != nil {
-			jsonErr(w, http.StatusBadRequest,
-				fmt.Sprintf("Erro ao executar query: %v", err),
-				map[string]string{"sql": finalSQL},
-			)
+			fmt.Printf("[AI Query] Query execution failed: %v\nSQL: %.500s\n", err, finalSQL)
+			jsonErr(w, http.StatusBadRequest, "Erro ao executar a consulta. Tente reformular a pergunta.")
 			return
 		}
 		defer rows.Close()

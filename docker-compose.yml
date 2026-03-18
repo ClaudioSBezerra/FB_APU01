@@ -23,6 +23,8 @@ services:
       - SMTP_FROM=${SMTP_FROM}
       - APP_URL=${APP_URL:-http://localhost:3000}
       - ZAI_API_KEY=${ZAI_API_KEY:-}
+      - JWT_SECRET=${JWT_SECRET}
+      - COOKIE_SECURE=false
     depends_on:
       db:
         condition: service_healthy
@@ -63,7 +65,7 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=${DB_NAME}
     ports:
-      - "10.0.1.1:5432:5432"  # acessível apenas pela rede interna Coolify — não exposto à internet
+      - "127.0.0.1:5433:5432"  # local dev (5432 pode estar em uso pelo postgres local)
     volumes:
       - postgres_data_v2:/var/lib/postgresql/data
     networks:

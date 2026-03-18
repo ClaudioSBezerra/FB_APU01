@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"fb_apu01/services"
@@ -52,13 +53,68 @@ type AuthResponse struct {
 	Environment string `json:"environment_name"`
 	Group       string `json:"group_name"`
 	Company     string `json:"company_name"`
-	CompanyID   string `json:"company_id"` // Added CompanyID
-	CNPJ        string `json:"cnpj"`       // Added CNPJ for company context
+	CompanyID   string `json:"company_id"`
+	CNPJ        string `json:"cnpj"`
+}
+
+// --- JWT Secret (lazy — read after godotenv.Load in main) ---
+
+// getJWTSecret reads JWT_SECRET from the environment at call time.
+// This ensures godotenv.Load() in main() takes effect before first use.
+func getJWTSecret() []byte {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		return []byte("super-secret-key-change-me-in-prod")
+	}
+	return []byte(secret)
+}
+
+// ValidateJWTSecret logs a warning (dev) or fatals (prod) if JWT_SECRET is not set.
+func ValidateJWTSecret() {
+	if os.Getenv("JWT_SECRET") == "" {
+		if os.Getenv("DATABASE_URL") != "" {
+			log.Fatal("FATAL: JWT_SECRET not set — set it to a 32+ byte random value before deploying.")
+		}
+		log.Println("WARNING: JWT_SECRET not set — using insecure default (OK for local dev only).")
+	}
+}
+
+// --- Refresh Token / Access Token Blacklist ---
+
+type refreshTokenData struct {
+	UserID    string
+	Role      string
+	ExpiresAt time.Time
+}
+
+var (
+	refreshTokenStore sync.Map // string → refreshTokenData
+	tokenBlacklist    sync.Map // string(accessToken) → time.Time(expiry)
+)
+
+func init() {
+	// Periodic cleanup of expired tokens
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		for range ticker.C {
+			now := time.Now()
+			refreshTokenStore.Range(func(k, v interface{}) bool {
+				if d, ok := v.(refreshTokenData); ok && now.After(d.ExpiresAt) {
+					refreshTokenStore.Delete(k)
+				}
+				return true
+			})
+			tokenBlacklist.Range(func(k, v interface{}) bool {
+				if exp, ok := v.(time.Time); ok && now.After(exp) {
+					tokenBlacklist.Delete(k)
+				}
+				return true
+			})
+		}
+	}()
 }
 
 // --- Utils ---
-
-var jwtSecret = []byte(getEnv("JWT_SECRET", "super-secret-key-change-me-in-prod"))
 
 func getEnv(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {
@@ -81,10 +137,45 @@ func GenerateToken(userID, role string) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,
 		"role":    role,
-		"exp":     time.Now().Add(time.Hour * 24).Unix(), // 24 hours
+		"exp":     time.Now().Add(30 * time.Minute).Unix(), // 30 minutes
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret)
+	return token.SignedString(getJWTSecret())
+}
+
+func generateRefreshTokenString() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+func isSecureCookie(r *http.Request) bool {
+	return os.Getenv("COOKIE_SECURE") == "true" ||
+		r.Header.Get("X-Forwarded-Proto") == "https"
+}
+
+func setRefreshCookie(w http.ResponseWriter, r *http.Request, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    token,
+		Path:     "/api/auth/",
+		HttpOnly: true,
+		Secure:   isSecureCookie(r),
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   7 * 24 * 60 * 60, // 7 days
+	})
+}
+
+func clearRefreshCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		Path:     "/api/auth/",
+		HttpOnly: true,
+		Secure:   isSecureCookie(r),
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+	})
 }
 
 // --- Handlers ---
@@ -131,8 +222,14 @@ func AuthMiddleware(next http.HandlerFunc, requiredRole string) http.HandlerFunc
 			return
 		}
 
+		// Check blacklist before validating signature
+		if _, revoked := tokenBlacklist.Load(tokenString); revoked {
+			http.Error(w, "Token revoked", http.StatusUnauthorized)
+			return
+		}
+
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			return jwtSecret, nil
+			return getJWTSecret(), nil
 		})
 
 		if err != nil || !token.Valid {
@@ -176,23 +273,19 @@ func GetUserIDFromContext(r *http.Request) string {
 }
 
 // GetEffectiveCompanyID fetches the company ID to use for the current request.
-// If requestedCompanyID is provided (e.g. via header), it verifies if the user has access to it.
-// If not provided or invalid, it falls back to the default company (Owner > Member).
 func GetEffectiveCompanyID(db *sql.DB, userID, requestedCompanyID string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	// 1. If a specific company is requested, verify access
 	if requestedCompanyID != "" {
 		var exists bool
-		// Check if Owner OR Member in the same Group/Environment
 		err := db.QueryRowContext(ctx, `
 			SELECT EXISTS(
-				SELECT 1 
+				SELECT 1
 				FROM companies c
 				LEFT JOIN enterprise_groups eg ON c.group_id = eg.id
 				LEFT JOIN user_environments ue ON eg.environment_id = ue.environment_id
-				WHERE c.id = $1 
+				WHERE c.id = $1
 				AND (c.owner_id = $2 OR ue.user_id = $2)
 			)
 		`, requestedCompanyID, userID).Scan(&exists)
@@ -200,14 +293,11 @@ func GetEffectiveCompanyID(db *sql.DB, userID, requestedCompanyID string) (strin
 		if err == nil && exists {
 			return requestedCompanyID, nil
 		}
-		// If requested ID is invalid/unauthorized, fall through to default logic
 		log.Printf("User %s requested invalid/unauthorized company %s. Falling back to default.", userID, requestedCompanyID)
 	}
 
-	// 2. Default Logic (Owner > Member)
 	var companyID string
 
-	// Strategy A: Check if user OWNS a company
 	err := db.QueryRowContext(ctx, `
 		SELECT c.id
 		FROM companies c
@@ -224,7 +314,6 @@ func GetEffectiveCompanyID(db *sql.DB, userID, requestedCompanyID string) (strin
 		return "", err
 	}
 
-	// Strategy B: Check via User Environment — prioriza preferred_company_id
 	err = db.QueryRowContext(ctx, `
 		SELECT c.id
 		FROM user_environments ue
@@ -267,10 +356,6 @@ func GetUserCompaniesHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Query companies where user:
-		// 1. Is the direct owner (owner_id)
-		// 2. Is linked to the environment via user_environments
-		// 3. The company is in the same group as a company the user owns (ex: FCM no mesmo grupo FCOSTA)
 		rows, err := db.Query(`
 			SELECT DISTINCT c.id, c.name, COALESCE(c.trade_name, ''), COALESCE(c.owner_id = $1, false) as is_owner,
 			       COALESCE(e.name, '') as env_name, COALESCE(eg.name, '') as group_name
@@ -309,6 +394,14 @@ func GetUserCompaniesHandler(db *sql.DB) http.HandlerFunc {
 
 func RegisterHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Rate limiting
+		if !RegisterRL.Allow(GetClientIP(r)) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			json.NewEncoder(w).Encode("Muitas tentativas de registro. Tente novamente mais tarde.")
+			return
+		}
+
 		var req RegisterRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -317,6 +410,11 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 
 		if req.Email == "" || req.Password == "" || req.FullName == "" || req.CompanyName == "" {
 			http.Error(w, "Missing required fields", http.StatusBadRequest)
+			return
+		}
+
+		if len(req.Password) < 8 {
+			http.Error(w, "Password must be at least 8 characters", http.StatusBadRequest)
 			return
 		}
 
@@ -341,7 +439,6 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 		var userID string
 		var role string
 		trialEnds := time.Now().Add(time.Hour * 24 * 14) // 14 days
-		// Ensure role column is populated (default 'user') and returned
 		err = tx.QueryRow(`
 			INSERT INTO users (email, password_hash, full_name, trial_ends_at, is_verified, role)
 			VALUES ($1, $2, $3, $4, $5, 'user')
@@ -350,8 +447,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 
 		if err != nil {
 			log.Printf("[Register] Error creating user: %v", err)
-			// Check specifically for unique constraint violation
-			tx.Rollback() // Ensure rollback before returning
+			tx.Rollback()
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusConflict)
 			json.NewEncoder(w).Encode("Este e-mail já está cadastrado.")
@@ -361,7 +457,6 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 		// 4. Create ISOLATED Environment and Group for the user
 		var envID, groupID, envName, groupName string
 
-		// Create Environment
 		envName = "Ambiente de " + req.FullName
 		err = tx.QueryRow("INSERT INTO environments (name, description) VALUES ($1, 'Ambiente Padrão do Usuário') RETURNING id", envName).Scan(&envID)
 		if err != nil {
@@ -371,7 +466,6 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Create Group
 		groupName = "Grupo de " + req.FullName
 		err = tx.QueryRow("INSERT INTO enterprise_groups (environment_id, name, description) VALUES ($1, $2, 'Grupo Padrão do Usuário') RETURNING id", envID, groupName).Scan(&groupID)
 		if err != nil {
@@ -402,15 +496,23 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Commit
 		if err := tx.Commit(); err != nil {
 			log.Printf("[Register] Error committing transaction: %v", err)
 			http.Error(w, "Transaction commit failed", http.StatusInternalServerError)
 			return
 		}
 
-		// Generate Token
+		// Generate access token
 		token, _ := GenerateToken(userID, "user")
+
+		// Set httpOnly refresh cookie
+		refreshToken := generateRefreshTokenString()
+		refreshTokenStore.Store(refreshToken, refreshTokenData{
+			UserID:    userID,
+			Role:      "user",
+			ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		})
+		setRefreshCookie(w, r, refreshToken)
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(AuthResponse{
@@ -427,7 +529,7 @@ func RegisterHandler(db *sql.DB) http.HandlerFunc {
 			Group:       groupName,
 			Company:     req.CompanyName,
 			CompanyID:   companyID,
-			CNPJ:        "", // CNPJ removed from company
+			CNPJ:        "",
 		})
 	}
 }
@@ -441,12 +543,21 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		ip := GetClientIP(r)
+
+		// Block early if already over limit from previous failures
+		if LoginRL.IsLimited(ip) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			json.NewEncoder(w).Encode("Muitas tentativas de login. Tente novamente em 15 minutos.")
+			return
+		}
+
 		log.Printf("[Login] Attempting login for: %s", req.Email)
 
 		// Get User
 		var user User
 		var hash string
-		// Use COALESCE for role and trial_ends_at to handle NULLs safely
 		err := db.QueryRow(`
 			SELECT id, email, full_name, password_hash, is_verified, COALESCE(trial_ends_at, NOW()), COALESCE(role, 'user'), created_at
 			FROM users WHERE email = $1
@@ -454,6 +565,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 
 		if err == sql.ErrNoRows {
 			log.Printf("[Login] User not found: %s", req.Email)
+			LoginRL.RecordFailure(ip) // count only failed attempts
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode("E-mail não encontrado ou senha inválida")
@@ -466,16 +578,15 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Check Password
 		if !CheckPasswordHash(req.Password, hash) {
 			log.Printf("[Login] Invalid password for: %s", req.Email)
+			LoginRL.RecordFailure(ip) // count only failed attempts
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode("E-mail não encontrado ou senha inválida")
 			return
 		}
 
-		// Check Trial Status
 		if user.Role != "admin" && user.TrialEndsAt.Before(time.Now()) {
 			log.Printf("[Login] Trial expired for: %s", req.Email)
 			w.Header().Set("Content-Type", "application/json")
@@ -484,7 +595,10 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// 2. Generate Token
+		// Login successful — reset failure counter for this IP
+		LoginRL.Reset(ip)
+
+		// Generate access token
 		token, err := GenerateToken(user.ID, user.Role)
 		if err != nil {
 			log.Printf("[Login] Error generating token: %v", err)
@@ -492,15 +606,22 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// 4. Get Environment, Group, and Company Context
-		// OPTIMIZATION: Split query to avoid complex joins and potential locks/slowdowns
-		// Added Timeout context to prevent 504 Gateway Timeouts on slow DB
+		// Set httpOnly refresh cookie
+		refreshToken := generateRefreshTokenString()
+		refreshTokenStore.Store(refreshToken, refreshTokenData{
+			UserID:    user.ID,
+			Role:      user.Role,
+			ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		})
+		setRefreshCookie(w, r, refreshToken)
+
+		// Get Environment, Group, and Company Context
 		var envName, groupName, companyName, companyID string
 
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
 
-		// Strategy A: Check if user OWNS a company (Fastest/Most Common)
+		// Strategy A: Check if user OWNS a company
 		err = db.QueryRowContext(ctx, `
 			SELECT e.name, eg.name, c.name, c.id
 			FROM companies c
@@ -512,8 +633,6 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 		`, user.ID).Scan(&envName, &groupName, &companyName, &companyID)
 
 		if err == sql.ErrNoRows {
-			// Strategy B: If not owner, check via User Environment (team members).
-			// Prioridade: preferred_company_id > owner > primeiro do grupo.
 			log.Printf("[Login] User %s owns no company, checking memberships...", req.Email)
 			err = db.QueryRowContext(ctx, `
 				SELECT e.name, eg.name, c.name, c.id
@@ -531,10 +650,8 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		if err == sql.ErrNoRows {
-			// No company found at all - Auto-provisioning
-			log.Printf("[Login] No company context found for user: %s. Auto-provisioning default context...", req.Email)
+			log.Printf("[Login] No company context found for user: %s. Auto-provisioning...", req.Email)
 
-			// 1. Get/Create Default Environment
 			var envID string
 			errEnv := db.QueryRowContext(ctx, "SELECT id, name FROM environments WHERE name = 'Ambiente de Testes' LIMIT 1").Scan(&envID, &envName)
 			if errEnv == sql.ErrNoRows {
@@ -548,7 +665,6 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 				companyName = "Sem Empresa"
 				companyID = ""
 			} else {
-				// 2. Get/Create Default Group
 				var groupID string
 				errGroup := db.QueryRowContext(ctx, "SELECT id, name FROM enterprise_groups WHERE environment_id = $1 AND name = 'Grupo de Empresas Testes' LIMIT 1", envID).Scan(&groupID, &groupName)
 				if errGroup == sql.ErrNoRows {
@@ -561,13 +677,8 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 					companyName = "Sem Empresa"
 					companyID = ""
 				} else {
-					// 3. Link User to Environment (Idempotent)
-					// We use ON CONFLICT DO NOTHING assuming there's a unique constraint or primary key on (user_id, environment_id)
-					// If not, we might duplicate, but standard schema usually has it.
-					// Checking user_environments definition would be good, but let's assume standard PK.
 					_, _ = db.ExecContext(ctx, "INSERT INTO user_environments (user_id, environment_id, role) VALUES ($1, $2, 'admin') ON CONFLICT DO NOTHING", user.ID, envID)
 
-					// 4. Create Company for User
 					companyName = "Empresa de " + user.FullName
 					if user.FullName == "" {
 						companyName = "Minha Empresa"
@@ -588,13 +699,10 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 					}
 				}
 			}
-			// Reset error to nil so we don't trigger the next error block
 			err = nil
 
 		} else if err != nil {
-			// Could be timeout or other error
 			log.Printf("[Login] Warning: Error fetching context (timeout?): %v. Proceeding without context.", err)
-			// Don't fail login, just return empty context so user can enter
 			envName = "Carregando..."
 			groupName = "Carregando..."
 			companyName = "Carregando..."
@@ -611,7 +719,7 @@ func LoginHandler(db *sql.DB) http.HandlerFunc {
 			Group:       groupName,
 			Company:     companyName,
 			CompanyID:   companyID,
-			CNPJ:        "", // CNPJ removed from company
+			CNPJ:        "",
 		})
 	}
 }
@@ -630,12 +738,22 @@ func ForgotPasswordHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		// Rate limiting by email to prevent abuse
+		if !ForgotPasswordRL.Allow(req.Email) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			json.NewEncoder(w).Encode("Muitas solicitações de recuperação. Tente novamente mais tarde.")
+			return
+		}
+
 		var userID string
 		err := db.QueryRow("SELECT id FROM users WHERE email = $1", req.Email).Scan(&userID)
 		if err == sql.ErrNoRows {
+			// Return vague success to prevent email enumeration
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode("E-mail não encontrado")
+			json.NewEncoder(w).Encode(map[string]string{
+				"message": "Se o e-mail estiver cadastrado, você receberá um link de recuperação em instantes",
+			})
 			return
 		} else if err != nil {
 			w.Header().Set("Content-Type", "application/json")
@@ -659,7 +777,6 @@ func ForgotPasswordHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Send real email using email service
 		err = services.SendPasswordResetEmail(req.Email, token)
 		if err != nil {
 			log.Printf("[ForgotPassword] Failed to send email: %v", err)
@@ -676,14 +793,12 @@ func ForgotPasswordHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-// ResetPasswordRequest struct for password reset
 type ResetPasswordRequest struct {
 	Token           string `json:"token"`
 	Password        string `json:"password"`
 	ConfirmPassword string `json:"confirm_password"`
 }
 
-// ResetPasswordHandler handles password reset with token
 func ResetPasswordHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req ResetPasswordRequest
@@ -694,7 +809,6 @@ func ResetPasswordHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Validate password match
 		if req.Password != req.ConfirmPassword {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
@@ -702,7 +816,6 @@ func ResetPasswordHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Validate password strength (min 8 characters)
 		if len(req.Password) < 8 {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
@@ -710,7 +823,6 @@ func ResetPasswordHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Get token info from database
 		var userID string
 		var expiresAt time.Time
 		var tokenType string
@@ -734,7 +846,6 @@ func ResetPasswordHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Check if token is for password reset
 		if tokenType != "password_reset" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
@@ -742,7 +853,6 @@ func ResetPasswordHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Check if token has expired
 		if time.Now().After(expiresAt) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusGone)
@@ -750,7 +860,6 @@ func ResetPasswordHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Hash new password
 		hash, err := HashPassword(req.Password)
 		if err != nil {
 			log.Printf("[ResetPassword] Error hashing password: %v", err)
@@ -760,7 +869,6 @@ func ResetPasswordHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Start transaction
 		tx, err := db.Begin()
 		if err != nil {
 			log.Printf("[ResetPassword] Error starting transaction: %v", err)
@@ -771,7 +879,6 @@ func ResetPasswordHandler(db *sql.DB) http.HandlerFunc {
 		}
 		defer tx.Rollback()
 
-		// Update user password
 		_, err = tx.Exec("UPDATE users SET password_hash = $1 WHERE id = $2", hash, userID)
 		if err != nil {
 			log.Printf("[ResetPassword] Error updating password: %v", err)
@@ -781,13 +888,11 @@ func ResetPasswordHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Mark token as used
 		_, err = tx.Exec("UPDATE verification_tokens SET used = true WHERE token = $1", req.Token)
 		if err != nil {
 			log.Printf("[ResetPassword] Error marking token as used: %v", err)
 		}
 
-		// Commit transaction
 		if err := tx.Commit(); err != nil {
 			log.Printf("[ResetPassword] Error committing transaction: %v", err)
 			w.Header().Set("Content-Type", "application/json")
@@ -828,9 +933,9 @@ func ChangePasswordHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		if len(req.NewPassword) < 6 {
+		if len(req.NewPassword) < 8 {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "A nova senha deve ter no mínimo 6 caracteres"})
+			json.NewEncoder(w).Encode(map[string]string{"error": "A nova senha deve ter no mínimo 8 caracteres"})
 			return
 		}
 
@@ -864,5 +969,90 @@ func ChangePasswordHandler(db *sql.DB) http.HandlerFunc {
 
 		log.Printf("[ChangePassword] Password changed for user %s", userID)
 		json.NewEncoder(w).Encode(map[string]string{"message": "Senha alterada com sucesso"})
+	}
+}
+
+// RefreshHandler issues a new short-lived access token using the httpOnly refresh cookie.
+func RefreshHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		cookie, err := r.Cookie("refresh_token")
+		if err != nil {
+			http.Error(w, "Refresh token required", http.StatusUnauthorized)
+			return
+		}
+
+		val, ok := refreshTokenStore.Load(cookie.Value)
+		if !ok {
+			http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
+			return
+		}
+
+		data := val.(refreshTokenData)
+		if time.Now().After(data.ExpiresAt) {
+			refreshTokenStore.Delete(cookie.Value)
+			clearRefreshCookie(w, r)
+			http.Error(w, "Refresh token expired", http.StatusUnauthorized)
+			return
+		}
+
+		// Rotate refresh token
+		refreshTokenStore.Delete(cookie.Value)
+		newRefreshToken := generateRefreshTokenString()
+		refreshTokenStore.Store(newRefreshToken, refreshTokenData{
+			UserID:    data.UserID,
+			Role:      data.Role,
+			ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		})
+		setRefreshCookie(w, r, newRefreshToken)
+
+		// Issue new access token
+		accessToken, err := GenerateToken(data.UserID, data.Role)
+		if err != nil {
+			http.Error(w, "Error generating token", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"token": accessToken})
+	}
+}
+
+// LogoutHandler revokes the current access token and clears the refresh cookie.
+func LogoutHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Blacklist the current access token
+		authHeader := r.Header.Get("Authorization")
+		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+			tokenString := authHeader[7:]
+			tok, _ := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+				return getJWTSecret(), nil
+			})
+			if tok != nil {
+				if claims, ok := tok.Claims.(jwt.MapClaims); ok {
+					if exp, ok := claims["exp"].(float64); ok {
+						tokenBlacklist.Store(tokenString, time.Unix(int64(exp), 0))
+					}
+				}
+			}
+		}
+
+		// Delete refresh token
+		if cookie, err := r.Cookie("refresh_token"); err == nil {
+			refreshTokenStore.Delete(cookie.Value)
+		}
+
+		clearRefreshCookie(w, r)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"message": "Sessão encerrada com sucesso"})
 	}
 }

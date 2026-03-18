@@ -262,6 +262,9 @@ func main() {
 	// Load .env file if it exists
 	_ = godotenv.Load()
 
+	// Validate JWT_SECRET — warns in dev, fatals in prod
+	handlers.ValidateJWTSecret()
+
 	// APP_MODULE controls which route groups are registered:
 	//   "simulador" — SPED upload/jobs/reports/AI; no NF-e/CT-e/RFB routes
 	//   "apuracao"  — NF-e/CT-e/RFB/apuração; no upload/jobs/reports/AI routes
@@ -275,30 +278,12 @@ func main() {
 	initDBAsync()
 	// defer db.Close() // Cannot defer nil, handle in shutdown if needed
 
-	// DEBUG: Emergency route to delete Iolanda
-	http.HandleFunc("/api/debug/nuke-iolanda", func(w http.ResponseWriter, r *http.Request) {
-		database := getDB()
-		if database == nil {
-			http.Error(w, "Database not ready", http.StatusServiceUnavailable)
-			return
-		}
-		email := "iolanda_fortes@hotmail.com"
-		_, err := database.Exec("DELETE FROM users WHERE email = $1", email)
-		if err != nil {
-			http.Error(w, "Error deleting user: "+err.Error(), 500)
-			return
-		}
-		w.Write([]byte("User " + email + " deleted successfully. Please register again."))
-	})
-
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8081"
 	}
 
 	http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		// CORS headers para desenvolvimento
-		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Content-Type", "application/json")
 
 		dbStatus := "connecting..."
@@ -444,6 +429,8 @@ func main() {
 	http.HandleFunc("/api/auth/forgot-password", withDB(handlers.ForgotPasswordHandler))
 	http.HandleFunc("/api/auth/reset-password", withDB(handlers.ResetPasswordHandler))
 	http.HandleFunc("/api/auth/change-password", withAuth(handlers.ChangePasswordHandler, ""))
+	http.HandleFunc("/api/auth/refresh", withDB(handlers.RefreshHandler))
+	http.HandleFunc("/api/auth/logout", withDB(handlers.LogoutHandler))
 	http.HandleFunc("/api/user/hierarchy", withAuth(handlers.GetUserHierarchyHandler, ""))
 	http.HandleFunc("/api/user/companies", withAuth(handlers.GetUserCompaniesHandler, ""))
 
@@ -458,9 +445,9 @@ func main() {
 	http.HandleFunc("/api/admin/users/reassign", withAuth(handlers.ReassignUserHandler, "admin"))
 
 	// Configuration Endpoints
-	http.HandleFunc("/api/config/aliquotas", withDB(handlers.GetTaxRatesHandler))
-	http.HandleFunc("/api/config/cfop", withDB(handlers.ListCFOPsHandler))
-	http.HandleFunc("/api/config/cfop/import", withDB(handlers.ImportCFOPsHandler))
+	http.HandleFunc("/api/config/aliquotas", withAuth(handlers.GetTaxRatesHandler, ""))
+	http.HandleFunc("/api/config/cfop", withAuth(handlers.ListCFOPsHandler, ""))
+	http.HandleFunc("/api/config/cfop/import", withAuth(handlers.ImportCFOPsHandler, ""))
 
 	http.HandleFunc("/api/config/forn-simples", func(w http.ResponseWriter, r *http.Request) {
 		database := getDB()
@@ -470,16 +457,16 @@ func main() {
 		}
 		switch r.Method {
 		case http.MethodGet:
-			handlers.ListFornSimplesHandler(database)(w, r)
+			handlers.AuthMiddleware(handlers.ListFornSimplesHandler(database), "")(w, r)
 		case http.MethodPost:
-			handlers.CreateFornSimplesHandler(database)(w, r)
+			handlers.AuthMiddleware(handlers.CreateFornSimplesHandler(database), "")(w, r)
 		case http.MethodDelete:
-			handlers.DeleteFornSimplesHandler(database)(w, r)
+			handlers.AuthMiddleware(handlers.DeleteFornSimplesHandler(database), "")(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	http.HandleFunc("/api/config/forn-simples/import", withDB(handlers.ImportFornSimplesHandler))
+	http.HandleFunc("/api/config/forn-simples/import", withAuth(handlers.ImportFornSimplesHandler, ""))
 
 	http.HandleFunc("/api/config/filial-apelidos", withAuth(handlers.FilialApelidosHandler, ""))
 	http.HandleFunc("/api/config/filial-apelidos/import", withAuth(handlers.ImportFilialApelidosHandler, ""))
@@ -633,8 +620,8 @@ func main() {
 
 	// Use custom server with timeouts (Inspired by production best practices)
 	server := &http.Server{
-		Addr:         ":" + port,
-		Handler:      nil,               // Use DefaultServeMux
+		Addr:    ":" + port,
+		Handler: handlers.SecurityMiddleware(http.DefaultServeMux, handlers.GetAllowedOrigins()),
 		ReadTimeout:  300 * time.Second, // 5 minutes for Uploads
 		WriteTimeout: 300 * time.Second, // 5 minutes for Long Responses
 		IdleTimeout:  60 * time.Second,

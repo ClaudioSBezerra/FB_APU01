@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -59,7 +60,8 @@ func GetRFBCredentialHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Mask client_secret - show only last 4 chars
+		// Decrypt for display (fallback to raw if not yet migrated), then mask
+		cred.ClientSecret = DecryptFieldWithFallback(cred.ClientSecret)
 		if len(cred.ClientSecret) > 4 {
 			cred.ClientSecret = strings.Repeat("*", len(cred.ClientSecret)-4) + cred.ClientSecret[len(cred.ClientSecret)-4:]
 		}
@@ -131,6 +133,14 @@ func SaveRFBCredentialHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		// Encrypt client_secret before persisting
+		encryptedSecret, encErr := EncryptField(req.ClientSecret)
+		if encErr != nil {
+			log.Printf("[RFB] Error encrypting client_secret: %v", encErr)
+			http.Error(w, "Error processing credentials", http.StatusInternalServerError)
+			return
+		}
+
 		// UPSERT - insert or update on conflict
 		var id string
 		err = db.QueryRow(`
@@ -139,7 +149,7 @@ func SaveRFBCredentialHandler(db *sql.DB) http.HandlerFunc {
 			ON CONFLICT (company_id)
 			DO UPDATE SET cnpj_matriz = $2, client_id = $3, client_secret = $4, ambiente = $5, ativo = true, updated_at = CURRENT_TIMESTAMP
 			RETURNING id
-		`, companyID, req.CNPJMatriz, req.ClientID, req.ClientSecret, req.Ambiente).Scan(&id)
+		`, companyID, req.CNPJMatriz, req.ClientID, encryptedSecret, req.Ambiente).Scan(&id)
 		if err != nil {
 			http.Error(w, "Error saving credential: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -156,7 +166,8 @@ func SaveRFBCredentialHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		// Mask client_secret in response
+		// Decrypt (fallback to raw if not yet migrated), then mask for response
+		cred.ClientSecret = DecryptFieldWithFallback(cred.ClientSecret)
 		if len(cred.ClientSecret) > 4 {
 			cred.ClientSecret = strings.Repeat("*", len(cred.ClientSecret)-4) + cred.ClientSecret[len(cred.ClientSecret)-4:]
 		}
