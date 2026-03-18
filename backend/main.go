@@ -24,9 +24,9 @@ import (
 )
 
 // Version information for backend deployment validation
-// Force rebuild: 2026-03-18 - v5.9.13 - Separação simulador/apuracao + docker-compose Service
+// Force rebuild: 2026-03-18 - v5.9.14 - Fix XHR X-Company-ID header no upload SPED
 const (
-	BackendVersion = "5.9.13"
+	BackendVersion = "5.9.14"
 	FeatureSet     = "Z.AI GLM Integration, AI Executive Reports, Email Estruturado, NF-e Entradas, Creditos em Risco, Tax Reform Projection, Simples Nacional Dashboard, Apelidos de Filiais, Filtro Multi-Filial Global"
 )
 

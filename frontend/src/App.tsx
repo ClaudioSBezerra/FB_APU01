@@ -169,7 +169,7 @@ function AppLayout() {
 }
 
 function App() {
-  console.log("App Version: 5.9.13 - Separação simulador/apuracao — Service docker-compose");
+  console.log("App Version: 5.9.14 - Fix XHR X-Company-ID header no upload SPED");
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

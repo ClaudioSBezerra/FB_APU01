@@ -290,9 +290,12 @@ export default function ImportarEFD() {
             const xhr = new XMLHttpRequest();
             xhr.open('POST', '/api/upload', true);
             
-            // Inject Auth Token
+            // Inject Auth Token and Company
             if (token) {
                 xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            }
+            if (companyId) {
+                xhr.setRequestHeader('X-Company-ID', companyId);
             }
 
             xhr.onload = () => {
