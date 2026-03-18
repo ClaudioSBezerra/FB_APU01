@@ -169,7 +169,7 @@ function AppLayout() {
 }
 
 function App() {
-  console.log("App Version: 5.9.11 - feat: Credenciais RFB → Config, split Importação/Débitos CBS");
+  console.log("App Version: 5.9.13 - Separação simulador/apuracao — Service docker-compose");
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
