@@ -63,10 +63,12 @@ func (s *secureResponseWriter) applyHeaders() {
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("X-XSS-Protection", "1; mode=block")
 	h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+	h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+	h.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 	if h.Get("Content-Security-Policy") == "" {
 		h.Set("Content-Security-Policy",
 			"default-src 'self'; "+
-				"script-src 'self' 'unsafe-inline' 'unsafe-eval'; "+
+				"script-src 'self' 'unsafe-inline'; "+
 				"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "+
 				"img-src 'self' data: blob:; "+
 				"font-src 'self' data: https://fonts.gstatic.com; "+
@@ -192,11 +194,13 @@ func (rl *rateLimiter) Reset(key string) {
 	delete(rl.requests, key)
 }
 
-// GetClientIP extracts the real client IP, respecting reverse proxy headers.
+// GetClientIP extracts the real client IP from reverse proxy headers.
+// Uses the LAST entry in X-Forwarded-For (set by trusted proxy) to prevent spoofing.
 func GetClientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		parts := strings.Split(xff, ",")
-		return strings.TrimSpace(parts[0])
+		// Use rightmost IP (added by our trusted reverse proxy, not spoofable by client)
+		return strings.TrimSpace(parts[len(parts)-1])
 	}
 	if xri := r.Header.Get("X-Real-IP"); xri != "" {
 		return xri

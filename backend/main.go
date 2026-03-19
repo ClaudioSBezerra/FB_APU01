@@ -260,6 +260,11 @@ func main() {
 	// Validate JWT_SECRET — warns in dev, fatals in prod
 	handlers.ValidateJWTSecret()
 
+	// Warn if ENCRYPTION_KEY not set separately from JWT_SECRET
+	if os.Getenv("ENCRYPTION_KEY") == "" && os.Getenv("DATABASE_URL") != "" {
+		log.Println("WARNING: ENCRYPTION_KEY not set — RFB credentials use JWT_SECRET as fallback. Set ENCRYPTION_KEY for proper secret separation.")
+	}
+
 	// APP_MODULE controls which route groups are registered:
 	//   "simulador" — SPED upload/jobs/reports/AI; no NF-e/CT-e/RFB routes
 	//   "apuracao"  — NF-e/CT-e/RFB/apuração; no upload/jobs/reports/AI routes

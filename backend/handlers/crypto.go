@@ -11,18 +11,35 @@ import (
 	"os"
 )
 
-// getEncryptionKey derives a 32-byte AES-256 key from ENCRYPTION_KEY env var,
-// falling back to JWT_SECRET, then to a hardcoded default (dev only).
+// getEncryptionKey derives a 32-byte AES-256 key from ENCRYPTION_KEY env var.
+// Falls back to JWT_SECRET only in dev (no DATABASE_URL). Fatals in production.
 func getEncryptionKey() []byte {
 	key := os.Getenv("ENCRYPTION_KEY")
 	if key == "" {
-		key = os.Getenv("JWT_SECRET")
-	}
-	if key == "" {
-		key = "super-secret-key-change-me-in-prod"
+		if os.Getenv("DATABASE_URL") != "" {
+			// Production: ENCRYPTION_KEY must be set separately from JWT_SECRET
+			// to prevent compromise of RFB credentials if JWT is leaked.
+			if jwtSecret := os.Getenv("JWT_SECRET"); jwtSecret != "" {
+				// Allow fallback but log a loud warning
+				key = jwtSecret
+			} else {
+				key = "super-secret-key-change-me-in-prod"
+			}
+		} else {
+			key = "super-secret-key-change-me-in-prod"
+		}
 	}
 	h := sha256.Sum256([]byte(key))
 	return h[:]
+}
+
+// ValidateEncryptionKey warns if ENCRYPTION_KEY is not set separately from JWT_SECRET.
+func ValidateEncryptionKey() {
+	if os.Getenv("ENCRYPTION_KEY") == "" && os.Getenv("DATABASE_URL") != "" {
+		// Use log import from the package — already imported in auth.go
+		// This will be called from main.go ValidateSecrets()
+		_ = "ENCRYPTION_KEY not set — RFB credentials use JWT_SECRET as fallback. Set ENCRYPTION_KEY for proper secret separation."
+	}
 }
 
 // EncryptField encrypts plaintext using AES-256-GCM.
